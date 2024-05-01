@@ -84,8 +84,33 @@ install_github("WGLab/SCOTCH")
 ```
 
 ### DTU analysis
+Below is sample codes for DTU analysis.
 
+```
+#----read gene-level count matrix-----#
+sample8_CD4_gene=t(as.matrix(read.csv("nSample8gene_expression_TcellsCD4.csv",row.names='X')))
+sample8_CD8_gene=t(as.matrix(read.csv("nSample8gene_expression_TcellsCD8.csv",row.names='X')))
 
+#----read transcript-level count matrix-----#
+sample8_CD4_transcript=read.csv("nSample8transcript_expression_TcellsCD4.csv",row.names = 'X')
+gene_transcript_CD4_df = data.frame(genes=str_remove(rownames(sample8_CD4_transcript),"-(ENST|novel|uncategorized).+"),
+                                    transcripts=rownames(sample8_CD4_transcript))
+sample8_CD4_transcript = sample8_CD4_transcript%>%as.matrix()%>%t()
+
+sample8_CD8_transcript=read.csv("nSample8transcript_expression_TcellsCD8.csv",row.names = 'X')
+gene_transcript_CD8_df = data.frame(genes=str_remove(rownames(sample8_CD8_transcript),"-(ENST|novel|uncategorized).+"),
+                                    transcripts=rownames(sample8_CD8_transcript))
+sample8_CD8_transcript = sample8_CD8_transcript%>%as.matrix()%>%t()
+
+#----gene-level analysis-----#
+df_gene = scotch_gene(sample8_CD4_gene, sample8_CD8_gene), epsilon=0.01,ncores=10)%>%
+  filter(pct1>=0.01|pct2>=0.01)
+
+#----transcript-level analysis-----#
+df_transcript = scotch_transcript(gene_transcript_CD4_df,gene_transcript_CD8_df, 
+                                  sample8_CD4_transcript, sample8_CD8_transcript, ncores=10)
+df_scotch = df_gene%>%left_join(df_transcript,by=c('genes'='gene'))
+```
 
 
 
