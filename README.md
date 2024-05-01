@@ -87,6 +87,8 @@ install_github("WGLab/SCOTCH")
 Below is sample codes for DTU analysis.
 
 ```
+library(SCOTCH)
+
 #----read gene-level count matrix-----#
 sample8_CD4_gene=t(as.matrix(read.csv("nSample8gene_expression_TcellsCD4.csv",row.names='X')))
 sample8_CD8_gene=t(as.matrix(read.csv("nSample8gene_expression_TcellsCD8.csv",row.names='X')))
