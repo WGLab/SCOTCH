@@ -25,9 +25,64 @@ conda activate SCOTCH
 ```
 
 ## Run SCOTCH preprocessing pipeline
+### Step1: prepare annotation file
 
+This step will generate annotation files for reference genome and tagged bam files. Set `--workers` argument for parallel computing. Set `--bam` argument as path to the folder saving separated bam files or path to a single bam file.
+
+```
+bamfolder="path/to/tagged/bamfile"
+outputfolder="path/to/output"
+reference="path/to/genome/reference/annotation.gtf"
+
+prepare.sh -t annotation -o $outputfolder --bam $bamfolder --reference $reference --workers 30
+```
+
+### Step2: generate compatible matrix
+
+This step will generate read-isoform compatible matrix. `-o` and `--bam` are the same with step1. Set `-match` argument for the threshold of read-exon mapping percentage. For example, setting 0.2 means reads covers >80% of the exon length as mapped, and reads covers <20% of the exon length as unmapped.
+
+```
+prepare.sh -t matrix -o $outputfolder --bam $bamfolder -match 0.2 
+```
+
+To speed up the step, job arrays can be submitted in SLURM. For example:
+
+```
+#! /bin/bash -l
+#SBATCH --nodes=1
+#SBATCH --ntasks=1 
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=200G
+#SBATCH --array=0-99
+source ~/.bashrc
+conda activate SCOTCH
+
+bamfolder="path/to/tagged/bamfile"
+outputfolder="path/to/output"
+
+prepare.sh -t matrix -o $outputfolder --bam $bamfolder -match 0.2 --job_index ${SLURM_ARRAY_TASK_ID} --jobs 100
+```
+
+### Step2: generate count matrix
+This step will generate gene- and isoform-level copunt matrix. `-o` and `--bam` are the same with step1. Set '-novel_read_n' for the threshold of filtering novel isoform. Novel isoform with the number of mapped reads below this threshold will be treated as uncategorized.
+
+```
+prepare.sh -t count -o $outputfolder --novel_read_n 10 --workers 20
+```
 
 ## Run SCOTCH statistical pipeline
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
