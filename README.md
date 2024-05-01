@@ -72,6 +72,9 @@ prepare.sh -t count -o $outputfolder --novel_read_n 10 --workers 20
 
 ## Run SCOTCH statistical pipeline
 
+### Installation
+
+In R, run below codes to install SCOTCH statistical pipeline.
 
 ```
 if (!requireNamespace("devtools", quietly = TRUE))
@@ -80,7 +83,7 @@ library("devtools")
 install_github("WGLab/SCOTCH")
 ```
 
-
+### DTU analysis
 
 
 
