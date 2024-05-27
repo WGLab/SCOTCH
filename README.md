@@ -16,7 +16,7 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 bash Miniconda3-latest-Linux-x86_64.sh
 ```
 After installing conda, SCOTCH sources can be downloaded:
-git clone https://github.com/WGLab/SCOTCH.git
+`git clone https://github.com/WGLab/SCOTCH.git`
 
 ```
 cd SCOTCH
