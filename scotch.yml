@@ -1,0 +1,30 @@
+name: scotch
+channels:
+  - r
+  - anaconda
+  - defaults
+  - conda-forge
+  - bioconda
+dependencies:
+  - anndata=0.9.1
+  - anndata2ri=1.2
+  - bedops=2.4.41
+  - bedtools=2.31.0
+  - biopython=1.78
+  - h5py=3.9.0
+  - joblib=1.1.1
+  - louvain=0.8.0
+  - networkx=3.1
+  - numpy=1.23.5
+  - pandas=1.5.2
+  - pip=22.3.1
+  - pysam=0.21.0
+  - python=3.10.12
+  - scipy=1.10.1
+  - tqdm=4.65.0
+  - pip:
+      - igraph==0.10.8
+      - matplotlib==3.6.3
+      - python-igraph==0.10.8
+      - python-louvain==0.16
+      - scanpy==1.9.6
