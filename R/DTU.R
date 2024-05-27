@@ -187,11 +187,12 @@ scotch_gene = function(X1_gene, X2_gene, epsilon=0.01,ncores=10){
 }
 
 
-LRT_by_gene = function(gene_name,gene_transcript_df, X1_transcript, X2_transcript){
+LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript){
   require(dplyr)
-  transcripts_gene = gene_transcript_df%>%filter(genes==gene_name)%>%pull(transcripts)
-  X1 = X1_transcript[,transcripts_gene]
-  X2 = X2_transcript[,transcripts_gene]
+  transcripts1_gene = gene_transcript_df1%>%filter(genes==gene_name)%>%pull(transcripts)
+  transcripts2_gene = gene_transcript_df2%>%filter(genes==gene_name)%>%pull(transcripts)
+  X1 = X1_transcript[,transcripts1_gene]
+  X2 = X2_transcript[,transcripts2_gene]
   if (is.numeric(nrow(X1)) && is.numeric(nrow(X2)) && nrow(X1) >= 20 && nrow(X2) >= 20){
     out = LRT_test(X1,X2)
   }else{out = NULL}
