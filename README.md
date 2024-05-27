@@ -20,7 +20,7 @@ git clone https://github.com/WGLab/SCOTCH.git
 
 ```
 cd SCOTCH
-conda env create --name SCOTCH --file SCOTCH.yml
+conda env create --name SCOTCH --file scotch.yml
 conda activate SCOTCH
 ```
 
