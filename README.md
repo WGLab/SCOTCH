@@ -1,6 +1,6 @@
 # SCOTCH 
 
-<img src="https://github.com/WGLab/SCOTCH/assets/27308407/0358c09d-dc50-4d40-9383-97e2b31a7707" alt="SCOTCH_logo" width="200">
+<img src="https://github.com/WGLab/SCOTCH/assets/27308407/3d338679-dd34-4838-a0cf-506983bc820a" alt="SCOTCH_logo" width="200">
 
 
 Single-Cell Omics for Transcriptome CHaracterization (SCOTCH): isoform-level characterization of gene expression through long-read single-cell RNA sequencing. See our pre-print at [here](https://www.biorxiv.org/content/10.1101/2024.04.29.590597v1). All codes and analysis results in the manuscript can be found at [here](https://github.com/WGLab/SCOTCH_reproduction)
