@@ -78,11 +78,13 @@ def merge_exons(exons):
     merged_exons.append((current_start, current_end))
     return merged_exons
 
-def extract_bam_info_folder(bam_folder, num_cores, parse=False):
+def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
     files = os.listdir(bam_folder)
     bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
     if parse:
         df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
+    elif pacbio:
+        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
     else:
         df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam) for bam in bamfiles)
     ReadTagsDF = pd.concat(df).reset_index(drop=True)
@@ -114,6 +116,21 @@ def extract_bam_info_parse(bam):
     else:
         ReadTagsDF = None
     return ReadTagsDF
+
+def extract_bam_info_pacbio(bam):
+    bamFilePysam = pysam.Samfile(bam, "rb")
+    #qname cb umi cbumi length
+    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('XM'), read.reference_end-read.reference_start) for read in bamFilePysam]
+    ReadTagsDF = pd.DataFrame(ReadTags)
+    if ReadTagsDF.shape[0] > 0:
+        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
+        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
+    else:
+        ReadTagsDF = None
+    return ReadTagsDF
+
 
 
 def bam_info_to_dict(bam_info, parse=False):
@@ -216,7 +233,7 @@ def read_exon_match(read, Info_singlegene):
     return gene_name, readDist, gene_length, n_mapExons
 
 
-def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05):
+def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, pacbio = False):
     geneName, readDist, geneLength, nMapExons,index = [], [], [], [],[]
     for i, info_singlegene in enumerate(Info_multigenes):
         gene_name, read_dist, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
@@ -234,7 +251,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05):
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = Map_read_to_gene(read,
                                                                                         Info_multigenes[ind],
                                                                                         lowest_match, geneInfo=None,
-                                                                                        exonInfo=None, isoformInfo=None)
+                                                                                        exonInfo=None, isoformInfo=None, pacbio = pacbio)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
         df_exon = df_exon.sort_values(by=['nMapExons', 'readDist', 'geneLength'], ascending=[False, True, False])
         if sum(df_exon.nMapExons) >= 2:
@@ -248,7 +265,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05):
                                                                                                   lowest_match,
                                                                                                   geneInfo=None,
                                                                                                   exonInfo=None,
-                                                                                                  isoformInfo=None)
+                                                                                                  isoformInfo=None, pacbio = pacbio)
                 read_novelisoform_tuple_dict[ind] = read_novelisoform_tuple_
                 read_isoform_compatibleVector_tuple_dict[ind] = read_isoform_compatibleVector_tuple_
                 if read_novelisoform_tuple_ is not None:
@@ -269,7 +286,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05):
                                                                                             Info_multigenes[ind],
                                                                                             lowest_match, geneInfo=None,
                                                                                             exonInfo=None,
-                                                                                            isoformInfo=None)
+                                                                                            isoformInfo=None, pacbio=pacbio)
     else:
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
@@ -461,14 +478,12 @@ def Map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.05, geneInfo=No
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = read_novelisoform_tuple0, read_isoform_compatibleVector_tuple0
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo = None,exonInfo= None, isoformInfo= None, qualifyExon= None, exonMatch1= None, exonMatch2= None):
+def map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo = None,exonInfo= None, isoformInfo= None, qualifyExon= None, exonMatch1= None, exonMatch2= None, pacbio = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
-    if isinstance(read, dict):
-        readName = read['qname']
-        referencePositions = read['get_reference_positions']
-    else:
-        readName = read.qname
-        referencePositions = read.get_reference_positions(full_length=False)
+    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    if pacbio:
+        readName = readName + '_' + str(readEnd - readStart)
+    referencePositions = read.get_reference_positions(full_length=False)
     if geneInfo is None:
         geneInfo, exonInfo, isoformInfo = Info_singlegene
         isoformInfo = dict(sorted(isoformInfo.items(), key=lambda item: len(item[1]), reverse=True))  # long to short
@@ -542,7 +557,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo = None,e
     else:  # existing isoform/uncategorized
         read_isoform_compatibleVector_tuple = (readName, read_isoform_compatibleVector)
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
-def Map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo=None, exonInfo=None, isoformInfo=None):
+def Map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo=None, exonInfo=None, isoformInfo=None, pacbio = False):
     if geneInfo is None:
         geneInfo, exonInfo, isoformInfo = Info_singlegene
         isoformInfo = dict(
@@ -558,13 +573,13 @@ def Map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo=None, ex
     read_novelisoform_tuple0, read_isoform_compatibleVector_tuple0 = map_read_to_gene(read, Info_singlegene,
                                                                                       lowest_match, geneInfo,
                                                                                       exonInfo, isoformInfo,
-                                                                                      qualifyExon0, exonMatch0_1, exonMatch0_2)
+                                                                                      qualifyExon0, exonMatch0_1, exonMatch0_2, pacbio)
     # take account of small exons
     read_novelisoform_tuple1, read_isoform_compatibleVector_tuple1 = map_read_to_gene(read, Info_singlegene,
                                                                                       lowest_match, geneInfo,
                                                                                       exonInfo,
                                                                                       isoformInfo, qualifyExon1,
-                                                                                      exonMatch1_1, exonMatch1_2)
+                                                                                      exonMatch1_1, exonMatch1_2, pacbio)
     read_novelisoform_tuple = None
     if read_isoform_compatibleVector_tuple0 is None and read_isoform_compatibleVector_tuple1 is not None:
         read_isoform_compatibleVector_tuple = read_isoform_compatibleVector_tuple1
@@ -732,7 +747,7 @@ def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isofor
     return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
 
 
-def save_compatibleVector_by_gene(geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector,qname_cbumi_dict, output_folder=None):
+def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,qname_cbumi_dict, output_folder=None):
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
     print('gene ' + str(geneName) + ' processing')
@@ -769,11 +784,10 @@ def save_compatibleVector_by_gene(geneName, geneID,geneStrand, colNames, Read_Is
         return output
 
 
-def process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match, Info_multigenes, parse=False):
-    if isinstance(read,dict):
-        readName, readStart, readEnd = read['qname'], read['reference_start'], read['reference_end']
-    else:
-        readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+def process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match, Info_multigenes, parse=False, pacbio = False):
+    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    if pacbio:
+        readName = readName + '_' + str(readEnd - readStart)
     novelIsoformResults = None
     isoformCompatibleVectorResults = None
     if parse:
@@ -784,20 +798,29 @@ def process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
+    elif pacbio:
+        if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName ==
+                qname_dict[readName]):
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = Map_read_to_gene(read, Info_multigenes[0],
+                                                                                            lowest_match, geneInfo,
+                                                                                            exonInfo, isoformInfo, True)
+            if read_novelisoform_tuple is not None:
+                novelIsoformResults = read_novelisoform_tuple
+            if read_isoform_compatibleVector_tuple is not None:
+                isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     else:
         poly_bool, poly = detect_poly(read, window=20, n=15)
         if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and poly_bool and readName == qname_dict[readName]):
-            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = Map_read_to_gene(read, Info_multigenes[0], lowest_match, geneInfo, exonInfo, isoformInfo)
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = Map_read_to_gene(read, Info_multigenes[0], lowest_match, geneInfo, exonInfo, isoformInfo, False)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     return novelIsoformResults, isoformCompatibleVectorResults
-def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_match, parse=False):
-    if isinstance(read,dict):
-        readName, readStart, readEnd = read['qname'], read['reference_start'], read['reference_end']
-    else:
-        readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_match, parse=False, pacbio = False):
+    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    if pacbio:
+        readName = readName + '_' + str(readEnd - readStart)
     if parse:
         poly_bool, poly = detect_poly_parse(read, window=20, n=10)
         if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
@@ -806,10 +829,17 @@ def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_
                                                                                                       lowest_match,poly_bool)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
+    elif pacbio:
+        if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
+            ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta(read,
+                                                                                                      Info_multigenes,
+                                                                                                      lowest_match, pacbio=True)
+            if ind >= 0:
+                return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     else:
         poly_bool, poly = detect_poly(read, window=20, n=15)
         if (readStart >= start and readEnd < end and poly_bool and readName == qname_dict[readName]):
-            ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta(read, Info_multigenes, lowest_match)
+            ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta(read, Info_multigenes, lowest_match,pacbio=False)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     return None
@@ -902,6 +932,92 @@ def extract_compatible_matrix_by_metagene(bamFile, meta_gene_pkl, meta_gene, qna
     #finish mapping reads to genes
     bamFilePysam.close()
 
+def extract_compatible_matrix_by_metagene_pacbio(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, lowest_match=0.2, output_folder=None):
+    #extract compatible matrix by metagene: output gene name and compatible matrix
+    #bamFile: path to bam file
+    #gene_pkl: path to gene annotation pkl file, or a geneStructureInformation object
+    print(meta_gene)
+    if isinstance(meta_gene_pkl,str):
+        metageneStructureInformation = load_pickle(meta_gene_pkl)
+    else:
+        metageneStructureInformation = meta_gene_pkl
+    Info_multigenes = metageneStructureInformation[meta_gene]#list: length is gene number
+    Info_multigenes_sort = []
+    for info in Info_multigenes:
+        isoformInfo = info[2]
+        isoformInfo = dict(sorted(isoformInfo.items(), key=lambda item: len(item[1]), reverse=True))
+        info[0]['isoformNames'] = list(isoformInfo.keys())
+        info[2] = isoformInfo
+        Info_multigenes_sort.append(info)
+    Info_multigenes = Info_multigenes_sort
+    if os.path.isfile(bamFile)==False: #bamFile is a folder
+        bamFile_name = [f for f in os.listdir(bamFile) if f.endswith('.bam') and '.'+Info_multigenes[0][0]['geneChr']+'.' in f]
+        bamFile = os.path.join(bamFile,bamFile_name[0])
+    bamFilePysam = pysam.Samfile(bamFile, "rb")
+    ##########-----only contain one gene for metagene
+    if len(Info_multigenes)==1:
+        geneInfo, exonInfo, isoformInfo = Info_multigenes[0]
+        n_isoforms = len(isoformInfo)
+        reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
+        Read_Isoform_compatibleVector, Read_novelIsoform, novel_isoformInfo = [], [], {}
+        for read in reads:
+            result = process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match, Info_multigenes, pacbio=True)
+            novelIsoformResults, isoformCompatibleVectorResults = result
+            if novelIsoformResults is not None:
+                Read_novelIsoform.append(novelIsoformResults)
+            if isoformCompatibleVectorResults is not None:
+                Read_Isoform_compatibleVector.append(isoformCompatibleVectorResults)
+        if len(Read_novelIsoform) > 0:
+            Read_novelIsoform, novel_isoformInfo, Read_Isoform_compatibleVector = polish_compatible_vectors(
+                Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms)
+        #loop finished, start compiling into compatible matrix
+        geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isoform_compatibleVector, geneInfo)
+        save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector, qname_cbumi_dict, output_folder)
+    ############-----multiple genes for one metagene
+    else:
+        geneChr, start, end = summarise_metagene(Info_multigenes)  # meta gene location
+        reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
+        #process reads metagene
+        #read_dicts = [read_to_dict(read) for read in reads]
+        results = []
+        for read in reads:
+            out = process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_match, pacbio = True)
+            if out is not None:
+                results.append(out)
+        Ind, read_novelisoform_tuple_metagene, read_isoform_compatibleVector_tuple_metagene = [], [], []
+        for result in results:
+            if result is not None:
+                ind, novelisoform_tuple, isoformCompatibleVector_tuple = result
+                Ind.append(ind)
+                read_novelisoform_tuple_metagene.append(novelisoform_tuple)
+                read_isoform_compatibleVector_tuple_metagene.append(isoformCompatibleVector_tuple)
+        unique_ind = list(set(Ind))
+        log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
+        #logging genes without any reads
+        for index in log_ind:
+            save_compatibleVector_by_gene(Info_multigenes[index][0]['geneName'], Info_multigenes[index][0]['geneID'], Info_multigenes[index][0]['geneStrand'], colNames=None,
+                                          Read_Isoform_compatibleVector=None, qname_cbumi_dict=None,output_folder=output_folder)
+        for index in unique_ind:
+            print('processing gene'+str(index))
+            #loop over genes within metagene; for one single gene:
+            Read_novelIsoform, Read_Isoform_compatibleVector, novel_isoformInfo=[],[], {}
+            for j, i in enumerate(Ind):
+                    #loop for reads
+                if i==index and read_novelisoform_tuple_metagene[j] is not None:
+                    Read_novelIsoform.append(read_novelisoform_tuple_metagene[j])
+                if i==index and read_isoform_compatibleVector_tuple_metagene[j] is not None:
+                    Read_Isoform_compatibleVector.append(read_isoform_compatibleVector_tuple_metagene[j])
+            if len(Read_novelIsoform) > 0:
+                Read_novelIsoform, novel_isoformInfo, Read_Isoform_compatibleVector = polish_compatible_vectors(
+                    Read_novelIsoform, Read_Isoform_compatibleVector, len(Info_multigenes[index][2]))
+            #loop over reads for one gene
+            geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(Read_novelIsoform,
+                                                                                               novel_isoformInfo,
+                                                                                               Read_Isoform_compatibleVector,
+                                                                                               Info_multigenes[index][0])
+            save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector, qname_cbumi_dict, output_folder)
+    #finish mapping reads to genes
+    bamFilePysam.close()
 
 def extract_compatible_matrix_by_metagene_parse(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, qname_sample_dict, lowest_match=0.2, output_folder=None):
     #extract compatible matrix by metagene: output gene name and compatible matrix
@@ -1047,6 +1163,47 @@ def generate_compatibleVector(bamFile, qname_dict, qname_cbumi_dict, metagene_pk
         MetaGenes_ = MetaGenes
     for meta_gene in MetaGenes_:
         extract_compatible_matrix_by_metagene(bamFile, metagene_pkl, meta_gene, qname_dict,qname_cbumi_dict, lowest_match, output_folder)
+
+
+
+def generate_compatibleVector_pacbio(bamFile, qname_dict, qname_cbumi_dict, metagene_pkl, lowest_match, output_folder, job_index=0,
+                              total_jobs=1, cover_existing = True):
+    if isinstance(metagene_pkl, str):
+        metageneStructureInformation = load_pickle(metagene_pkl)
+    else:
+        metageneStructureInformation = metagene_pkl
+    target = os.path.join(output_folder, 'compatible_matrix')
+    if cover_existing:
+        print('If there are existing compatible matrix files, SCOTCH will overwrite them')
+        genes_existing = []
+    else:
+        print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
+        genes_existing = [g[:-4] for g in os.listdir(target)]
+        if os.path.isfile(os.path.join(target, 'log.txt')):
+            gene_df = pd.read_csv(os.path.join(target, 'log.txt'), header=None)
+            genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
+    MetaGene_Gene_dict = {}
+    for key, values in metageneStructureInformation.items():
+        genes_ = []
+        for value in values:
+            gene = str(value[0]['geneName'])+'_'+str(value[0]['geneID'])
+            if gene not in genes_existing:
+                genes_.append(gene)
+        if len(genes_) > 0:
+            MetaGene_Gene_dict[key] = genes_
+    MetaGenes = list(MetaGene_Gene_dict.keys())
+    print('total metagene number is: ' + str(len(MetaGenes)))
+    if total_jobs > 1:
+        step_size = math.ceil(len(MetaGenes) / total_jobs)
+        s = int(list(range(0, len(MetaGenes), step_size))[job_index])
+        e = int(s + step_size)
+        MetaGenes_ = MetaGenes[s:e]
+        print('processing: ' + str(len(MetaGenes_)) + ' metagenes')
+    else:
+        MetaGenes_ = MetaGenes
+    for meta_gene in MetaGenes_:
+        extract_compatible_matrix_by_metagene_pacbio(bamFile, metagene_pkl, meta_gene, qname_dict,qname_cbumi_dict, lowest_match, output_folder)
+
 
 def generate_compatibleVector_parse(bamFile, qname_dict, qname_cbumi_dict, qname_sample_dict, metagene_pkl, lowest_match, output_folder, job_index=0,
                               total_jobs=1, cover_existing = True):

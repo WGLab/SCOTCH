@@ -325,6 +325,8 @@ def generate_count_matrix_by_gene_parse(library_path_list, sample_name, gene, no
                 with open(log_file, 'w') as file:
                     file.write(str(gene) + '\n')
         return None
+
+
 def generate_adata(triple_list):
     cells_dict = {}
     features_dict = {}
