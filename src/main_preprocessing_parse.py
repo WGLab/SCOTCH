@@ -36,6 +36,7 @@ parser.add_argument('--workers',type=int,default=8, help="number of workers per 
 
 
 #bam = '/scr1/users/xu3/singlecell/project_singlecell/sample8_R9/bam/sample8_R9.filtered.bam'
+
 def main():
     global args
     args = parser.parse_args()
