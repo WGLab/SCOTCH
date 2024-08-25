@@ -77,6 +77,9 @@ def generate_reference_df(gtf_path):
         drop=True)
     outfile_gene = os.path.join(outdir,'gene_gtf.bed')
     outfile_exon = os.path.join(outdir, 'exon_gtf.bed')
+    #change gtf 1-based to 0-based
+    df_gene.START = [str(int(s)-1) for s in df_gene.START.tolist()]
+    df_exon.START = [str(int(s) - 1) for s in df_exon.START.tolist()]
     df_gene.to_csv(outfile_gene,sep = '\t', header = False, index = False, quoting=csv.QUOTE_NONE)
     df_exon.to_csv(outfile_exon, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
     #sort
@@ -109,41 +112,6 @@ def generate_reference_df(gtf_path):
     remove_command = f'rm {output_path} {output_path2} {output_path3} {output_path4}'
     os.system(remove_command)
     return genes, exons
-#def generate_reference_df(gtf_path):
-#    outdir = os.path.dirname(gtf_path)
-#    _, _, df = read_gtf(gtf_path, None, ['gene', 'exon'])
-#    df = df.dropna(axis=0, subset=['gene_name']).reset_index(drop=True)
-#    df.columns = ['CHR', 'SOURCE', 'TYPE', 'START', 'END', '.', '.', '.', 'gene_id','gene_type','gene_name',  'transcript_id']
-#    df_gene = df[df.iloc[:, 2] == "gene"].loc[:, ['CHR', 'START', 'END', 'gene_id','gene_name', 'gene_type']].reset_index(
-#        drop=True)
-#    df_exon = df[df.iloc[:, 2] == "exon"].loc[:, ['CHR', 'START', 'END','gene_id', 'gene_name', 'transcript_id']].reset_index(
-#        drop=True)
-#    outfile_gene = os.path.join(outdir,'gene_gtf.bed')
-#    outfile_exon = os.path.join(outdir, 'exon_gtf.bed')
-#    df_gene.to_csv(outfile_gene,sep = '\t', header = False, index = False, quoting=csv.QUOTE_NONE)
-#    df_exon.to_csv(outfile_exon, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
-    #sort
-#    input_path = os.path.join(outdir,'exon_gtf.bed')
-#    output_path = os.path.join(outdir,'exon_gtf.sort.bed')
-#    sort_command = f'sort -k1,1 -k2,2n -k3,3n {input_path} > {output_path}'
-#    os.system(sort_command)
-    #partition
-#    output_path2 = os.path.join(outdir, 'exon_gtf.part.bed')
-#    part_command = f'bedops -p {output_path} > {output_path2}'
-#    os.system(part_command)
-    #intersect
-#    output_path3 = os.path.join(outdir, 'exon_gtf.part2.bed')
-#    intersect_command = f'bedtools intersect -a {output_path2} -b {output_path} -wa -wb > {output_path3}'
-#    os.system(intersect_command)
-#    exons = pd.read_csv(output_path3, sep='\t', header=None, low_memory=False)
-#    exons.columns = ['CHR', 'START', 'END', 'CHR2', 'START2', 'END2', 'GENE_ID','GENE', 'TRANSCRIPT']
-#    exons = exons.loc[:, ['CHR', 'START', 'END', 'GENE_ID','GENE', 'TRANSCRIPT']]
-#    genes = pd.read_csv(outfile_gene, sep='\t', header=None, low_memory=False)
-    #remove
-#    remove_command = f'rm {output_path} {output_path2} {output_path3}'
-#    os.system(remove_command)
-#    return genes, exons
-
 
 
 

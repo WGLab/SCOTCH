@@ -150,7 +150,6 @@ def bam_info_to_dict(bam_info, parse=False):
         return qname_dict, qname_cbumi_dict
 
 def process_gene(geneID, geneName, genes ,exons, build=None):
-    #gtf file is 1 based, change annotation to 0 based
     GeneDf = genes[genes.iloc[:, 3] == geneID].reset_index(drop=True)
     ExonsDf = exons[exons.iloc[:, 3] == geneID].reset_index(drop=True)
     exonsdf = ExonsDf.iloc[:, :3].drop_duplicates().reset_index(drop=True)
@@ -160,10 +159,10 @@ def process_gene(geneID, geneName, genes ,exons, build=None):
         geneChr = str(build) + '_'+str(geneChr)
     geneStrand = GeneDf.iloc[0, 6]
     isoformNames = ExonsDf.TRANSCRIPT.unique().tolist()
-    GeneInfo = {'geneName': geneName, 'geneID': geneID, 'geneChr': geneChr, 'geneStart': geneStart -1 , 'geneEnd': geneEnd,
+    GeneInfo = {'geneName': geneName, 'geneID': geneID, 'geneChr': geneChr, 'geneStart': geneStart, 'geneEnd': geneEnd,
                 'geneStrand':geneStrand, 'numofExons': exonsdf.shape[0], 'numofIsoforms': len(isoformNames),
                 'isoformNames': isoformNames}
-    ExonPositions = list(zip(exonsdf.iloc[:, 1] -1 , exonsdf.iloc[:, 2]))
+    ExonPositions = list(zip(exonsdf.iloc[:, 1], exonsdf.iloc[:, 2]))
     ExonsDf = ExonsDf.merge(exonsdf, how='left')
     ExonIsoformDict = dict()
     for isoform in isoformNames:
