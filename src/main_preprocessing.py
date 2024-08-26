@@ -2,7 +2,6 @@ import argparse
 import preprocessing as pp
 import count_matrix as cm
 import os
-import pandas as pd
 import annotation as annot
 #from scipy.sparse import csr_matrix, save_npz
 from scipy.io import mmwrite

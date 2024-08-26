@@ -6,7 +6,6 @@ import os
 import pandas as pd
 import pickle
 from preprocessing import load_pickle
-import tqdm
 
 ######################################################################
 ##############################annotation##############################
@@ -373,8 +372,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
         if os.path.isfile(output) == False:
-            geneStructureInformation = Parallel(n_jobs=num_cores)(
-                delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in tqdm(Genes))
+            geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
             geneStructureInformation = dict(geneStructureInformation)
             #save to output, single gene
             if output is not None:
