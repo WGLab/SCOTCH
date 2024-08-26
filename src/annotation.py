@@ -361,6 +361,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     #option1: ---------rely on bam file alone---------###
     #####################################################
+    print('rely on bam file alone to generate gene annotations')
     if refGeneFile_path is None and bamfile_path is not None:
         geneStructureInformation = annotate_genes(geneStructureInformation = None, bamfile_path = bamfile_path,
                        coverage_threshold_gene=coverage_threshold_gene,
@@ -369,6 +370,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     # option2: --------rely on existing annotation alone#
     #####################################################
+    print('rely on existing gene annotations')
     if refGeneFile_path is not None:
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
@@ -387,6 +389,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
+        print('rely on bam file to update existing gene annotations')
         if bamfile_path is not None:
             geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
                                                       bamfile_path=bamfile_path,
@@ -446,25 +449,29 @@ class Annotator:
     def annotate_genes(self):
         if not os.path.exists(self.annotation_folder_path):
             os.makedirs(self.annotation_folder_path)
-        #annotation free mode
-        if self.reference_gtf_path is None:
-            print('annotation free mode')
-            _ = extract_annotation_info(None, self.bam_path, self.workers,
-                            "geneStructureInformation.pkl", None,
-                            self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                        self.min_gene_size)
-        if self.update_gtf:
-            print('update existing annotation using bam file')
-            _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
-                                        "geneStructureInformation.pkl", None,
-                                        self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                        self.min_gene_size)
+        if os.path.isfile(self.annotation_path_single_gene) and os.path.isfile(self.annotation_path_meta_gene):
+            print('gene annotation information exist')
         else:
-            print('using existing annotation file')
-            _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
-                                        "geneStructureInformation.pkl", None,
-                                        self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                        self.min_gene_size)
+            print('gene annotation information does not exist, we will generate')
+            #annotation free mode
+            if self.reference_gtf_path is None:
+                print('annotation free mode')
+                _ = extract_annotation_info(None, self.bam_path, self.workers,
+                                "geneStructureInformation.pkl", None,
+                                self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.min_gene_size)
+            if self.update_gtf:
+                print('update existing annotation using bam file')
+                _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
+                                            "geneStructureInformation.pkl", None,
+                                            self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.min_gene_size)
+            else:
+                print('using existing annotation file')
+                _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
+                                            "geneStructureInformation.pkl", None,
+                                            self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.min_gene_size)
     def annotation_bam(self):
         if not os.path.exists(self.bamInfo_folder_path):
             os.makedirs(self.bamInfo_folder_path)

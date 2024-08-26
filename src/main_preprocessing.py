@@ -3,7 +3,8 @@ import preprocessing as pp
 import count_matrix as cm
 import os
 import pandas as pd
-from scipy.sparse import csr_matrix, save_npz
+import annotation as annot
+#from scipy.sparse import csr_matrix, save_npz
 from scipy.io import mmwrite
 import pickle
 
@@ -12,10 +13,13 @@ parser = argparse.ArgumentParser(description='Preprocess files')
 parser.add_argument('--target',type=str,help="path to target root folder for output files")
 parser.add_argument('--task',type=str,help="choose task between annotation, matrix(read * isoform), and count (count matrix)")
 
-#give one of the arguments below
-parser.add_argument('--ref',type=str,default='/scr1/users/xu3/singlecell/ref/hg38_ensemble/genes',
-                    help="Path to gene annotation file in gtf format, output pickel file")
-parser.add_argument('--geneinfo',type=str, help="path to pickle file of gene annotations")
+#task is annotation
+parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf format, output pickel file, leave it blank if using annotation-free mode")
+parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
+parser.add_argument('--update_gtf_off', action='store_false',dest='update_gtf',help='do NOT use bam file to update existing gtf annotations')
+parser.add_argument('--coverage_threshold_gene',type=int, default= 5, help="coverage threshold to support gene discovery")
+parser.add_argument('--coverage_threshold_exon',type=int, default=20, help="coverage threshold to support exon discovery")
+parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
 
 #task is matrix
 parser.add_argument('--bam',type=str,help="Path to bam file")
@@ -39,45 +43,14 @@ def main():
     if not os.path.exists(args.target):
         os.makedirs(args.target)
     if args.task=='annotation':
-        #gene annotation information
-        print('extracting annotation information')
-        if not os.path.exists(os.path.join(args.target,'reference')):
-            os.makedirs(os.path.join(args.target,'reference'))
-        output = os.path.join(args.target,"reference/geneStructureInformation.pkl")
-        output2 = os.path.join(args.target, "reference/metageneStructureInformation.pkl")
-        if os.path.isfile(output) and os.path.isfile(output2):
-            print('gene annotation information exist')
-        else:
-            _ = pp.extract_annotation_info(args.ref, num_cores=args.workers, output=output)
+        annotator = annot.Annotator(target=args.target, reference_gtf_path = args.ref,
+                                    bam_path = args.bam, update_gtf = args.update_gtf,
+                                    workers = args.workers,coverage_threshold_gene = args.coverage_threshold_gene,
+                                    coverage_threshold_exon = args.coverage_threshold_exon, min_gene_size = args.min_gene_size)
+        #generate gene annotation
+        annotator.annotate_genes()
         #bam information
-        if not os.path.exists(os.path.join(args.target,'bam')):
-            os.makedirs(os.path.join(args.target,'bam'))
-        bamInfo_pkl_file = os.path.join(args.target, 'bam/bam.Info.pkl')
-        bamInfo2_pkl_file = os.path.join(args.target, 'bam/bam.Info2.pkl')
-        bamInfo_file = os.path.join(args.target, 'bam/bam.Info.csv')
-        if os.path.isfile(bamInfo_pkl_file) == True and os.path.isfile(bamInfo_file) == True:
-            print('bam file information exist')
-        if os.path.isfile(bamInfo_pkl_file) == False and os.path.isfile(bamInfo_file) == True:
-            print('extracting bam file pickle information')
-            bam_info = pd.read_csv(bamInfo_file)
-            qname_dict, qname_cbumi_dict = pp.bam_info_to_dict(bam_info)
-            with open(bamInfo_pkl_file, 'wb') as file:
-                pickle.dump(qname_dict, file)
-            with open(bamInfo2_pkl_file, 'wb') as file:
-                pickle.dump(qname_cbumi_dict, file)
-        if os.path.isfile(bamInfo_pkl_file) == False and os.path.isfile(bamInfo_file) == False:
-            print('extracting bam file information')
-            if os.path.isfile(args.bam)==False:
-                bam_info = pp.extract_bam_info_folder(args.bam, args.workers)
-            else:
-                bam_info = pp.extract_bam_info(args.bam)
-            bam_info.to_csv(bamInfo_file)
-            print('generating bam file pickle information')
-            qname_dict, qname_cbumi_dict = pp.bam_info_to_dict(bam_info)
-            with open(bamInfo_pkl_file, 'wb') as file:
-                pickle.dump(qname_dict, file)
-            with open(bamInfo2_pkl_file, 'wb') as file:
-                pickle.dump(qname_cbumi_dict, file)
+        annotator.annotation_bam()
     elif args.task=='matrix':#task is to generate compatible matrix
         bamInfo_pkl_file = os.path.join(args.target, 'bam/bam.Info.pkl')
         bamInfo2_pkl_file = os.path.join(args.target, 'bam/bam.Info2.pkl')
