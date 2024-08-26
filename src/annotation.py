@@ -354,6 +354,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     """
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
+    genes = None
     #####################################################
     #option1: ---------rely on bam file alone---------###
     #####################################################
@@ -363,6 +364,9 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                        coverage_threshold_gene=coverage_threshold_gene,
                        coverage_threshold_exon=coverage_threshold_exon,
                        min_gene_size=min_gene_size, workers=num_cores)
+        if output is not None:
+            with open(output, 'wb') as file:
+                pickle.dump(geneStructureInformation, file)
     #####################################################
     # option2: --------rely on existing annotation alone#
     #####################################################
@@ -378,7 +382,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
             if output is not None:
                 with open(output, 'wb') as file:
                     pickle.dump(geneStructureInformation, file)
-        else:
+        else:#there exist pre-computate annotation file
             print('load existing annotation pickle file of each single gene')
             geneStructureInformation = load_pickle(output)
         ##############################################################
@@ -391,9 +395,20 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                                                       coverage_threshold_gene=coverage_threshold_gene,
                                                       coverage_threshold_exon=coverage_threshold_exon,
                                                       min_gene_size=min_gene_size, workers=num_cores)
+            if output is not None:
+                with open('updated_' + str(output), 'wb') as file:
+                    pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
-        # group genes
+        if genes is None: #bam generated reference
+            geneIDs = list(geneStructureInformation.keys())
+            rows = []
+            for i, geneID in enumerate(geneIDs):
+                row = [geneStructureInformation[geneID][0]['geneChr'], geneStructureInformation[geneID][0]['geneStart'],
+                geneStructureInformation[geneID][0]['geneEnd'], geneStructureInformation[geneID][0]['geneID'],
+                geneStructureInformation[geneID][0]['geneName'], '.', i]
+                rows.append(row)
+            genes = pd.DataFrame(rows)
         genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND', 'META_GENE']
         grouped = genes.groupby("META_GENE")
         grouped_dict = {key: group.iloc[:, 3].tolist() for key, group in grouped}  # META_GENE STARTS FROM 1
