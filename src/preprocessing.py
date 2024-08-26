@@ -78,6 +78,10 @@ def merge_exons(exons):
     merged_exons.append((current_start, current_end))
     return merged_exons
 
+######################################################################
+##############################annotation##############################
+######################################################################
+
 def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
     files = os.listdir(bam_folder)
     bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
@@ -130,7 +134,6 @@ def extract_bam_info_pacbio(bam):
     else:
         ReadTagsDF = None
     return ReadTagsDF
-
 
 
 def bam_info_to_dict(bam_info, parse=False):
@@ -199,6 +202,9 @@ def extract_annotation_info(refGeneFile, num_cores=8, output="geneStructureInfor
             pickle.dump(metageneStructureInformation, file)
     return metageneStructureInformation
 
+######################################################################
+
+
 def summarise_metagene(Info_multigenes):
     n_genes = len(Info_multigenes)
     geneChr = Info_multigenes[0][0]['geneChr']
@@ -211,12 +217,8 @@ def summarise_metagene(Info_multigenes):
     return geneChr, start, end
 
 def read_exon_match(read, Info_singlegene):
-    if isinstance(read, dict):
-        readName, readStart, readEnd = read['qname'], read['reference_start'], read['reference_end']
-        referencePositions = read['get_reference_positions']
-    else:
-        readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
-        referencePositions = read.get_reference_positions(full_length=False)
+    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    referencePositions = read.get_reference_positions(full_length=False)
     geneInfo, exonInfo, isoformInfo = Info_singlegene
     gene_name =geneInfo['geneName']
     gene_length = geneInfo['geneEnd'] - geneInfo['geneStart']
@@ -224,7 +226,7 @@ def read_exon_match(read, Info_singlegene):
         readDist = readStart - geneInfo["geneStart"]
     else:
         readDist = readEnd - geneInfo["geneEnd"]
-    if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd']):
+    if readStart >= geneInfo['geneStart'] and readEnd <= geneInfo['geneEnd']:
         mapExons = exon_hit(referencePositions, exonInfo)
         n_mapExons=sum(mapExons)
     else:
@@ -662,6 +664,10 @@ def find_novel_by_chunk(df_pct, df_assign, chunk_size=1500):
 
 
 def map_read_to_isoform(isoformInfo_dict, isoform_assignment_vector_list, read_assignment_df):
+    #isoformInfo_dict: isoform - exon annotation
+    #isoform_assignment_vector_list: isoform - exon
+    #read_assignment_df: read - exon
+    #output: reduced isoformInfo_dict annotation; read - isoform compatible matrix, unmapped reads
     novel_isoform_assignment = np.array(isoform_assignment_vector_list)
     data = read_assignment_df.to_numpy()
     if novel_isoform_assignment.ndim == 1 or data.ndim == 1:
@@ -682,8 +688,6 @@ def map_read_to_isoform(isoformInfo_dict, isoform_assignment_vector_list, read_a
     novelisoform_dict = {key: value for key, value in isoformInfo_dict.items() if key in novel_isoform_names}
     novelisoform_dict = dict(sorted(novelisoform_dict.items(), key=lambda item: -len(item[1])))
     novel_df = novel_df[novelisoform_dict.keys()]
-    #for rd in novel_df_empty.index.tolist():
-    #    Read_Isoform_compatibleVector.append((rd, [0] * n_isoforms))
     return novelisoform_dict, novel_df, novel_df_empty.index.tolist()
 
 def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms):
@@ -844,6 +848,7 @@ def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_
     return None
 
 
+#####main function ########
 def extract_compatible_matrix_by_metagene(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, lowest_match=0.2, output_folder=None):
     #extract compatible matrix by metagene: output gene name and compatible matrix
     #bamFile: path to bam file
