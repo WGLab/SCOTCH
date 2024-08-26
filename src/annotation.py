@@ -172,9 +172,6 @@ def get_splicejuction_from_read(read):
     return junctions #this returns introns e.g. (103, 105) is 0 based containing 2 bases
 
 
-
-###main function
-##TODO: update existing annotation, generate annotation, no repeat read bam file
 def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=20):
     bam = pysam.AlignmentFile(bam_file, "rb")
     exons, coverage, junctions = [], {}, []
