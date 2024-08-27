@@ -375,7 +375,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     # option2: --------rely on existing annotation alone#
     #####################################################
     if refGeneFile_path is not None:
-        print('use existing gene annotation gtf file')
+        print('use the existing gtf file for gene annotations')
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
@@ -388,7 +388,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                 with open(output, 'wb') as file:
                     pickle.dump(geneStructureInformation, file)
         else:#there exist pre-computate annotation file
-            print('load existing annotation pickle file of each single gene')
+            print('load existing annotation pickle file of each single gene at: '+str(output))
             geneStructureInformation = load_pickle(output)
         ##############################################################
         #option3: ---------update existing annotation using bam file##
@@ -472,19 +472,19 @@ class Annotator:
             if self.reference_gtf_path is None:
                 print('annotation free mode')
                 _ = extract_annotation_info(None, self.bam_path, self.workers,
-                                "geneStructureInformation.pkl", None,
+                                self.annotation_path_single_gene, None,
                                 self.coverage_threshold_gene, self.coverage_threshold_exon,
                                             self.min_gene_size)
             if self.update_gtf:
                 print('update existing annotation using bam file')
                 _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
-                                            "geneStructureInformation.pkl", None,
+                                            self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
                                             self.min_gene_size)
             else:
                 print('using existing annotation file')
                 _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
-                                            "geneStructureInformation.pkl", None,
+                                            self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
                                             self.min_gene_size)
     def annotation_bam(self):
