@@ -314,6 +314,10 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon):
         chrom, gene_start, gene_end = geneStructureInformation[geneID][0]['geneChr'], \
         geneStructureInformation[geneID][0]['geneStart'], geneStructureInformation[geneID][0]['geneEnd']
+        if os.path.isfile(bamfile_path) == False:  # bamfile is a folder
+            bamFile_name = [f for f in os.listdir(bamfile_path) if
+                            f.endswith('.bam') and '.' + str(chrom) + '.' in f]
+            bamfile_path = os.path.join(bamfile_path, bamFile_name[0])
         exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon)
         original_exons = geneStructureInformation[geneID][1]
         updated_exons = update_exons(original_exons, exons_bam)
