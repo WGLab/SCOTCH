@@ -465,24 +465,24 @@ class Annotator:
         if not os.path.exists(self.annotation_folder_path):
             os.makedirs(self.annotation_folder_path)
         if os.path.isfile(self.annotation_path_single_gene) and os.path.isfile(self.annotation_path_meta_gene):
-            print('gene annotation information exist')
+            print('complete gene annotation information exist')
         else:
-            print('gene annotation information does not exist, we will generate')
+            print('complete gene annotation information does not exist, we will generate')
             #annotation free mode
             if self.reference_gtf_path is None:
-                print('annotation free mode')
+                print('Annotation-free Mode: we will rely on given bam files to generate gene annotations')
                 _ = extract_annotation_info(None, self.bam_path, self.workers,
                                 self.annotation_path_single_gene, None,
                                 self.coverage_threshold_gene, self.coverage_threshold_exon,
                                             self.min_gene_size)
             if self.update_gtf:
-                print('update existing annotation using bam file')
+                print('Semi-annotation Mode: we will update existing gene annotations using given bam files')
                 _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
                                             self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
                                             self.min_gene_size)
             else:
-                print('using existing annotation file')
+                print('Annotation-only Mode: we will only use existing gene annotations')
                 _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
                                             self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
