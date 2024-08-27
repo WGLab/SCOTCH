@@ -358,8 +358,8 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     #option1: ---------rely on bam file alone---------###
     #####################################################
-    print('rely on bam file alone to generate gene annotations')
     if refGeneFile_path is None and bamfile_path is not None:
+        print('rely on bam file alone to generate gene annotations')
         geneStructureInformation = annotate_genes(geneStructureInformation = None, bamfile_path = bamfile_path,
                        coverage_threshold_gene=coverage_threshold_gene,
                        coverage_threshold_exon=coverage_threshold_exon,
@@ -370,14 +370,15 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     # option2: --------rely on existing annotation alone#
     #####################################################
-    print('rely on existing gene annotations')
     if refGeneFile_path is not None:
+        print('use existing gene annotation gtf file')
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
         if os.path.isfile(output) == False:
             geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
             geneStructureInformation = dict(geneStructureInformation)
+            print('finish generating geneStructureInformation.pkl')
             #save to output, single gene
             if output is not None:
                 with open(output, 'wb') as file:
@@ -388,8 +389,8 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
-        print('rely on bam file to update existing gene annotations')
         if bamfile_path is not None:
+            print('rely on bam file to update existing gene annotations')
             geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
                                                       bamfile_path=bamfile_path,
                                                       coverage_threshold_gene=coverage_threshold_gene,
