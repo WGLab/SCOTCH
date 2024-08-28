@@ -401,7 +401,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                                                       coverage_threshold_exon=coverage_threshold_exon,
                                                       min_gene_size=min_gene_size, workers=num_cores)
             if output is not None:
-                with open('updated_' + str(output), 'wb') as file:
+                with open(output[:-4]+'updated.pkl', 'wb') as file:
                     pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
