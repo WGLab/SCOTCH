@@ -171,7 +171,7 @@ def get_splicejuction_from_read(read):
     return junctions #this returns introns e.g. (103, 105) is 0 based containing 2 bases
 
 
-def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=20):
+def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=0.01):
     bam = pysam.AlignmentFile(bam_file, "rb")
     exons, coverage, junctions = [], {}, []
     #get read coverage
@@ -184,8 +184,9 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                         coverage[pos] += 1
                     else:
                         coverage[pos] = 1
+    coverage_threshold_absolute = max(coverage.values())*coverage_threshold
     #only keep positions that meet the coverage threshold
-    coverage = {pos: cov for pos, cov in coverage.items() if cov > coverage_threshold}
+    coverage = {pos: cov for pos, cov in coverage.items() if cov > coverage_threshold_absolute}
     coverage_blocks = get_continuous_blocks(coverage)
     coverage_blocks = [(a,b) for a, b in coverage_blocks if b-a >= 20]#delete less than 20bp exons
     if len(coverage_blocks)==0:
@@ -249,26 +250,71 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
     return sorted_all_genes
 
 
-def update_exons(exonInfo_annotation, exonInfo_annotation_free):
-    if len(exonInfo_annotation)==1:
-        return exonInfo_annotation
-    updated_exonInfo = list(exonInfo_annotation)
-    for i in range(len(exonInfo_annotation) - 1):
-        end_of_current = exonInfo_annotation[i][1]
-        start_of_next = exonInfo_annotation[i + 1][0]
-        if end_of_current < start_of_next:
-            gap_start = end_of_current
-            gap_end = start_of_next
-            for exon in exonInfo_annotation_free:
-                exon_start, exon_end = exon
+
+def update_exons(A, B):
+    ##B is reference
+    ##A is based on bam
+    def correct_point(point, reference_points, threshold = 10):
+        closest_point = None
+        min_distance = float('inf')
+        for ref_point in reference_points:
+            distance = abs(point - ref_point)
+            if distance < threshold and distance < min_distance:
+                closest_point = ref_point
+                min_distance = distance
+        return closest_point if closest_point is not None else point
+    def partition_intervals(A, B):
+        all_intervals = A + B
+        all_intervals.sort()
+        partitions = []
+        current_start, current_end = all_intervals[0]
+        for start, end in all_intervals[1:]:
+            if start >= current_end:
+                if current_start < current_end:
+                    partitions.append((current_start, current_end))
+                current_start, current_end = start, end
+            else:
+                temp = [current_start, current_end, start, end]
+                temp.sort()
+                for i in [0, 1]:
+                    if temp[i]<temp[i + 1]:
+                        partitions.append((temp[i], temp[i + 1]))
+                current_start, current_end = temp[2], temp[3]
+        if current_start<current_end:
+            partitions.append((current_start, current_end))
+        return partitions
+    if len(B)==1:
+        return B
+    reference_points = [point for segment in B for point in segment]
+    corrected_A = []
+    for start, end in A:
+        corrected_start = correct_point(start, reference_points)
+        corrected_end = correct_point(end, reference_points)
+        corrected_A.append((corrected_start, corrected_end))
+    corrected_A = [(a,b) for a,b in corrected_A if a<b]
+    return partition_intervals(corrected_A,B)
+
+
+#def update_exons(exonInfo_annotation, exonInfo_annotation_free):
+#    if len(exonInfo_annotation)==1:
+#        return exonInfo_annotation
+#    updated_exonInfo = list(exonInfo_annotation)
+#    for i in range(len(exonInfo_annotation) - 1):
+#        end_of_current = exonInfo_annotation[i][1]
+#        start_of_next = exonInfo_annotation[i + 1][0]
+#        if end_of_current < start_of_next:
+#            gap_start = end_of_current
+#            gap_end = start_of_next
+#            for exon in exonInfo_annotation_free:
+#                exon_start, exon_end = exon
                 # Find overlap with the gap
-                if (exon_start>=gap_start and exon_start <= gap_end) or (exon_end >= gap_start and exon_end <= gap_end):
-                    segment_start = max(gap_start, exon_start)
-                    segment_end = min(gap_end, exon_end)
-                    if segment_start < segment_end:
-                        updated_exonInfo.append((segment_start, segment_end))
-    updated_exonInfo.sort()
-    return updated_exonInfo
+#                if (exon_start>=gap_start and exon_start <= gap_end) or (exon_end >= gap_start and exon_end <= gap_end):
+#                    segment_start = max(gap_start, exon_start)
+#                    segment_end = min(gap_end, exon_end)
+#                    if segment_start < segment_end:
+#                        updated_exonInfo.append((segment_start, segment_end))
+#    updated_exonInfo.sort()
+#    return updated_exonInfo
 
 
 
@@ -320,7 +366,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
             bamfile_path = os.path.join(bamfile_path, bamFile_name[0])
         exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon)
         original_exons = geneStructureInformation[geneID][1]
-        updated_exons = update_exons(original_exons, exons_bam)
+        updated_exons = update_exons(exons_bam, original_exons)
         # geneInfo
         geneInfo = geneStructureInformation[geneID][0]
         geneInfo['numofExons'] = len(updated_exons)
