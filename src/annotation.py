@@ -191,10 +191,13 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1):
     std_derivative = np.std(derivatives)
     z_scores = (derivatives - mean_derivative) / std_derivative
     cut_positions = positions[np.abs(z_scores) > 3]
+    if len(cut_positions)==0:
+        return exons
     cut_positions_valid = [cut_positions[0]]
-    for i in range(1, len(cut_positions)):
-        if cut_positions[i] - cut_positions[i - 1] > 10:
-            cut_positions_valid.append(cut_positions[i])
+    if len(cut_positions)>1:
+        for i in range(1, len(cut_positions)):
+            if cut_positions[i] - cut_positions[i - 1] > 10:
+                cut_positions_valid.append(cut_positions[i])
     new_exons = []
     for exon in exons:
         exon_start, exon_end = exon
