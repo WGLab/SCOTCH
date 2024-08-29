@@ -6,7 +6,8 @@ import os
 import pandas as pd
 import pickle
 from preprocessing import load_pickle
-
+from scipy.ndimage import gaussian_filter1d
+import numpy as np
 ######################################################################
 ##############################annotation##############################
 ######################################################################
@@ -170,9 +171,45 @@ def get_splicejuction_from_read(read):
             ref_pos += cigarlen
     return junctions #this returns introns e.g. (103, 105) is 0 based containing 2 bases
 
+def cut_exons_by_derivative(exons, coverage, sigma = 1):
+    #exon_dict: just one exon
+    #coverage: the whole coverage object {1000:100, 1001:101}
+    derivatives, positions = [], []
+    for exon in exons:
+        exon_start, exon_end = exon
+        coverage_values = np.array([coverage[i] for i in range(exon_start, exon_end)])
+        smoothed_coverage = gaussian_filter1d(coverage_values, sigma)
+        derivative = np.diff(smoothed_coverage)
+        derivatives.append(derivative.tolist())
+        positions.extend(range(exon_start + 1, exon_end))
+    derivatives = np.asarray([ii for i in derivatives for ii in i])
+    positions = np.asarray(positions)
+    mean_derivative = np.mean(derivatives)
+    std_derivative = np.std(derivatives)
+    z_scores = (derivatives - mean_derivative) / std_derivative
+    cut_positions = positions[np.abs(z_scores) > 3]
+    cut_positions_valid = [cut_positions[0]]
+    for i in range(1, len(cut_positions)):
+        if cut_positions[i] - cut_positions[i - 1] > 10:
+            cut_positions_valid.append(cut_positions[i])
+    new_exons = []
+    for exon in exons:
+        exon_start, exon_end = exon
+        cuts = [pos for pos in cut_positions_valid if pos - exon_start > 10 and exon_end-pos > 10]
+        if len(cuts)==0:
+            new_exons.append(exon)
+        else:
+            exon_positions = [exon_start]+cuts +[exon_end]
+            for i in range(len(exon_positions)-1):
+                new_exons.append((exon_positions[i], exon_positions[i+1]))
+    return new_exons
 
-def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=0.01):
-    bam = pysam.AlignmentFile(bam_file, "rb")
+
+def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=0.01, boundary_threshold=0.01):
+    if isinstance(bam_file,str):
+        bam = pysam.AlignmentFile(bam_file, "rb")
+    else:
+        bam = bam_file
     exons, coverage, junctions = [], {}, []
     #get read coverage
     for read in bam.fetch(chrom, gene_start, gene_end):
@@ -191,6 +228,18 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
     coverage_blocks = [(a,b) for a, b in coverage_blocks if b-a >= 20]#delete less than 20bp exons
     if len(coverage_blocks)==0:
         return exons
+    # fill up holes less than 20bp
+    if len(coverage_blocks) >1:
+        coverage_blocks_ = []
+        current_start, current_end = coverage_blocks[0]
+        for start, end in coverage_blocks[1:]:
+            if start - current_end > 20:
+                coverage_blocks_.append((current_start, current_end))
+                current_start, current_end = start, end
+            else:
+                current_end = end
+        coverage_blocks_.append((current_start, current_end))
+        coverage_blocks = coverage_blocks_
     #use splicing junctions to find sub-exons
     boundaries = count_and_sort_tuple_elements(junctions)
     filtered_boundaries = [{} for _ in coverage_blocks]
@@ -199,17 +248,25 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
             if start < boundary < end:
                 filtered_boundaries[i][boundary] = freq
                 break
-    Filtered_Boundaries = []
+    Filtered_Boundaries= []
+    boundary_threshold_absolute = max(list(boundaries.values()))*boundary_threshold
     for filtered_boundaries_ in filtered_boundaries:
         merged_boundaries = merge_boundaries_by_evidence(filtered_boundaries_, merge_distance=10)
         sorted_boundaries = dict(sorted(merged_boundaries.items()))
-        filtered_sorted_boundaries = {k: v for k, v in sorted_boundaries.items() if v > 20}
+        filtered_sorted_boundaries = {k: v for k, v in sorted_boundaries.items() if v >= boundary_threshold_absolute}
         Filtered_Boundaries.append(filtered_sorted_boundaries)
+    #futher filter the boundaries that are too close to a boundary of an exon_block
+    for i, block_boundaries in enumerate(Filtered_Boundaries):
+        for boundary in list(block_boundaries.keys()):
+            if abs(boundary - coverage_blocks[i][0])<=10 or abs(boundary - coverage_blocks[i][1])<=10:
+                del Filtered_Boundaries[i][boundary]
+    #partition exon blocks into sub exons based on splicing positions
     for i in range(len(coverage_blocks)):
         start, end = coverage_blocks[i]
         positions = [start]+list(Filtered_Boundaries[i].keys())+[end]
         for ii in range(len(positions)-1):
             exons.append((positions[ii], positions[ii+1]))
+    exons = cut_exons_by_derivative(exons, coverage)
     bam.close()
     return exons
 
@@ -295,51 +352,33 @@ def update_exons(A, B):
     return partition_intervals(corrected_A,B)
 
 
-#def update_exons(exonInfo_annotation, exonInfo_annotation_free):
-#    if len(exonInfo_annotation)==1:
-#        return exonInfo_annotation
-#    updated_exonInfo = list(exonInfo_annotation)
-#    for i in range(len(exonInfo_annotation) - 1):
-#        end_of_current = exonInfo_annotation[i][1]
-#        start_of_next = exonInfo_annotation[i + 1][0]
-#        if end_of_current < start_of_next:
-#            gap_start = end_of_current
-#            gap_end = start_of_next
-#            for exon in exonInfo_annotation_free:
-#                exon_start, exon_end = exon
-                # Find overlap with the gap
-#                if (exon_start>=gap_start and exon_start <= gap_end) or (exon_end >= gap_start and exon_end <= gap_end):
-#                    segment_start = max(gap_start, exon_start)
-#                    segment_end = min(gap_end, exon_end)
-#                    if segment_start < segment_end:
-#                        updated_exonInfo.append((segment_start, segment_end))
-#    updated_exonInfo.sort()
-#    return updated_exonInfo
 
 
-
+#modes involving bam file
 def annotate_genes(geneStructureInformation, bamfile_path,
-                   coverage_threshold_gene = 5, coverage_threshold_exon = 20,
+                   coverage_threshold_gene=5, coverage_threshold_exon=0.01,coverage_threshold_splicing=0.01,
                    min_gene_size=50, workers=1):
     """
     generate geneStructureInformation either using bamfile alone (leave geneStructureInformation blank) or update existing annotation file using bam file
     :param geneStructureInformation: pickle file object of existing gene annotation, not path
     :param bamfile_path: can be a folder path of multiple bams or a single bam file
     :param coverage_threshold_gene: minimal read coverage for gene
-    :param coverage_threshold_exon: minimal read coverage for exon
+    :param coverage_threshold_exon: minimal read coverage for exon, percentage to the maximum coverage
+    :param coverage_threshold_splicing: minimal read coverage to support splicing, percentage to the maximum splicing
     :param min_gene_size: minimal length for novel gene discovery
     :return: updated geneStructureInformation annotation
     """
-    def novel_gene_annotation(chrom, all_genes_dict, bamfile, coverage_threshold_exon=20):
+    def novel_gene_annotation(chrom, all_genes_dict, bamfile, coverage_threshold_exon=0.01, coverage_threshold_splicing=0.01):
         #all_genes: {'chr1':[(100,200),(300,400)]}, bamfile: path to one bam file
         if os.path.isfile(bamfile) == False:  # bamfile is a folder
             bamFile_name = [f for f in os.listdir(bamfile) if
                             f.endswith('.bam') and '.' + str(chrom) + '.' in f]
             bamfile = os.path.join(bamfile, bamFile_name[0])
+        bamfile = pysam.AlignmentFile(bamfile, "rb")
         genes = all_genes_dict[chrom]  # [(100,200),(300,400)]
         gene_annotations = {}
         for i, (gene_start, gene_end) in enumerate(genes):
-            exonInfo = get_non_overlapping_exons(bamfile, chrom, gene_start, gene_end, coverage_threshold_exon)
+            exonInfo = get_non_overlapping_exons(bamfile, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing)
             geneInfo = {'geneName': 'gene_'+ str(i+1)+'_'+chrom, 'geneID': 'gene_'+ str(i+1)+'_'+chrom,
                         'geneChr': chrom, 'geneStart':gene_start, 'geneEnd':gene_end, 'geneStrand': '.',
                         'numofExons': len(exonInfo), 'numofIsoforms': 0, 'isoformNames':[]}
@@ -357,14 +396,14 @@ def annotate_genes(geneStructureInformation, bamfile_path,
             updated_indices = [exon_mapping[idx] for idx in exon_indices if idx in exon_mapping]
             updated_isoform_info[isoform] = updated_indices
         return updated_isoform_info
-    def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon):
+    def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing):
         chrom, gene_start, gene_end = geneStructureInformation[geneID][0]['geneChr'], \
         geneStructureInformation[geneID][0]['geneStart'], geneStructureInformation[geneID][0]['geneEnd']
         if os.path.isfile(bamfile_path) == False:  # bamfile is a folder
             bamFile_name = [f for f in os.listdir(bamfile_path) if
                             f.endswith('.bam') and '.' + str(chrom) + '.' in f]
             bamfile_path = os.path.join(bamfile_path, bamFile_name[0])
-        exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon)
+        exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing)
         original_exons = geneStructureInformation[geneID][1]
         updated_exons = update_exons(exons_bam, original_exons)
         # geneInfo
@@ -380,26 +419,27 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         all_genes = get_genes_from_bam(bamfile_path, coverage_threshold_gene, min_gene_size) #{'chr1':[(100,200),(300,400)]}
         chroms = list(all_genes.keys())
         results = Parallel(n_jobs=workers)(
-            delayed(novel_gene_annotation)(chrom, all_genes, bamfile_path, coverage_threshold_exon) for chrom in chroms)
+            delayed(novel_gene_annotation)(chrom, all_genes, bamfile_path, coverage_threshold_exon, coverage_threshold_splicing) for chrom in chroms)
         annotations = {k: v for result in results for k, v in result.items()}
     #update existing gene annotation using bam file
     else:
         geneIDs = list(geneStructureInformation.keys())
         results = Parallel(n_jobs=workers)(
-            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon) for geneID in geneIDs)
+            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
     return annotations
 
 def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                             output="geneStructureInformation.pkl", build=None,
-                            coverage_threshold_gene=5, coverage_threshold_exon=20,min_gene_size=50):
+                            coverage_threshold_gene=5, coverage_threshold_exon=0.01,coverage_threshold_splicing=0.01,
+                            min_gene_size=50):
     """
-    extract gene annotation information
+    wrapper function to extract gene annotation information including exons and isoforms
     :param refGeneFile_path: path to gene annotation gtf file
     :param bamfile_path: path to bam file or the folder for bam files
     :param num_cores: number of workers for parallel computing
     :param output: default: geneStructureInformation.pkl
-    :param build: used for parse platform namingss
+    :param build: used for parse platform naming
     :return: metageneStructureInformation
     """
     geneStructureInformation = None
@@ -410,10 +450,13 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     if refGeneFile_path is None and bamfile_path is not None:
         print('rely on bam file alone to generate gene annotations')
-        geneStructureInformation = annotate_genes(geneStructureInformation = None, bamfile_path = bamfile_path,
-                       coverage_threshold_gene=coverage_threshold_gene,
-                       coverage_threshold_exon=coverage_threshold_exon,
-                       min_gene_size=min_gene_size, workers=num_cores)
+        geneStructureInformation = annotate_genes(geneStructureInformation = None,
+                                                  bamfile_path = bamfile_path,
+                                                  coverage_threshold_gene=coverage_threshold_gene,
+                                                  coverage_threshold_exon=coverage_threshold_exon,
+                                                  coverage_threshold_splicing = coverage_threshold_splicing,
+                                                  min_gene_size=min_gene_size,
+                                                  workers=num_cores)
         if output is not None:
             with open(output, 'wb') as file:
                 pickle.dump(geneStructureInformation, file)
@@ -445,6 +488,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                                                       bamfile_path=bamfile_path,
                                                       coverage_threshold_gene=coverage_threshold_gene,
                                                       coverage_threshold_exon=coverage_threshold_exon,
+                                                      coverage_threshold_splicing=coverage_threshold_splicing,
                                                       min_gene_size=min_gene_size, workers=num_cores)
             if output is not None:
                 with open(output[:-4]+'updated.pkl', 'wb') as file:
@@ -482,7 +526,8 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
 
 class Annotator:
     def __init__(self, target, reference_gtf_path, bam_path, update_gtf, workers,
-                 coverage_threshold_gene, coverage_threshold_exon, min_gene_size):
+                 coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,
+                 min_gene_size):
         """
         target: root path to save annotation files. SCOTCH will automatically create sub folders
         reference_gtf: path to gtf annotation (optional)
@@ -506,6 +551,7 @@ class Annotator:
         # some parameters
         self.coverage_threshold_gene = coverage_threshold_gene
         self.coverage_threshold_exon = coverage_threshold_exon
+        self.coverage_threshold_splicing = coverage_threshold_splicing
         self.min_gene_size = min_gene_size
     def annotate_genes(self):
         if not os.path.exists(self.annotation_folder_path):
@@ -520,18 +566,21 @@ class Annotator:
                 _ = extract_annotation_info(None, self.bam_path, self.workers,
                                 self.annotation_path_single_gene, None,
                                 self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.coverage_threshold_splicing,
                                             self.min_gene_size)
             if self.update_gtf:
                 print('Semi-annotation Mode: we will update existing gene annotations using given bam files')
                 _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
                                             self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.coverage_threshold_splicing,
                                             self.min_gene_size)
             else:
                 print('Annotation-only Mode: we will only use existing gene annotations')
                 _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
                                             self.annotation_path_single_gene, None,
                                             self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                            self.coverage_threshold_splicing,
                                             self.min_gene_size)
     def annotation_bam(self):
         if not os.path.exists(self.bamInfo_folder_path):
