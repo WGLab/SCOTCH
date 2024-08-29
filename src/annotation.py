@@ -278,7 +278,6 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                 exons.append((positions[ii], positions[ii+1]))
     #partition2: partition meta-exons using read coverage derivatives
     exons = cut_exons_by_derivative(exons, coverage)
-    bam.close()
     return exons
 
 
@@ -292,7 +291,6 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
                 if not read.is_unmapped:
                     for pos in range(read.reference_start, read.reference_end):
                         coverage[chrom][pos] += 1
-        bam.close()
         genes = {}
         for chrom, cov_dict in coverage.items():
             cov_dict = {pos: cov for pos, cov in cov_dict.items() if cov > coverage_threshold}
