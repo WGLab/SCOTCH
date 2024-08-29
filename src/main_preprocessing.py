@@ -17,7 +17,8 @@ parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf 
 parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
 parser.add_argument('--update_gtf_off', action='store_false',dest='update_gtf',help='do NOT use bam file to update existing gtf annotations')
 parser.add_argument('--coverage_threshold_gene',type=int, default= 5, help="coverage threshold to support gene discovery")
-parser.add_argument('--coverage_threshold_exon',type=int, default=20, help="coverage threshold to support exon discovery")
+parser.add_argument('--coverage_threshold_exon',type=int, default=0.01, help="coverage threshold to support exon discovery, percentage to the maximum coverage")
+parser.add_argument('--coverage_threshold_splicing',type=int, default=0.01, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
 
 #task is matrix
@@ -45,7 +46,8 @@ def main():
         annotator = annot.Annotator(target=args.target, reference_gtf_path = args.ref,
                                     bam_path = args.bam, update_gtf = args.update_gtf,
                                     workers = args.workers,coverage_threshold_gene = args.coverage_threshold_gene,
-                                    coverage_threshold_exon = args.coverage_threshold_exon, min_gene_size = args.min_gene_size)
+                                    coverage_threshold_exon = args.coverage_threshold_exon, coverage_threshold_splicing = args.coverage_threshold_splicing,
+                                    min_gene_size = args.min_gene_size)
         #generate gene annotation
         annotator.annotate_genes()
         #bam information
