@@ -177,6 +177,9 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1):
     derivatives, positions = [], []
     for exon in exons:
         exon_start, exon_end = exon
+        for pos in range(exon_start, exon_end):
+            if pos not in coverage:
+                coverage[pos] = 0
         coverage_values = np.array([coverage[i] for i in range(exon_start, exon_end)])
         smoothed_coverage = gaussian_filter1d(coverage_values, sigma)
         derivative = np.diff(smoothed_coverage)
@@ -223,7 +226,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                         coverage[pos] = 1
     if len(coverage)==0:
         return exons
-    coverage_threshold_absolute = max(coverage.values())*coverage_threshold
+    coverage_threshold_absolute = max(max(coverage.values())*coverage_threshold,10)
     #only keep positions that meet the coverage threshold
     coverage = {pos: cov for pos, cov in coverage.items() if cov > coverage_threshold_absolute}
     coverage_blocks = get_continuous_blocks(coverage)
@@ -255,7 +258,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                     filtered_boundaries[i][boundary] = freq
                     break
         Filtered_Boundaries= []
-        boundary_threshold_absolute = max(list(boundaries.values()))*boundary_threshold
+        boundary_threshold_absolute = max(max(list(boundaries.values()))*boundary_threshold,10)
         for filtered_boundaries_ in filtered_boundaries:
             merged_boundaries = merge_boundaries_by_evidence(filtered_boundaries_, merge_distance=10)
             sorted_boundaries = dict(sorted(merged_boundaries.items()))
