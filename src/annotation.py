@@ -221,6 +221,8 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                         coverage[pos] += 1
                     else:
                         coverage[pos] = 1
+    if len(coverage)==0:
+        return exons
     coverage_threshold_absolute = max(coverage.values())*coverage_threshold
     #only keep positions that meet the coverage threshold
     coverage = {pos: cov for pos, cov in coverage.items() if cov > coverage_threshold_absolute}
@@ -240,32 +242,38 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                 current_end = end
         coverage_blocks_.append((current_start, current_end))
         coverage_blocks = coverage_blocks_
-    #use splicing junctions to find sub-exons
+    #update exons to meta-exons
+    exons = coverage_blocks
+    #partition1: use splicing junctions to find sub-exons
     boundaries = count_and_sort_tuple_elements(junctions)
-    filtered_boundaries = [{} for _ in coverage_blocks]
-    for boundary, freq in boundaries.items():
-        for i, (start, end) in enumerate(coverage_blocks):
-            if start < boundary < end:
-                filtered_boundaries[i][boundary] = freq
-                break
-    Filtered_Boundaries= []
-    boundary_threshold_absolute = max(list(boundaries.values()))*boundary_threshold
-    for filtered_boundaries_ in filtered_boundaries:
-        merged_boundaries = merge_boundaries_by_evidence(filtered_boundaries_, merge_distance=10)
-        sorted_boundaries = dict(sorted(merged_boundaries.items()))
-        filtered_sorted_boundaries = {k: v for k, v in sorted_boundaries.items() if v >= boundary_threshold_absolute}
-        Filtered_Boundaries.append(filtered_sorted_boundaries)
-    #futher filter the boundaries that are too close to a boundary of an exon_block
-    for i, block_boundaries in enumerate(Filtered_Boundaries):
-        for boundary in list(block_boundaries.keys()):
-            if abs(boundary - coverage_blocks[i][0])<=10 or abs(boundary - coverage_blocks[i][1])<=10:
-                del Filtered_Boundaries[i][boundary]
-    #partition exon blocks into sub exons based on splicing positions
-    for i in range(len(coverage_blocks)):
-        start, end = coverage_blocks[i]
-        positions = [start]+list(Filtered_Boundaries[i].keys())+[end]
-        for ii in range(len(positions)-1):
-            exons.append((positions[ii], positions[ii+1]))
+    if len(boundaries)>1:
+        #group boundaries by meta-exons
+        filtered_boundaries = [{} for _ in coverage_blocks]
+        for boundary, freq in boundaries.items():
+            for i, (start, end) in enumerate(coverage_blocks):
+                if start < boundary < end:
+                    filtered_boundaries[i][boundary] = freq
+                    break
+        Filtered_Boundaries= []
+        boundary_threshold_absolute = max(list(boundaries.values()))*boundary_threshold
+        for filtered_boundaries_ in filtered_boundaries:
+            merged_boundaries = merge_boundaries_by_evidence(filtered_boundaries_, merge_distance=10)
+            sorted_boundaries = dict(sorted(merged_boundaries.items()))
+            filtered_sorted_boundaries = {k: v for k, v in sorted_boundaries.items() if v >= boundary_threshold_absolute}
+            Filtered_Boundaries.append(filtered_sorted_boundaries)
+        #futher filter the boundaries that are too close to a boundary of an exon_block
+        for i, block_boundaries in enumerate(Filtered_Boundaries):
+            for boundary in list(block_boundaries.keys()):
+                if abs(boundary - coverage_blocks[i][0])<=10 or abs(boundary - coverage_blocks[i][1])<=10:
+                    del Filtered_Boundaries[i][boundary]
+        #partition exon blocks into sub exons based on splicing positions
+        exons = [] #----re-initiate exons
+        for i in range(len(coverage_blocks)):
+            start, end = coverage_blocks[i]
+            positions = [start]+list(Filtered_Boundaries[i].keys())+[end]
+            for ii in range(len(positions)-1):
+                exons.append((positions[ii], positions[ii+1]))
+    #partition2: partition meta-exons using read coverage derivatives
     exons = cut_exons_by_derivative(exons, coverage)
     bam.close()
     return exons
@@ -340,6 +348,8 @@ def update_exons(A, B):
         if current_start<current_end:
             partitions.append((current_start, current_end))
         return partitions
+    if len(A)==0:
+        return B
     if len(B)==1:
         return B
     reference_points = [point for segment in B for point in segment]
