@@ -766,7 +766,8 @@ def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isofor
     return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
 
 ##TODO: change functions used this function: exonInfo,isoformInfo
-def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
+def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
+                                  qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
     #save compatible vector
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
@@ -784,10 +785,13 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
                     if isoform_name != 'uncategorized':
                         exon_indices = isoformInfo[isoform_name]
                         exon_coords = ",".join([f"({exonInfo[i][0]},{exonInfo[i][1]})" for i in exon_indices])
-                        data_to_save.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords])
+                        data_to_save.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords,
+                                             qname_cbumi_dict[readname].split('_')[0],
+                                             qname_cbumi_dict[readname].split('_')[1]])
                     else:
-                        data_to_save.append([readname, isoform_name, "-", "-"])
-        df = pd.DataFrame(data_to_save, columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates'])
+                        data_to_save.append([readname, isoform_name, "-", "-",qname_cbumi_dict[readname].split('_')[0],
+                                             qname_cbumi_dict[readname].split('_')[1]])
+        df = pd.DataFrame(data_to_save, columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates','Cell','Umi'])
         # Save to a TSV file
         readmapping_filename = os.path.join(output_folder0, geneName+'_read_isoform_exon_mapping.tsv')
         df.to_csv(readmapping_filename, sep='\t', index=False)
