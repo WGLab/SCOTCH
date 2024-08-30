@@ -134,6 +134,8 @@ class ReadMapper:
                 return return_list
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
         compatible_folder_path = os.path.join(self.target,'compatible')
+        if not os.path.exists(compatible_folder_path):
+            os.makedirs(compatible_folder_path)
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []

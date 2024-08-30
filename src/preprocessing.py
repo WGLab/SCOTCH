@@ -774,6 +774,8 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
     if Read_Isoform_compatibleVector is not None:
         # save read-isoform mapping
         output_folder0 = os.path.join(output_folder, 'auxillary')
+        if not os.path.exists(output_folder0):
+            os.makedirs(output_folder0)
         data_to_save = []
         for readname, indicators in Read_Isoform_compatibleVector.items():
             for idx, value in enumerate(indicators):
