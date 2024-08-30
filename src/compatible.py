@@ -1,7 +1,7 @@
 from preprocessing import *
 import pysam
 
-##TODO: add other platforms
+
 class ReadMapper:
     def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x'):
         self.target = target
@@ -294,8 +294,12 @@ class ReadMapper:
             print('processing: ' + str(len(MetaGenes_)) + ' metagenes')
         else:#total_jobs = 1
             MetaGenes_ = MetaGenes
-        for meta_gene in MetaGenes_:
-            self.map_reads(meta_gene, save=True)
+        if self.parse:
+            for meta_gene in MetaGenes_:
+                self.map_reads_parse(meta_gene, save=True)
+        else:
+            for meta_gene in MetaGenes_:
+                self.map_reads(meta_gene, save=True)
 
 
 
