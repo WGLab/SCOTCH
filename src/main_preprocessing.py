@@ -59,6 +59,7 @@ def main():
         print('generating compatible matrix')
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
                                       current_job_index=args.job_index)
+
     else: # task is to generate count matrix
         adata_gene_unfiltered, adata_transcript_unfiltered, adata_gene_filtered, adata_transcript_filtered = cm.generate_count_matrix(path=args.target, novel_read_n=args.novel_read_n, num_cores=args.workers)
         print('count matrix generated')

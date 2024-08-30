@@ -1,6 +1,7 @@
 from preprocessing import *
 import pysam
 
+##TODO: add other platforms
 class ReadMapper:
     def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x'):
         self.target = target
@@ -15,7 +16,7 @@ class ReadMapper:
         self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')#bamInfo2_pkl_file
         self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
         # bam information file
-        self.qname_dict = load_pickle(self.bamInfo_folder_path)
+        self.qname_dict = load_pickle(self.bamInfo_pkl_path)
         self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene)
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
