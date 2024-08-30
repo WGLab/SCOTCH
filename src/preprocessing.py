@@ -795,6 +795,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         # Save to a TSV file
         readmapping_filename = os.path.join(output_folder0, geneName+'_read_isoform_exon_mapping.tsv')
         df.to_csv(readmapping_filename, sep='\t', index=False)
+
         mat = np.array(list(dict(Read_Isoform_compatibleVector).values()))
         rowNames = list(dict(Read_Isoform_compatibleVector).keys())
         rowNames = [qname_cbumi_dict[rn] for rn in rowNames]

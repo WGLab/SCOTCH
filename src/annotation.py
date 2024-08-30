@@ -401,13 +401,16 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         return gene_annotations
     def update_isoform_info(original_exons, updated_exons, isoformInfo):
         exon_mapping = {}
-        for original_idx, original_exon in enumerate(original_exons):
-            for updated_idx, updated_exon in enumerate(updated_exons):
-                if original_exon == updated_exon:
-                    exon_mapping[original_idx] = updated_idx
+        for original_idx, (original_start, original_end) in enumerate(original_exons):
+            for updated_idx, (updated_start, updated_end) in enumerate(updated_exons):
+                if original_start <= updated_start and original_end >= updated_end:
+                    if original_idx not in exon_mapping:
+                        exon_mapping[original_idx] = []
+                    exon_mapping[original_idx].append(updated_idx)
         updated_isoform_info = {}
         for isoform, exon_indices in isoformInfo.items():
             updated_indices = [exon_mapping[idx] for idx in exon_indices if idx in exon_mapping]
+            updated_indices = [ii for i in updated_indices for ii in i]
             updated_isoform_info[isoform] = updated_indices
         return updated_isoform_info
     def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing):
@@ -420,13 +423,14 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing)
         original_exons = geneStructureInformation[geneID][1]
         updated_exons = update_exons(exons_bam, original_exons)
+        geneStructureInformation_copy = geneStructureInformation.copy()
         # geneInfo
-        geneInfo = geneStructureInformation[geneID][0]
+        geneInfo = geneStructureInformation_copy[geneID][0]
         geneInfo['numofExons'] = len(updated_exons)
         # exonInfo
         exonInfo = updated_exons
         # isoformInfo
-        isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation[geneID][2])
+        isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation_copy[geneID][2])
         return {geneID:[geneInfo, exonInfo, isoformInfo]}
     #generate gene annotation solely based on bam file
     if geneStructureInformation is None:
