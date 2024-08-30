@@ -131,6 +131,39 @@ class ReadMapper:
                             'isoformInfo': self.metageneStructureInformationwNovel[meta_gene][index][2]})
             if save==False:
                 return return_list
+    def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
+        compatible_folder_path = os.path.join(self.target,'compatible')
+        if cover_existing:
+            print('If there are existing compatible matrix files, SCOTCH will overwrite them')
+            genes_existing = []
+        else:
+            print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
+            genes_existing = [g[:-4] for g in os.listdir(compatible_folder_path)]
+            if os.path.isfile(os.path.join(compatible_folder_path, 'log.txt')):
+                gene_df = pd.read_csv(os.path.join(compatible_folder_path, 'log.txt'), header=None)
+                genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
+        MetaGene_Gene_dict = {}
+        for key, values in self.metageneStructureInformation.items():
+            genes_ = []
+            for value in values:
+                gene = str(value[0]['geneName']) + '_' + str(value[0]['geneID'])
+                if gene not in genes_existing:
+                    genes_.append(gene)
+            if len(genes_) > 0:
+                MetaGene_Gene_dict[key] = genes_
+        MetaGenes = list(MetaGene_Gene_dict.keys())
+        print('total metagene number is: ' + str(len(MetaGenes)))
+        if total_jobs > 1:
+            step_size = math.ceil(len(MetaGenes) / total_jobs)
+            s = int(list(range(0, len(MetaGenes), step_size))[current_job_index])
+            e = int(s + step_size)
+            MetaGenes_ = MetaGenes[s:e]
+            print('processing: ' + str(len(MetaGenes_)) + ' metagenes')
+        else:#total_jobs = 1
+            MetaGenes_ = MetaGenes
+        for meta_gene in MetaGenes_:
+            self.map_reads(meta_gene, save=True)
+
 
 
 

@@ -3,6 +3,7 @@ import preprocessing as pp
 import count_matrix as cm
 import os
 import annotation as annot
+import compatible as cp
 #from scipy.sparse import csr_matrix, save_npz
 from scipy.io import mmwrite
 import pickle
@@ -11,6 +12,7 @@ parser = argparse.ArgumentParser(description='Preprocess files')
 #mandaroty options
 parser.add_argument('--target',type=str,help="path to target root folder for output files")
 parser.add_argument('--task',type=str,help="choose task between annotation, matrix(read * isoform), and count (count matrix)")
+parser.add_argument('--bam',type=str,help="Path to bam file or bam folder")
 
 #task is annotation
 parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf format, output pickel file, leave it blank if using annotation-free mode")
@@ -22,7 +24,6 @@ parser.add_argument('--coverage_threshold_splicing',type=int, default=0.01, help
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
 
 #task is matrix
-parser.add_argument('--bam',type=str,help="Path to bam file")
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
 parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork")
 parser.add_argument('--cover_existing',action='store_true')
@@ -52,17 +53,12 @@ def main():
         annotator.annotate_genes()
         #bam information
         annotator.annotation_bam()
-
     elif args.task=='matrix':#task is to generate compatible matrix
-        bamInfo_pkl_file = os.path.join(args.target, 'bam/bam.Info.pkl')
-        bamInfo2_pkl_file = os.path.join(args.target, 'bam/bam.Info2.pkl')
-        qname_dict = pp.load_pickle(bamInfo_pkl_file)
-        qname_cbumi_dict = pp.load_pickle(bamInfo2_pkl_file)
-        metagene_pkl = pp.load_pickle(os.path.join(args.target, "reference/metageneStructureInformation.pkl"))
+        readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
+                                   lowest_match=args.match, platform = '10x')
         print('generating compatible matrix')
-        pp.generate_compatibleVector(args.bam, qname_dict, qname_cbumi_dict, metagene_pkl, args.match, args.target,
-                                     args.job_index, args.total_jobs, args.cover_existing)
-
+        readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
+                                      current_job_index=args.job_index)
     else: # task is to generate count matrix
         adata_gene_unfiltered, adata_transcript_unfiltered, adata_gene_filtered, adata_transcript_filtered = cm.generate_count_matrix(path=args.target, novel_read_n=args.novel_read_n, num_cores=args.workers)
         print('count matrix generated')
