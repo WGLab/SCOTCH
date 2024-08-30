@@ -766,7 +766,6 @@ def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isofor
     return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
 
 ##TODO: change functions used this function: exonInfo,isoformInfo
-##TODO: save group novel isoform info
 def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
                                   qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
     #save compatible vector

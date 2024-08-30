@@ -17,7 +17,7 @@ parser.add_argument('--ref',type=str,default='/scr1/users/xu3/singlecell/ref/hg3
 parser.add_argument('--geneinfo',type=str, help="path to pickle file of gene annotations")
 
 #task is annotation
-parser.add_argument('--build',type=str, default='hg38',help="genome build")
+parser.add_argument('--build',type=str, help="genome build")
 
 #task is matrix
 parser.add_argument('--bam',type=str,help="Path to bam file")

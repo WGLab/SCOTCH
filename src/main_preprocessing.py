@@ -13,7 +13,7 @@ parser = argparse.ArgumentParser(description='Preprocess files')
 parser.add_argument('--target',type=str,help="path to target root folder for output files")
 parser.add_argument('--task',type=str,help="choose task between annotation, matrix(read * isoform), and count (count matrix)")
 parser.add_argument('--bam',type=str,help="Path to bam file or bam folder")
-
+parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
 #task is annotation
 parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf format, output pickel file, leave it blank if using annotation-free mode")
 parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
@@ -48,14 +48,14 @@ def main():
                                     bam_path = args.bam, update_gtf = args.update_gtf,
                                     workers = args.workers,coverage_threshold_gene = args.coverage_threshold_gene,
                                     coverage_threshold_exon = args.coverage_threshold_exon, coverage_threshold_splicing = args.coverage_threshold_splicing,
-                                    min_gene_size = args.min_gene_size)
+                                    min_gene_size = args.min_gene_size, build=args.build, platform = args.platform)
         #generate gene annotation
         annotator.annotate_genes()
         #bam information
         annotator.annotation_bam()
     elif args.task=='matrix':#task is to generate compatible matrix
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
-                                   lowest_match=args.match, platform = '10x')
+                                   lowest_match=args.match, platform = args.platform)
         print('generating compatible matrix')
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
                                       current_job_index=args.job_index)
