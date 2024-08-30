@@ -766,18 +766,16 @@ def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isofor
     return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
 
 ##TODO: change functions used this function: exonInfo,isoformInfo
+##TODO: save group novel isoform info
 def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
                                   qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
     #save compatible vector
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
     print('gene ' + str(geneName) + ' processing')
+    readmapping_data = []
     if Read_Isoform_compatibleVector is not None:
         # save read-isoform mapping
-        output_folder0 = os.path.join(output_folder, 'auxillary')
-        if not os.path.exists(output_folder0):
-            os.makedirs(output_folder0)
-        data_to_save = []
         for readname, indicators in Read_Isoform_compatibleVector.items():
             for idx, value in enumerate(indicators):
                 if value == 1:  # Only consider mappings where the indicator is 1
@@ -785,17 +783,12 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
                     if isoform_name != 'uncategorized':
                         exon_indices = isoformInfo[isoform_name]
                         exon_coords = ",".join([f"({exonInfo[i][0]},{exonInfo[i][1]})" for i in exon_indices])
-                        data_to_save.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords,
+                        readmapping_data.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords,
                                              qname_cbumi_dict[readname].split('_')[0],
                                              qname_cbumi_dict[readname].split('_')[1]])
                     else:
-                        data_to_save.append([readname, isoform_name, "-", "-",qname_cbumi_dict[readname].split('_')[0],
+                        readmapping_data.append([readname, isoform_name, "-", "-",qname_cbumi_dict[readname].split('_')[0],
                                              qname_cbumi_dict[readname].split('_')[1]])
-        df = pd.DataFrame(data_to_save, columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates','Cell','Umi'])
-        # Save to a TSV file
-        readmapping_filename = os.path.join(output_folder0, geneName+'_read_isoform_exon_mapping.tsv')
-        df.to_csv(readmapping_filename, sep='\t', index=False)
-
         mat = np.array(list(dict(Read_Isoform_compatibleVector).values()))
         rowNames = list(dict(Read_Isoform_compatibleVector).keys())
         rowNames = [qname_cbumi_dict[rn] for rn in rowNames]
@@ -805,14 +798,25 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         output = None
     if (output_folder is not None and len(rowNames)>0):
         data_df = pd.DataFrame(output['compatibleMatrix'], index=output['rowNames_cbumi'],columns=output['colNames_isoforms'])
-        data_df = group_novel_isoform(data_df, geneStrand)
+        data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand)
+        # Save read-isoform mappings to a TSV file
+        if len(readmapping_data)>0:
+            output_folder0 = os.path.join(output_folder, 'auxillary')
+            if not os.path.exists(output_folder0):
+                os.makedirs(output_folder0)
+            readmapping = pd.DataFrame(readmapping_data,
+                                       columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates', 'Cell', 'Umi'])
+            readmapping_filename = os.path.join(output_folder0, geneName + '_read_isoform_exon_mapping.tsv')
+            readmapping['Isoform_Name_Final'] = readmapping['Isoform'].apply(lambda isoform: novel_isoform_name_mapping.get(isoform, isoform))
+            readmapping.to_csv(readmapping_filename, sep='\t', index=False)
+        #save compatible matrix
         output_folder = os.path.join(output_folder,'compatible_matrix')
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
         file_name = os.path.join(output_folder, str(geneName) + '.csv')
         data_df.to_csv(file_name)
         print('gene ' + str(geneName) + ' saved')
-    elif (output_folder is not None and len(rowNames)==0):
+    elif (output_folder is not None and len(rowNames)==0): #log the gene because no reads mapped
         output_folder = os.path.join(output_folder, 'compatible_matrix')
         if not os.path.exists(output_folder):
             os.makedirs(output_folder)
@@ -1382,15 +1386,17 @@ def group_novel_isoform(df, geneStrand):
             novel_isoform_group_list, novel_isoform_id, parent_id = pair_isoform(novel_isoform_group_list, novel_isoform_id,
                                                                                  query_id, geneStrand)
         novel_isoform_group_name = ['novelIsoformGroup_'+str(i[-1]) for i in novel_isoform_group_list]
-        df_novel_group = []
+        df_novel_group, novel_isoform_name_mapping = [], {}
         for i in range(len(novel_isoform_group_list)):
-            isoform_group_name = ['novelIsoform_' + str(i) for i in novel_isoform_group_list[i]]
+            isoform_group_name = ['novelIsoform_' + str(ii) for ii in novel_isoform_group_list[i]]
+            for isoform_name in isoform_group_name:
+                novel_isoform_name_mapping[isoform_name] = novel_isoform_group_name[i]
             df_novel_ = df_novel[isoform_group_name].max(axis=1)
             df_novel_group.append(df_novel_)
         df_novel_grouped = pd.concat(df_novel_group, axis=1)
         df_novel_grouped.columns = novel_isoform_group_name
         df = pd.concat([df_existing, df_novel_grouped, df_uncategorized], axis=1)
-    return df
+    return df, novel_isoform_name_mapping
 
 
 def pair_isoform(novel_isoform_group_list, novel_isoform_id, query_id, geneStrand):
