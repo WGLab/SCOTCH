@@ -52,6 +52,7 @@ def main():
         annotator.annotate_genes()
         #bam information
         annotator.annotation_bam()
+
     elif args.task=='matrix':#task is to generate compatible matrix
         bamInfo_pkl_file = os.path.join(args.target, 'bam/bam.Info.pkl')
         bamInfo2_pkl_file = os.path.join(args.target, 'bam/bam.Info2.pkl')
@@ -61,6 +62,7 @@ def main():
         print('generating compatible matrix')
         pp.generate_compatibleVector(args.bam, qname_dict, qname_cbumi_dict, metagene_pkl, args.match, args.target,
                                      args.job_index, args.total_jobs, args.cover_existing)
+
     else: # task is to generate count matrix
         adata_gene_unfiltered, adata_transcript_unfiltered, adata_gene_filtered, adata_transcript_filtered = cm.generate_count_matrix(path=args.target, novel_read_n=args.novel_read_n, num_cores=args.workers)
         print('count matrix generated')

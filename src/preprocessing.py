@@ -19,6 +19,19 @@ from collections import defaultdict
 
 
 
+#some utility functions
+def sort_multigeneInfo(Info_multigenes):
+    Info_multigenes_sort = []
+    for info_singlegene in Info_multigenes:
+        isoformInfo = info_singlegene[2]
+        if len(isoformInfo)>0:
+            isoformInfo = dict(sorted(isoformInfo.items(), key=lambda item: len(item[1]), reverse=True))
+            info_singlegene[0]['isoformNames'] = list(isoformInfo.keys())
+            info_singlegene[2] = isoformInfo
+        Info_multigenes_sort.append(info_singlegene)
+    return Info_multigenes_sort
+
+
 #extract read information
 def read_to_dict(aligned_segment):
     # Create a dictionary of the aligned segment data you want to keep
@@ -67,140 +80,143 @@ def novelid_to_exonid(novelid):
     return exonid
 
 def merge_exons(exons):
-    merged_exons = []
-    current_start, current_end = exons[0]
-    for start, end in exons[1:]:
-        if start <= current_end:
-            current_end = max(current_end, end)
-        else:
-            merged_exons.append((current_start, current_end))
-            current_start, current_end = start, end
-    merged_exons.append((current_start, current_end))
+    if len(exons)<2:
+        merged_exons = exons
+    else:
+        merged_exons = []
+        current_start, current_end = exons[0]
+        for start, end in exons[1:]:
+            if start == current_end:
+                current_end = max(current_end, end)
+            else:
+                merged_exons.append((current_start, current_end))
+                current_start, current_end = start, end
+        merged_exons.append((current_start, current_end))
     return merged_exons
 
 ######################################################################
 ##############################annotation##############################
 ######################################################################
 
-def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
-    files = os.listdir(bam_folder)
-    bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
-    if parse:
-        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
-    elif pacbio:
-        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
-    else:
-        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam) for bam in bamfiles)
-    ReadTagsDF = pd.concat(df).reset_index(drop=True)
-    return ReadTagsDF
+#def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
+#    files = os.listdir(bam_folder)
+#    bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
+#    if parse:
+#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
+#    elif pacbio:
+#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
+#    else:
+#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam) for bam in bamfiles)
+#    ReadTagsDF = pd.concat(df).reset_index(drop=True)
+#    return ReadTagsDF
 
-def extract_bam_info(bam):
+#def extract_bam_info(bam):
     #extract readname, cb, umi from bam file
     # bam: path to bam file
-    bamFilePysam = pysam.Samfile(bam, "rb")
-    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('UB'), read.qend-read.qstart) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0]>0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI']=ReadTagsDF.CB.astype(str)+'_'+ReadTagsDF.UMI.astype(str)
-    else:
-        ReadTagsDF = None
-    return ReadTagsDF
+#    bamFilePysam = pysam.Samfile(bam, "rb")
+#    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('UB'), read.qend-read.qstart) for read in bamFilePysam]
+#    ReadTagsDF = pd.DataFrame(ReadTags)
+#    if ReadTagsDF.shape[0]>0:
+#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+#        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
+#        ReadTagsDF['CBUMI']=ReadTagsDF.CB.astype(str)+'_'+ReadTagsDF.UMI.astype(str)
+#    else:
+#        ReadTagsDF = None
+#    return ReadTagsDF
 
-def extract_bam_info_parse(bam):
-    bamFilePysam = pysam.Samfile(bam, "rb")
+#def extract_bam_info_parse(bam):
+#    bamFilePysam = pysam.Samfile(bam, "rb")
+#    #qname cb umi cbumi length
+#    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3], read.qname.split('_')[-1] , len(read.query_alignment_sequence), read.get_tag('pS')) for read in bamFilePysam]
+#    ReadTagsDF = pd.DataFrame(ReadTags)
+#    if ReadTagsDF.shape[0] > 0:
+#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE']
+#        ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
+#        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+#    else:
+#        ReadTagsDF = None
+#    return ReadTagsDF
+
+#def extract_bam_info_pacbio(bam):
+#    bamFilePysam = pysam.Samfile(bam, "rb")
     #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3], read.qname.split('_')[-1] , len(read.query_alignment_sequence), read.get_tag('pS')) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0] > 0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE']
-        ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-    else:
-        ReadTagsDF = None
-    return ReadTagsDF
-
-def extract_bam_info_pacbio(bam):
-    bamFilePysam = pysam.Samfile(bam, "rb")
-    #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('XM'), read.reference_end-read.reference_start) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0] > 0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
-    else:
-        ReadTagsDF = None
-    return ReadTagsDF
+#    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('XM'), read.reference_end-read.reference_start) for read in bamFilePysam]
+#    ReadTagsDF = pd.DataFrame(ReadTags)
+#    if ReadTagsDF.shape[0] > 0:
+#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+#        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
+#        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+#        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
+#    else:
+#        ReadTagsDF = None
+#    return ReadTagsDF
 
 
-def bam_info_to_dict(bam_info, parse=False):
+#def bam_info_to_dict(bam_info, parse=False):
     #input bam_info is a dataframe(bam_info is sorted already when generating)
     #the output dict qname_dict: key: qname, value: the right qname to keep; qname_CBUMI_dict: qname_cbumi
     #generate qname_dict
-    max_length_df = bam_info.drop_duplicates(subset='CBUMI', keep='first')
-    cbumi_to_max_qname = pd.Series(max_length_df.QNAME.values, index=max_length_df.CBUMI).to_dict()
-    qname_dict = {row['QNAME']: cbumi_to_max_qname[row['CBUMI']] for index, row in bam_info.iterrows()}
+#    max_length_df = bam_info.drop_duplicates(subset='CBUMI', keep='first')
+#    cbumi_to_max_qname = pd.Series(max_length_df.QNAME.values, index=max_length_df.CBUMI).to_dict()
+#    qname_dict = {row['QNAME']: cbumi_to_max_qname[row['CBUMI']] for index, row in bam_info.iterrows()}
     #generate qname_cbumi_dict
     # Assuming 'bam_info' is your pandas DataFrame
-    qname_cbumi_dict = dict(zip(bam_info['QNAME'], bam_info['CBUMI']))
-    if parse:
-        qname_sample_dict = dict(zip(bam_info['QNAME'], bam_info['SAMPLE']))
-        return qname_dict, qname_cbumi_dict, qname_sample_dict
-    else:
-        return qname_dict, qname_cbumi_dict
+#    qname_cbumi_dict = dict(zip(bam_info['QNAME'], bam_info['CBUMI']))
+#    if parse:
+#        qname_sample_dict = dict(zip(bam_info['QNAME'], bam_info['SAMPLE']))
+#        return qname_dict, qname_cbumi_dict, qname_sample_dict
+#    else:
+#        return qname_dict, qname_cbumi_dict
 
-def process_gene(geneID, geneName, genes ,exons, build=None):
-    GeneDf = genes[genes.iloc[:, 3] == geneID].reset_index(drop=True)
-    ExonsDf = exons[exons.iloc[:, 3] == geneID].reset_index(drop=True)
-    exonsdf = ExonsDf.iloc[:, :3].drop_duplicates().reset_index(drop=True)
-    exonsdf['exon_num'] = list(range(exonsdf.shape[0]))
-    geneChr, geneStart, geneEnd = GeneDf.iloc[0, 0], GeneDf.iloc[0, 1], GeneDf.iloc[0, 2]
-    if build is not None:
-        geneChr = str(build) + '_'+str(geneChr)
-    geneStrand = GeneDf.iloc[0, 6]
-    isoformNames = ExonsDf.TRANSCRIPT.unique().tolist()
-    GeneInfo = {'geneName': geneName, 'geneID': geneID, 'geneChr': geneChr, 'geneStart': geneStart, 'geneEnd': geneEnd,
-                'geneStrand':geneStrand, 'numofExons': exonsdf.shape[0], 'numofIsoforms': len(isoformNames),
-                'isoformNames': isoformNames}
-    ExonPositions = list(zip(exonsdf.iloc[:, 1], exonsdf.iloc[:, 2]))
-    ExonsDf = ExonsDf.merge(exonsdf, how='left')
-    ExonIsoformDict = dict()
-    for isoform in isoformNames:
-        ExonIsoformDict[isoform] = ExonsDf[ExonsDf.TRANSCRIPT == isoform].exon_num.tolist()
-    return geneID, [GeneInfo, ExonPositions, ExonIsoformDict]
+#def process_gene(geneID, geneName, genes ,exons, build=None):
+#    GeneDf = genes[genes.iloc[:, 3] == geneID].reset_index(drop=True)
+#    ExonsDf = exons[exons.iloc[:, 3] == geneID].reset_index(drop=True)
+#    exonsdf = ExonsDf.iloc[:, :3].drop_duplicates().reset_index(drop=True)
+#    exonsdf['exon_num'] = list(range(exonsdf.shape[0]))
+#    geneChr, geneStart, geneEnd = GeneDf.iloc[0, 0], GeneDf.iloc[0, 1], GeneDf.iloc[0, 2]
+#    if build is not None:
+#        geneChr = str(build) + '_'+str(geneChr)
+#    geneStrand = GeneDf.iloc[0, 6]
+#    isoformNames = ExonsDf.TRANSCRIPT.unique().tolist()
+#    GeneInfo = {'geneName': geneName, 'geneID': geneID, 'geneChr': geneChr, 'geneStart': geneStart, 'geneEnd': geneEnd,
+#                'geneStrand':geneStrand, 'numofExons': exonsdf.shape[0], 'numofIsoforms': len(isoformNames),
+#                'isoformNames': isoformNames}
+#    ExonPositions = list(zip(exonsdf.iloc[:, 1], exonsdf.iloc[:, 2]))
+#    ExonsDf = ExonsDf.merge(exonsdf, how='left')
+#    ExonIsoformDict = dict()
+#    for isoform in isoformNames:
+#        ExonIsoformDict[isoform] = ExonsDf[ExonsDf.TRANSCRIPT == isoform].exon_num.tolist()
+#    return geneID, [GeneInfo, ExonPositions, ExonIsoformDict]
 
-def extract_annotation_info(refGeneFile, num_cores=8, output="geneStructureInformation.pkl", build=None):
-    metageneStructureInformation = None
-    meta_output = os.path.join(os.path.dirname(output),'meta'+os.path.basename(output))
-    genes, exons = ref.generate_reference_df(gtf_path = refGeneFile)
-    Genes = list(zip(genes.iloc[:,3].tolist(), genes.iloc[:,4].tolist()))#id, name
-    if os.path.isfile(output)==False:
-        geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName,genes ,exons, build) for geneID, geneName in tqdm(Genes))
-        geneStructureInformation = dict(geneStructureInformation)
-        if output is not None:
-            with open(output, 'wb') as file:
-                pickle.dump(geneStructureInformation, file)
-    else:
-        geneStructureInformation = load_pickle(output)
-    if os.path.isfile(meta_output)==False:
-        #group genes
-        genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND' ,'META_GENE']
-        grouped = genes.groupby("META_GENE")
-        grouped_dict = {key: group.iloc[:, 3].tolist() for key, group in grouped}  # META_GENE STARTS FROM 1
-        metageneStructureInformation = {}
-        for i in range(1, 1 + len(grouped_dict)):
-            meta_gene = 'meta_gene_' + str(i)
-            gene_ids = grouped_dict[i]
-            meta_gene_info = []
-            for id in gene_ids:
-                meta_gene_info.append(geneStructureInformation[id])
-            metageneStructureInformation[meta_gene] = meta_gene_info
-        with open(meta_output, 'wb') as file:
-            pickle.dump(metageneStructureInformation, file)
-    return metageneStructureInformation
+#def extract_annotation_info(refGeneFile, num_cores=8, output="geneStructureInformation.pkl", build=None):
+#    metageneStructureInformation = None
+#    meta_output = os.path.join(os.path.dirname(output),'meta'+os.path.basename(output))
+#    genes, exons = ref.generate_reference_df(gtf_path = refGeneFile)
+#    Genes = list(zip(genes.iloc[:,3].tolist(), genes.iloc[:,4].tolist()))#id, name
+#    if os.path.isfile(output)==False:
+#        geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName,genes ,exons, build) for geneID, geneName in tqdm(Genes))
+#        geneStructureInformation = dict(geneStructureInformation)
+#        if output is not None:
+#            with open(output, 'wb') as file:
+#                pickle.dump(geneStructureInformation, file)
+#    else:
+#        geneStructureInformation = load_pickle(output)
+#    if os.path.isfile(meta_output)==False:
+#        #group genes
+#        genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND' ,'META_GENE']
+#        grouped = genes.groupby("META_GENE")
+#        grouped_dict = {key: group.iloc[:, 3].tolist() for key, group in grouped}  # META_GENE STARTS FROM 1
+#        metageneStructureInformation = {}
+#        for i in range(1, 1 + len(grouped_dict)):
+#            meta_gene = 'meta_gene_' + str(i)
+#            gene_ids = grouped_dict[i]
+#            meta_gene_info = []
+#            for id in gene_ids:
+#                meta_gene_info.append(geneStructureInformation[id])
+#            metageneStructureInformation[meta_gene] = meta_gene_info
+#        with open(meta_output, 'wb') as file:
+#            pickle.dump(metageneStructureInformation, file)
+#    return metageneStructureInformation
 
 ######################################################################
 
@@ -353,7 +369,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, poly=F
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.05, geneInfo = None,exonInfo= None, isoformInfo= None,
+def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, geneInfo = None,exonInfo= None, isoformInfo= None,
                            qualifyExon= None, exonMatch1= None, exonMatch2= None, poly=False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     if isinstance(read, dict):
@@ -439,7 +455,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.05, geneInfo = 
         read_isoform_compatibleVector_tuple = (readName, read_isoform_compatibleVector)
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def Map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.05, geneInfo=None, exonInfo=None, isoformInfo=None, poly=False):
+def Map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, geneInfo=None, exonInfo=None, isoformInfo=None, poly=False):
     if geneInfo is None:
         geneInfo, exonInfo, isoformInfo = Info_singlegene
         isoformInfo = dict(
@@ -479,7 +495,7 @@ def Map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.05, geneInfo=No
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = read_novelisoform_tuple0, read_isoform_compatibleVector_tuple0
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def map_read_to_gene(read, Info_singlegene, lowest_match=0.05, geneInfo = None,exonInfo= None, isoformInfo= None, qualifyExon= None, exonMatch1= None, exonMatch2= None, pacbio = False):
+def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, geneInfo = None,exonInfo= None, isoformInfo= None, qualifyExon= None, exonMatch1= None, exonMatch2= None, pacbio = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     if pacbio:
@@ -749,12 +765,29 @@ def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isofor
     geneStrand = geneInfo['geneStrand']
     return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
 
-
-def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,qname_cbumi_dict, output_folder=None):
+##TODO: change functions used this function: exonInfo,isoformInfo
+def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
+    #save compatible vector
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
     print('gene ' + str(geneName) + ' processing')
     if Read_Isoform_compatibleVector is not None:
+        # save read-isoform mapping
+        output_folder0 = os.path.join(output_folder, 'auxillary')
+        data_to_save = []
+        for readname, indicators in Read_Isoform_compatibleVector.items():
+            for idx, value in enumerate(indicators):
+                if value == 1:  # Only consider mappings where the indicator is 1
+                    isoform_name = colNames[idx]
+                    if isoform_name != 'uncategorized':
+                        exon_indices = isoformInfo[isoform_name]
+                        exon_coords = ",".join([f"({exonInfo[i][0]},{exonInfo[i][1]})" for i in exon_indices])
+                        data_to_save.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords])
+                    else:
+                        data_to_save.append([readname, isoform_name, "-", "-"])
+        df = pd.DataFrame(data_to_save, columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates'])
+        # Save to a TSV file
+        df.to_csv(output_folder0+geneName+'_read_isoform_exon_mapping.tsv', sep='\t', index=False)
         mat = np.array(list(dict(Read_Isoform_compatibleVector).values()))
         rowNames = list(dict(Read_Isoform_compatibleVector).keys())
         rowNames = [qname_cbumi_dict[rn] for rn in rowNames]
