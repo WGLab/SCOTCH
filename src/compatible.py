@@ -14,12 +14,8 @@ class ReadMapper:
         self.bamInfo_folder_path = os.path.join(target, "bam")
         self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')#bamInfo_pkl_file
         self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')#bamInfo2_pkl_file
+        self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl')  # bamInfo2_pkl_file
         self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
-        # bam information file
-        self.qname_dict = load_pickle(self.bamInfo_pkl_path)
-        self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
-        self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene)
-        self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
         # parameters
         self.lowest_match = lowest_match
         self.platform = platform
@@ -29,6 +25,13 @@ class ReadMapper:
         self.compatible_matrix_folder_path = os.path.join(target, "compatible_matrix")
         self.read_mapping_path = os.path.join(target, "auxillary")
         self.count_matrix_folder_path = os.path.join(target, "count_matrix")
+        # bam information file
+        self.qname_dict = load_pickle(self.bamInfo_pkl_path)
+        self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
+        if self.parse:
+            self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path)
+        self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene)
+        self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
     def read_bam(self, chrom = None):
         # bam_path is a folder
         if os.path.isfile(self.bam_path) == False:
@@ -41,6 +44,7 @@ class ReadMapper:
             bamFilePysam = pysam.Samfile(self.bam_path, "rb")
         return bamFilePysam
     def map_reads(self, meta_gene, save = True):
+        #used for ont and pacbio
         Info_multigenes = self.metageneStructureInformation[meta_gene]
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
@@ -51,15 +55,12 @@ class ReadMapper:
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
-            samples_novel, samples_known = [], []
             for read in reads:
                 result = process_read(read, geneInfo, exonInfo, isoformInfo, self.qname_dict, self.lowest_match,
                                       Info_multigenes, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
-                    ##TODO: qname_sample_dict: annotation_parse
-                    samples_novel.append(qname_sample_dict[read.qname])
                 if result_known is not None:
                     Read_knownIsoform.append(result_known)
             #expand uncategorized novel reads into Read_knownIsoform
@@ -152,93 +153,116 @@ class ReadMapper:
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
+            samples_novel, samples_known = [], []
             for read in reads:
                 result = process_read(read, geneInfo, exonInfo, isoformInfo, self.qname_dict, self.lowest_match,
                                       Info_multigenes, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
+                    samples_novel.append(self.qname_sample_dict[read.qname])
                 if result_known is not None:
                     Read_knownIsoform.append(result_known)
-            #expand uncategorized novel reads into Read_knownIsoform
-            if len(Read_novelIsoform) > 0:
-                Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
-                    Read_novelIsoform, Read_knownIsoform, n_isoforms)
-            #compile output into compatible matrix
-            geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, geneInfo)
-            #update annotation information in self
-            self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'] = \
-                self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']+list(novel_isoformInfo.keys())
-            self.metageneStructureInformationwNovel[meta_gene][0][0]['numofIsoforms'] = \
-                self.metageneStructureInformationwNovel[meta_gene][0][0]['numofIsoforms'] + len(list(
-                    novel_isoformInfo.keys()))
-            self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo)
-            if save:
-                # save compatible matrix of each gene, save read-isoform mappings
-                save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
-                                      self.qname_cbumi_dict, self.metageneStructureInformationwNovel[meta_gene][0][1],
-                                          self.metageneStructureInformationwNovel[meta_gene][0][2], self.target)
-            else:
-                return [{'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
-                 'exonInfo': self.metageneStructureInformationwNovel[meta_gene][0][1],
-                'isoformInfo':self.metageneStructureInformationwNovel[meta_gene][0][2]}]
+                    samples_known.append(self.qname_sample_dict[read.qname])
+            unique_samples = list(set(samples_novel+samples_known))
+            return_samples = []
+            for sample in unique_samples:
+                Read_novelIsoform_sample, Read_knownIsoform_sample = [], []
+                sample_target = os.path.join(self.target, sample)
+                sample_index_novel = [i for i, s in enumerate(samples_novel) if s == sample]
+                sample_index_known = [i for i, s in enumerate(samples_known) if s == sample]
+                if len(sample_index_novel) > 0:
+                    Read_novelIsoform_sample = [Read_novelIsoform[i] for i in sample_index_novel]
+                if len(sample_index_known) > 0:
+                    Read_knownIsoform_sample = [Read_knownIsoform[i] for i in sample_index_known]
+                if len(Read_novelIsoform_sample) > 0:
+                    Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample = polish_compatible_vectors(Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms)
+                geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(Read_novelIsoform_sample, novel_isoformInfo,Read_knownIsoform_sample, geneInfo)
+                # update annotation information in self
+                for novel_isoform_name in list(novel_isoformInfo.keys()):
+                    if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
+                        self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'].append(novel_isoform_name)
+                self.metageneStructureInformationwNovel[meta_gene][0][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'])
+                self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo)
+                if save:
+                    save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames,
+                                                  Read_Isoform_compatibleVector_sample, self.qname_cbumi_dict,
+                                                  self.metageneStructureInformationwNovel[meta_gene][0][1],
+                                                  self.metageneStructureInformationwNovel[meta_gene][0][2],
+                                                  sample_target)
+                else:
+                    return_sample = {'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector_sample, 'isoforms': colNames,
+                             'exonInfo': self.metageneStructureInformationwNovel[meta_gene][0][1],
+                             'isoformInfo': self.metageneStructureInformationwNovel[meta_gene][0][2]}
+                    return_samples.append(return_sample)
+            if save==False:
+                return return_samples
         else:
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
             reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
             # process reads metagene
-            results = []
+            results, samples = [], []
             for read in reads:
                 out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
-            Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
-            unique_ind = list(set(Ind))
-            # logging genes without any reads
-            log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
-            for index in log_ind:
-                save_compatibleVector_by_gene(geneName=Info_multigenes[index][0]['geneName'],
-                                              geneID=Info_multigenes[index][0]['geneID'],
-                                              geneStrand=Info_multigenes[index][0]['geneStrand'],
-                                              colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
-                                              qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
-                                              output_folder=self.target)
-            #save compatible matrix by genes
-            return_list = []
-            for index in unique_ind:
-                print('processing gene' + str(index))
-                # loop over genes within metagene; for one single gene:
-                Read_novelIsoform, Read_knownIsoform, novel_isoformInfo = [], [], {}
-                for j, i in enumerate(Ind):#i: gene index; j: index of index---# loop for reads
-                    if i == index and Read_novelIsoform_metagene[j] is not None:
-                        Read_novelIsoform.append(Read_novelIsoform_metagene[j])
-                    if i == index and Read_knownIsoform_metagene[j] is not None:
-                        Read_knownIsoform.append(Read_knownIsoform_metagene[j])
-                if len(Read_novelIsoform) > 0:
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
-                        Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]))
-                geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, Info_multigenes[index][0])
-                # update annotation information in self
-                self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] = \
-                    self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] + list(
-                        novel_isoformInfo.keys())
-                self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] = \
-                    self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] + len(list(
-                        novel_isoformInfo.keys()))
-                self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo)
-                if save:
-                    save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
-                                                  self.qname_cbumi_dict,
-                                                  self.metageneStructureInformationwNovel[meta_gene][index][1],
-                                                  self.metageneStructureInformationwNovel[meta_gene][index][2],
-                                                  self.target)
-                else:
-                    return_list.append({'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
-                            'exonInfo': self.metageneStructureInformationwNovel[meta_gene][index][1],
-                            'isoformInfo': self.metageneStructureInformationwNovel[meta_gene][index][2]})
-            if save==False:
-                return return_list
+                    samples.append(self.qname_sample_dict[read.qname])
+            unique_samples = list(set(samples))
+            return_samples = []
+            for sample in unique_samples:
+                sample_target = os.path.join(self.target, sample)
+                sample_index = [i for i, s in enumerate(samples) if s == sample]
+                result_sample = [results[i] for i in sample_index]
+                Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = [], [], []
+                for result in result_sample:
+                    if result is not None:
+                        ind, novelisoform, knownisoform = result
+                        Ind.append(ind)
+                        Read_novelIsoform_metagene.append(novelisoform)
+                        Read_knownIsoform_metagene.append(knownisoform)
+                unique_ind = list(set(Ind))
+                # logging genes without any reads
+                log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
+                for index in log_ind:
+                    save_compatibleVector_by_gene(geneName=Info_multigenes[index][0]['geneName'],
+                                                  geneID=Info_multigenes[index][0]['geneID'],
+                                                  geneStrand=Info_multigenes[index][0]['geneStrand'],
+                                                  colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
+                                                  qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
+                                                  output_folder=sample_target)
+                #save compatible matrix by genes
+                for index in unique_ind:
+                    print('processing gene' + str(index))
+                    # loop over genes within metagene; for one single gene:
+                    Read_novelIsoform, Read_knownIsoform, novel_isoformInfo = [], [], {}
+                    for j, i in enumerate(Ind):#i: gene index; j: index of index---# loop for reads
+                        if i == index and Read_novelIsoform_metagene[j] is not None:
+                            Read_novelIsoform.append(Read_novelIsoform_metagene[j])
+                        if i == index and Read_knownIsoform_metagene[j] is not None:
+                            Read_knownIsoform.append(Read_knownIsoform_metagene[j])
+                    if len(Read_novelIsoform) > 0:
+                        Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
+                            Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]))
+                    geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
+                        Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, Info_multigenes[index][0])
+                    # update annotation information in self
+                    for novel_isoform_name in list(novel_isoformInfo.keys()):
+                        if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
+                            self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'].append(novel_isoform_name)
+                    self.metageneStructureInformationwNovel[meta_gene][0][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'])
+                    self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo)
+                    if save:
+                        save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
+                                                      self.qname_cbumi_dict,
+                                                      self.metageneStructureInformationwNovel[meta_gene][index][1],
+                                                      self.metageneStructureInformationwNovel[meta_gene][index][2],
+                                                      sample_target)
+                    else:
+                        return_samples.append({'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
+                                'exonInfo': self.metageneStructureInformationwNovel[meta_gene][index][1],
+                                'isoformInfo': self.metageneStructureInformationwNovel[meta_gene][index][2]})
+                if save==False:
+                    return return_samples
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
         if not os.path.exists(self.compatible_matrix_folder_path):
             os.makedirs(self.compatible_matrix_folder_path)
