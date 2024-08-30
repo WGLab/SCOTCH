@@ -733,8 +733,6 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
             novelisoform_dict = {}
     return read_novelisoform_tuples, novelisoform_dict, Read_Isoform_compatibleVector
 
-
-
 def compile_compatible_vectors(Read_novelIsoform, novel_isoformInfo, Read_Isoform_compatibleVector, geneInfo):
     #this function is for all reads mapped to one gene
     #input are output of map_read_to_gene
@@ -893,6 +891,7 @@ def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_
 
 
 #####main function ########
+##TODO: delete
 def extract_compatible_matrix_by_metagene(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, lowest_match=0.2, output_folder=None):
     #extract compatible matrix by metagene: output gene name and compatible matrix
     #bamFile: path to bam file
@@ -980,6 +979,7 @@ def extract_compatible_matrix_by_metagene(bamFile, meta_gene_pkl, meta_gene, qna
     #finish mapping reads to genes
     bamFilePysam.close()
 
+##TODO: delete
 def extract_compatible_matrix_by_metagene_pacbio(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, lowest_match=0.2, output_folder=None):
     #extract compatible matrix by metagene: output gene name and compatible matrix
     #bamFile: path to bam file
@@ -1067,6 +1067,7 @@ def extract_compatible_matrix_by_metagene_pacbio(bamFile, meta_gene_pkl, meta_ge
     #finish mapping reads to genes
     bamFilePysam.close()
 
+##TODO: delete
 def extract_compatible_matrix_by_metagene_parse(bamFile, meta_gene_pkl, meta_gene, qname_dict, qname_cbumi_dict, qname_sample_dict, lowest_match=0.2, output_folder=None):
     #extract compatible matrix by metagene: output gene name and compatible matrix
     #bamFile: path to bam file
@@ -1174,6 +1175,8 @@ def extract_compatible_matrix_by_metagene_parse(bamFile, meta_gene_pkl, meta_gen
 
 
 #main function
+
+##TODO: delete
 def generate_compatibleVector(bamFile, qname_dict, qname_cbumi_dict, metagene_pkl, lowest_match, output_folder, job_index=0,
                               total_jobs=1, cover_existing = True):
     if isinstance(metagene_pkl, str):
@@ -1213,7 +1216,7 @@ def generate_compatibleVector(bamFile, qname_dict, qname_cbumi_dict, metagene_pk
         extract_compatible_matrix_by_metagene(bamFile, metagene_pkl, meta_gene, qname_dict,qname_cbumi_dict, lowest_match, output_folder)
 
 
-
+##TODO: delete
 def generate_compatibleVector_pacbio(bamFile, qname_dict, qname_cbumi_dict, metagene_pkl, lowest_match, output_folder, job_index=0,
                               total_jobs=1, cover_existing = True):
     if isinstance(metagene_pkl, str):
@@ -1253,6 +1256,7 @@ def generate_compatibleVector_pacbio(bamFile, qname_dict, qname_cbumi_dict, meta
         extract_compatible_matrix_by_metagene_pacbio(bamFile, metagene_pkl, meta_gene, qname_dict,qname_cbumi_dict, lowest_match, output_folder)
 
 
+##TODO: delete
 def generate_compatibleVector_parse(bamFile, qname_dict, qname_cbumi_dict, qname_sample_dict, metagene_pkl, lowest_match, output_folder, job_index=0,
                               total_jobs=1, cover_existing = True):
     if isinstance(metagene_pkl, str):
@@ -1307,6 +1311,7 @@ def detect_poly_parse(read, window = 20, n = 10):
     if nT>=n or nA>=n:
         poly_bool = True
     return poly_bool, poly
+
 
 ##TODO: this function is for 3' kit, should consider 5'kit
 def detect_poly(read, window = 20, n = 15):
@@ -1368,6 +1373,7 @@ def remove_dict_items(dictionary,threshold):
 ############group novel isoforms#############
 def group_novel_isoform(df, geneStrand):
     df_novel = df.filter(like='novelIsoform')
+    novel_isoform_name_mapping = {}
     if df_novel.shape[1]>1:
         df_uncategorized = df.filter(like='uncategorized')
         drop_c = df_novel.columns.tolist()+df_uncategorized.columns.tolist()
@@ -1385,7 +1391,7 @@ def group_novel_isoform(df, geneStrand):
             novel_isoform_group_list, novel_isoform_id, parent_id = pair_isoform(novel_isoform_group_list, novel_isoform_id,
                                                                                  query_id, geneStrand)
         novel_isoform_group_name = ['novelIsoformGroup_'+str(i[-1]) for i in novel_isoform_group_list]
-        df_novel_group, novel_isoform_name_mapping = [], {}
+        df_novel_group = []
         for i in range(len(novel_isoform_group_list)):
             isoform_group_name = ['novelIsoform_' + str(ii) for ii in novel_isoform_group_list[i]]
             for isoform_name in isoform_group_name:
