@@ -196,8 +196,11 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1, z_score_threshold = 3):
     positions = np.asarray(positions)
     mean_derivative = np.mean(derivatives)
     std_derivative = np.std(derivatives)
-    z_scores = (derivatives - mean_derivative) / std_derivative
-    cut_positions = positions[np.abs(z_scores) > z_score_threshold]
+    if std_derivative==0:
+        cut_positions = []
+    else:
+        z_scores = (derivatives - mean_derivative) / std_derivative
+        cut_positions = positions[np.abs(z_scores) > z_score_threshold]
     if len(cut_positions)==0:
         return exons
     cut_positions_valid = [cut_positions[0]]
