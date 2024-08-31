@@ -16,7 +16,7 @@ parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, par
 #mandatory for parse
 parser.add_argument('--build',type=str, default='hg38',help="genome build")
 #task is annotation
-parser.add_argument('--reference',type=str, help="Path to gene annotation file in either gtf format or the geneStructureInformation.pkl file. Leave it blank if using annotation-free mode. ")
+parser.add_argument('--reference',type=str, default='../data/geneStructureInformation.pkl',help="Path to gene annotation file in either gtf format or the geneStructureInformation.pkl file. Leave it blank if using annotation-free mode. Default is human hg38 build")
 parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
 parser.add_argument('--update_gtf_off', action='store_false',dest='update_gtf',help='do NOT use bam file to update existing gtf annotations')
 parser.add_argument('--coverage_threshold_gene',type=int, default= 20, help="coverage threshold to support gene discovery")
