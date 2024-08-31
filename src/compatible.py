@@ -10,6 +10,7 @@ class ReadMapper:
         self.annotation_folder_path = os.path.join(target, "reference")
         self.annotation_path_single_gene = os.path.join(target, "reference/geneStructureInformation.pkl")
         self.annotation_path_meta_gene = os.path.join(target, "reference/metageneStructureInformation.pkl")
+        self.annotation_path_meta_gene_novel = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
         # bam information path
         self.bamInfo_folder_path = os.path.join(target, "bam")
         self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')#bamInfo_pkl_file
@@ -318,6 +319,10 @@ class ReadMapper:
         else:
             for meta_gene in MetaGenes_:
                 self.map_reads(meta_gene, save=True)
+    def save_annotation_w_novel_isoform(self):
+        with open(self.annotation_path_meta_gene_novel, 'wb') as file:
+            pickle.dump(self.metageneStructureInformationwNovel, file)
+
 
 
 
