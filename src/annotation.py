@@ -4,6 +4,7 @@ from joblib import Parallel, delayed
 import reference as ref
 import os
 import pandas as pd
+import re
 import pickle
 from preprocessing import load_pickle
 from scipy.ndimage import gaussian_filter1d
@@ -16,6 +17,7 @@ def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
     files = os.listdir(bam_folder)
     bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
     if parse:
+        bamfiles = [bam for bam in bamfiles if bam+'.bai' in files]
         df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
     elif pacbio:
         df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
@@ -40,13 +42,18 @@ def extract_bam_info(bam):
 
 def extract_bam_info_parse(bam):
     bamFilePysam = pysam.Samfile(bam, "rb")
+    match = re.search(r'sublibrary(\d+)', bam)
+    if match:
+        sublib = match.group(1)
+    else:
+        sublib = '1'
     #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3], read.qname.split('_')[-1] , len(read.query_alignment_sequence), read.get_tag('pS')) for read in bamFilePysam]
+    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3], read.qname.split('_')[-1] , len(read.query_alignment_sequence), read.get_tag('pS'), sublib) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0] > 0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE']
+        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE', 'SUBLIB']
         ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str) + '_' + ReadTagsDF.SUBLIB.astype(str)
     else:
         ReadTagsDF = None
     return ReadTagsDF

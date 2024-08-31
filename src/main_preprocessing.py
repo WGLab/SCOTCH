@@ -1,5 +1,4 @@
 import argparse
-import preprocessing as pp
 import count_matrix as cm
 import os
 import annotation as annot
@@ -56,48 +55,25 @@ def main():
     elif args.task=='matrix':#task is to generate compatible matrix
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match, platform = args.platform)
+        if args.platform == 'parse':
+            readmapper.merge_bam()
         print('generating compatible matrix')
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
-                                      current_job_index=args.job_index)
+                                  current_job_index=args.job_index)
 
     else: # task is to generate count matrix
-        adata_gene_unfiltered, adata_transcript_unfiltered, adata_gene_filtered, adata_transcript_filtered = cm.generate_count_matrix(path=args.target, novel_read_n=args.novel_read_n, num_cores=args.workers)
-        print('count matrix generated')
-        output_gene_unfiltered = os.path.join(args.target,'count_matrix/adata_gene_unfiltered'+str(args.novel_read_n)+'.csv')
-        output_transcript_unfiltered = os.path.join(args.target,  'count_matrix/adata_transcript_unfiltered'+str(args.novel_read_n)+'.csv')
-        output_gene_filtered = os.path.join(args.target,'count_matrix/adata_gene_filtered' + str(args.novel_read_n) + '.csv')
-        output_transcript_filtered = os.path.join(args.target, 'count_matrix/adata_transcript_filtered' + str(args.novel_read_n) + '.csv')
-        # save gene
-        print('saving count matrix on gene level ')
-        adata_gene_unfiltered_df = adata_gene_unfiltered.to_df()
-        adata_gene_filtered_df = adata_gene_filtered.to_df()
-        adata_gene_unfiltered_df.to_csv(output_gene_unfiltered)
-        adata_gene_filtered_df.to_csv(output_gene_filtered)
-        gene_meta_unfiltered = {'obs':adata_gene_unfiltered.obs.index.tolist(), "var":adata_gene_unfiltered.var.index.tolist()}
-        gene_meta_filtered = {'obs': adata_gene_filtered.obs.index.tolist(),"var": adata_gene_filtered.var.index.tolist()}
-        with open(os.path.join(args.target,'count_matrix/adata_gene_unfiltered'+str(args.novel_read_n)+'.pickle'), 'wb') as f:
-            pickle.dump(gene_meta_unfiltered, f)
-        mmwrite(os.path.join(args.target,'count_matrix/adata_gene_unfiltered'+str(args.novel_read_n)+'.mtx'),adata_gene_unfiltered.X)
-        with open(os.path.join(args.target,'count_matrix/adata_gene_filtered'+str(args.novel_read_n)+'.pickle'), 'wb') as f:
-            pickle.dump(gene_meta_filtered, f)
-        mmwrite(os.path.join(args.target, 'count_matrix/adata_gene_filtered' + str(args.novel_read_n) + '.mtx'),
-                adata_gene_filtered.X)
-        # save transcript
-        print('saving count matrix on transcript level ')
-        adata_transcript_unfiltered_df = adata_transcript_unfiltered.to_df()
-        adata_transcript_filtered_df = adata_transcript_filtered.to_df()
-        adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
-        adata_transcript_filtered_df.to_csv(output_transcript_filtered)
-        transcript_meta_unfiltered = {'obs': adata_transcript_unfiltered.obs.index.tolist(), "var": adata_transcript_unfiltered.var.index.tolist()}
-        mmwrite(os.path.join(args.target, 'count_matrix/adata_transcript_unfiltered' + str(args.novel_read_n) + '.mtx'), adata_transcript_unfiltered.X)
-        transcript_meta_filtered = {'obs': adata_transcript_filtered.obs.index.tolist(),"var": adata_transcript_filtered.var.index.tolist()}
-        mmwrite(os.path.join(args.target, 'count_matrix/adata_transcript_filtered' + str(args.novel_read_n) + '.mtx'),
-                adata_transcript_filtered.X)
-        with open(os.path.join(args.target, 'count_matrix/adata_transcript_unfiltered' + str(args.novel_read_n) + '.pickle'),
-                  'wb') as f:pickle.dump(transcript_meta_unfiltered, f)
-        with open(os.path.join(args.target, 'count_matrix/adata_transcript_filtered' + str(args.novel_read_n) + '.pickle'),
-                  'wb') as f:pickle.dump(transcript_meta_filtered, f)
-    return
+        countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.target,
+                       platform = args.platform, workers = args.workers)
+        if args.platform=='parse':
+            countmatrix.generate_multiple_samples()
+            countmatrix.save_multiple_samples(csv=True, mtx=True)
+        else:
+            countmatrix.generate_single_sample()
+            countmatrix.save_single_sample(csv=True, mtx=True)
+
+
+
+
 
 
 if __name__ == '__main__':

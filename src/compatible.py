@@ -22,24 +22,42 @@ class ReadMapper:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         # some paths
-        self.compatible_matrix_folder_path = os.path.join(target, "compatible_matrix")
-        self.read_mapping_path = os.path.join(target, "auxillary")
-        self.count_matrix_folder_path = os.path.join(target, "count_matrix")
+        if platform!='parse':
+            self.compatible_matrix_folder_path = os.path.join(target, "compatible_matrix")#not for parse
+            self.read_mapping_path = os.path.join(target, "auxillary")#not for parse
+            self.count_matrix_folder_path = os.path.join(target, "count_matrix")#not for parse
         # bam information file
         self.qname_dict = load_pickle(self.bamInfo_pkl_path)
         self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
+        self.sorted_bam_path = None
         if self.parse:
             self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path)
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene)
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
+    def merge_bam(self):
+        merged_folder = os.path.join(self.bam_path, 'merged')
+        os.makedirs(merged_folder, exist_ok=True)
+        bamFile_name = [f for f in os.listdir(self.bam_path) if
+                        f.endswith('.bam') and f + '.bai' in os.listdir(self.bam_path)]
+        print('merging bam files, usually sublibraries')
+        self.sorted_bam_path = os.path.join(merged_folder, 'merged.sorted.bam')
+        pysam.merge(os.path.join(merged_folder, 'merged.bam'), bamFile_name)
+        print('sorting bam files, usually sublibraries')
+        pysam.sort("-o", self.sorted_bam_path, os.path.join(merged_folder, 'merged.bam'))
+        pysam.index(self.sorted_bam_path)
     def read_bam(self, chrom = None):
+        # parse: input a folder, find merged bam file to read; read the single bam file if input is a file path
         # bam_path is a folder
         if os.path.isfile(self.bam_path) == False:
-            # find the bam file
-            bamFile_name = [f for f in os.listdir(self.bam_path) if
+            # find the bam file based on chrom
+            if chrom is not None:
+                bamFile_name = [f for f in os.listdir(self.bam_path) if
                             f.endswith('.bam') and '.' + chrom + '.' in f]
-            bamFile = os.path.join(self.bam_path, bamFile_name[0])
-            bamFilePysam = pysam.Samfile(bamFile, "rb")
+                bamFile = os.path.join(self.bam_path, bamFile_name[0]) #not bai
+                bamFilePysam = pysam.Samfile(bamFile, "rb")
+            else:
+                #read the merged bam file, has to run merge_bam first
+                bamFilePysam = pysam.Samfile(self.sorted_bam_path, "rb")
         else:
             bamFilePysam = pysam.Samfile(self.bam_path, "rb")
         return bamFilePysam
@@ -145,7 +163,7 @@ class ReadMapper:
     def map_reads_parse(self, meta_gene, save = True):
         Info_multigenes = self.metageneStructureInformation[meta_gene]
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
-        bamFilePysam = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
+        bamFilePysam = self.read_bam()
         if len(Info_multigenes)==1:
             geneInfo, exonInfo, isoformInfo = Info_multigenes[0]
             n_isoforms = len(isoformInfo)
@@ -168,7 +186,7 @@ class ReadMapper:
             return_samples = []
             for sample in unique_samples:
                 Read_novelIsoform_sample, Read_knownIsoform_sample = [], []
-                sample_target = os.path.join(self.target, sample)
+                sample_target = os.path.join(self.target, 'samples/'+sample)
                 sample_index_novel = [i for i, s in enumerate(samples_novel) if s == sample]
                 sample_index_known = [i for i, s in enumerate(samples_known) if s == sample]
                 if len(sample_index_novel) > 0:
@@ -210,7 +228,7 @@ class ReadMapper:
             unique_samples = list(set(samples))
             return_samples = []
             for sample in unique_samples:
-                sample_target = os.path.join(self.target, sample)
+                sample_target = os.path.join(self.target, 'samples/'+sample)
                 sample_index = [i for i, s in enumerate(samples) if s == sample]
                 result_sample = [results[i] for i in sample_index]
                 Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = [], [], []
