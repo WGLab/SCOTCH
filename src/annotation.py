@@ -260,9 +260,9 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
     exons = coverage_blocks
     #partition1: use splicing junctions to find sub-exons
     boundaries = count_and_sort_tuple_elements(junctions)
-    boundary_threshold_absolute = max(max(list(boundaries.values())) * boundary_threshold, 20)
     #filter out splicing positions with few support
     if len(boundaries)>1:
+        boundary_threshold_absolute = max(max(list(boundaries.values())) * boundary_threshold, 20)
         #group boundaries by meta-exons
         filtered_boundaries = [{} for _ in coverage_blocks]
         for boundary, freq in boundaries.items():
