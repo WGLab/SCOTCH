@@ -40,8 +40,9 @@ parser.add_argument('--workers',type=int,default=8, help="number of workers per 
 def main():
     global args
     args = parser.parse_args()
-    if not os.path.exists(args.target):
-        os.makedirs(args.target)
+    for t in args.target:
+        if not os.path.exists(t):
+            os.makedirs(t)
     if args.task=='annotation':
         annotator = annot.Annotator(target=args.target, reference_gtf_path = args.reference,
                                     bam_path = args.bam, update_gtf = args.update_gtf,
