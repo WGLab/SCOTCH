@@ -9,7 +9,7 @@ import pickle
 from preprocessing import load_pickle
 from scipy.ndimage import gaussian_filter1d
 import numpy as np
-import tqdm
+import shutil
 ######################################################################
 ##############################annotation##############################
 ######################################################################
@@ -471,7 +471,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                             min_gene_size=50):
     """
     wrapper function to extract gene annotation information including exons and isoforms
-    :param refGeneFile_path: path to gene annotation gtf file
+    :param refGeneFile_path: path to gene annotation gtf file, or pickle file that can be directly used
     :param bamfile_path: path to bam file or the folder for bam files
     :param num_cores: number of workers for parallel computing
     :param output: default: geneStructureInformation.pkl
@@ -501,21 +501,28 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     # option2: --------rely on existing annotation alone#
     #####################################################
     if refGeneFile_path is not None:
-        print('use the existing gtf file for gene annotations')
-        genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
-        Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
-        #generate single gene annotations if not existing
-        if os.path.isfile(output) == False:
-            geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
-            geneStructureInformation = dict(geneStructureInformation)
-            print('finish generating geneStructureInformation.pkl')
-            #save to output, single gene
-            if output is not None:
-                with open(output, 'wb') as file:
-                    pickle.dump(geneStructureInformation, file)
-        else:#there exist pre-computate annotation file
-            print('load existing annotation pickle file of each single gene at: '+str(output))
-            geneStructureInformation = load_pickle(output)
+        if refGeneFile_path.endswith('gtf'):
+            print('use the existing gtf file for gene annotations')
+            genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
+            Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
+            #generate single gene annotations if not existing
+            if os.path.isfile(output) == False:
+                geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
+                geneStructureInformation = dict(geneStructureInformation)
+                print('finish generating geneStructureInformation.pkl')
+                #save to output, single gene
+                if output is not None:
+                    with open(output, 'wb') as file:
+                        pickle.dump(geneStructureInformation, file)
+            else:#there exist pre-computate annotation file
+                print('load existing annotation pickle file of each single gene at: '+str(output))
+                geneStructureInformation = load_pickle(output)
+        elif refGeneFile_path.endswith('pkl'):
+            print('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_path))
+            geneStructureInformation = load_pickle(refGeneFile_path)
+            shutil.copy(refGeneFile_path, output)
+        else:
+            print('Only gtf and pkl files are supported!')
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
