@@ -679,7 +679,7 @@ class Annotator:
         self.z_score_threshold = z_score_threshold
         self.min_gene_size = min_gene_size
     def annotate_genes(self):
-        for i in range(len(target)):
+        for i in range(len(self.target)):
             if not os.path.exists(self.annotation_folder_path[i]):
                 os.makedirs(self.annotation_folder_path[i])
             if os.path.isfile(self.annotation_path_single_gene[i]) and os.path.isfile(self.annotation_path_meta_gene[i]):
@@ -733,7 +733,7 @@ class Annotator:
                         pickle.dump(qname_sample_dict, file)
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 print('extracting bam file information')
-                if os.path.isfile(self.bam_path)==False:
+                if os.path.isfile(self.bam_path[i])==False:
                     bam_info = extract_bam_info_folder(self.bam_path, self.workers, self.parse, self.pacbio)
                 else:
                     if self.parse:
