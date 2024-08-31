@@ -10,7 +10,7 @@ import pickle
 parser = argparse.ArgumentParser(description='Preprocess files')
 #mandaroty options
 parser.add_argument('--target',type=str,help="path to target root folder for output files")
-parser.add_argument('--task',type=str,help="choose task between annotation, matrix(read * isoform), and count (count matrix)")
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix or all")
 parser.add_argument('--bam',type=str,help="Path to bam file or bam folder")
 parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
 #task is annotation
@@ -52,7 +52,7 @@ def main():
         annotator.annotate_genes()
         #bam information
         annotator.annotation_bam()
-    elif args.task=='matrix':#task is to generate compatible matrix
+    if args.task=='compatible matrix':#task is to generate compatible matrix
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match, platform = args.platform)
         if args.platform == 'parse':
@@ -61,7 +61,7 @@ def main():
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
                                   current_job_index=args.job_index)
 
-    else: # task is to generate count matrix
+    if args.task == 'count matrix': # task is to generate count matrix
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.target,
                        platform = args.platform, workers = args.workers)
         if args.platform=='parse':
@@ -71,8 +71,33 @@ def main():
             countmatrix.generate_single_sample()
             countmatrix.save_single_sample(csv=True, mtx=True)
 
-
-
+    if args.task=='all':
+        #annotation
+        annotator = annot.Annotator(target=args.target, reference_gtf_path=args.ref,
+                                    bam_path=args.bam, update_gtf=args.update_gtf,
+                                    workers=args.workers, coverage_threshold_gene=args.coverage_threshold_gene,
+                                    coverage_threshold_exon=args.coverage_threshold_exon,
+                                    coverage_threshold_splicing=args.coverage_threshold_splicing,
+                                    min_gene_size=args.min_gene_size, build=args.build, platform=args.platform)
+        annotator.annotate_genes()
+        annotator.annotation_bam()
+        #compatible matrix
+        readmapper = cp.ReadMapper(target=args.target, bam_path=args.bam,
+                                   lowest_match=args.match, platform=args.platform)
+        if args.platform == 'parse':
+            readmapper.merge_bam()
+        print('generating compatible matrix')
+        readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
+                                      current_job_index=args.job_index)
+        #count matrix
+        countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.target,
+                                     platform=args.platform, workers=args.workers)
+        if args.platform == 'parse':
+            countmatrix.generate_multiple_samples()
+            countmatrix.save_multiple_samples(csv=True, mtx=True)
+        else:
+            countmatrix.generate_single_sample()
+            countmatrix.save_single_sample(csv=True, mtx=True)
 
 
 
