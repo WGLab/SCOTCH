@@ -8,11 +8,13 @@ from scipy.io import mmwrite
 import pickle
 
 parser = argparse.ArgumentParser(description='Preprocess files')
-#mandaroty options
+#mandatory options
 parser.add_argument('--target',type=str,help="path to target root folder for output files")
 parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix or all")
 parser.add_argument('--bam',type=str,help="Path to bam file or bam folder")
 parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
+#mandatory for parse
+parser.add_argument('--build',type=str, default='hg38',help="genome build")
 #task is annotation
 parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf format, output pickel file, leave it blank if using annotation-free mode")
 parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
