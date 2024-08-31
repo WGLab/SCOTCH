@@ -20,6 +20,48 @@ from collections import defaultdict
 
 
 #some utility functions
+
+# Function to convert the dictionary to GTF
+def convert_to_gtf(geneStructureInformation, output_file, meta = False):
+    def partition_metagene(metageneStructureInformation):
+        meta_gene_names = list(metageneStructureInformation.keys())
+        geneStructureInformation = {}
+        for meta_gene in meta_gene_names:
+            genes_info_list = metageneStructureInformation[meta_gene]
+            for gene_info in genes_info_list:
+                geneID, single_gene_info = gene_info.items()
+                geneStructureInformation[geneID] = single_gene_info
+        return geneStructureInformation
+    if meta:
+        geneStructureInformation = partition_metagene(geneStructureInformation)
+    with (open(output_file, 'w') as gtf):
+        for gene_id, info in geneStructureInformation.items():
+            geneInfo, exonInfo, isoformInfo = info
+            gene_name = geneInfo['geneName']
+            gene_chr = geneInfo['geneChr']
+            gene_start = geneInfo['geneStart']
+            gene_end = geneInfo['geneEnd']
+            gene_strand = geneInfo['geneStrand']
+            # Write gene entry
+            gtf.write(f"{gene_chr}\tsource\tgene\t{gene_start}\t{gene_end}\t.\t{gene_strand}\t.\t"
+                      f"gene_id \"{gene_id}\"; gene_name \"{gene_name}\";\n")
+            # Write isoform and exon entries
+            for isoform_name, exon_indices in isoformInfo.items():
+                isoform_start = exonInfo[exon_indices[0]][0]
+                isoform_end = exonInfo[exon_indices[0]][1]
+                # Write transcript entry
+                gtf.write(f"{gene_chr}\tsource\ttranscript\t{isoform_start}\t{isoform_end}\t.\t{gene_strand}\t.\t"
+                          f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; gene_name \"{gene_name}\";\n")
+                # Write exon entries
+                exons_transcript = []
+                for exon_index in exon_indices:
+                    exons_transcript.append(exonInfo[exon_index])
+                merged_exons_transcript = merge_exons(exons_transcript)
+                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_transcript, start=1):
+                    gtf.write(f"{gene_chr}\tsource\texon\t{exon_start}\t{exon_end}\t.\t{gene_strand}\t.\t"
+                          f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; exon_number \"{exon_num}\"; "
+                          f"gene_name \"{gene_name}\";\n")
+
 def sort_multigeneInfo(Info_multigenes):
     Info_multigenes_sort = []
     for info_singlegene in Info_multigenes:
