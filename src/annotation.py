@@ -641,7 +641,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
 
 
 class Annotator:
-    def __init__(self, target, reference_gtf_path, bam_path, update_gtf, workers,
+    def __init__(self, target:list, reference_gtf_path, bam_path:list, update_gtf, workers,
                  coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,z_score_threshold,
                  min_gene_size, build = None, platform = '10x'):
         """
@@ -651,8 +651,8 @@ class Annotator:
         update_gtf: whether to update gtf annotation using bam file
         build: parse parameter
         """
-        self.multiple_bam = True if isinstance(bam_path, list) else False
-        self.multiple_samples = True if isinstance(target, list) else False
+        self.multiple_bam = True if len(bam_path)>1 else False
+        self.multiple_samples = True if len(target)>1 else False
         self.workers = workers
         self.target = target
         self.reference_gtf_path = reference_gtf_path
@@ -662,28 +662,16 @@ class Annotator:
         self.platform = platform
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
-        if self.multiple_samples:
-            # gene annotation information
-            self.annotation_folder_path = os.path.join(target, "reference")
-            self.annotation_path_single_gene = os.path.join(target, "reference/geneStructureInformation.pkl")
-            self.annotation_path_meta_gene = os.path.join(target, "reference/metageneStructureInformation.pkl")
-            # bam information
-            self.bamInfo_folder_path = os.path.join(target, "bam")
-            self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')
-            self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')
-            self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl') #only available for parse
-            self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
-        else:
-            # gene annotation information
-            self.annotation_folder_path = [os.path.join(t, "reference") for t in target]
-            self.annotation_path_single_gene = [os.path.join(t, "reference/geneStructureInformation.pkl") for t in target]
-            self.annotation_path_meta_gene = [os.path.join(t, "reference/metageneStructureInformation.pkl") for t in target]
-            # bam information
-            self.bamInfo_folder_path = [os.path.join(t, "bam") for t in target]
-            self.bamInfo_pkl_path = [os.path.join(t, 'bam/bam.Info.pkl') for t in target]
-            self.bamInfo2_pkl_path = [os.path.join(t, 'bam/bam.Info2.pkl') for t in target]
-            self.bamInfo3_pkl_path = [os.path.join(t, 'bam/bam.Info3.pkl') for t in target]  # only available for parse
-            self.bamInfo_csv_path = [os.path.join(t, 'bam/bam.Info.csv') for t in target]
+        # gene annotation information
+        self.annotation_folder_path = [os.path.join(t, "reference") for t in target]
+        self.annotation_path_single_gene = [os.path.join(t, "reference/geneStructureInformation.pkl") for t in target]
+        self.annotation_path_meta_gene = [os.path.join(t, "reference/metageneStructureInformation.pkl") for t in target]
+        # bam information
+        self.bamInfo_folder_path = [os.path.join(t, "bam") for t in target]
+        self.bamInfo_pkl_path = [os.path.join(t, 'bam/bam.Info.pkl') for t in target]
+        self.bamInfo2_pkl_path = [os.path.join(t, 'bam/bam.Info2.pkl') for t in target]
+        self.bamInfo3_pkl_path = [os.path.join(t, 'bam/bam.Info3.pkl') for t in target]  # only available for parse
+        self.bamInfo_csv_path = [os.path.join(t, 'bam/bam.Info.csv') for t in target]
         # some parameters
         self.coverage_threshold_gene = coverage_threshold_gene
         self.coverage_threshold_exon = coverage_threshold_exon
