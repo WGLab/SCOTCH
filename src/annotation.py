@@ -455,7 +455,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     else:
         geneIDs = list(geneStructureInformation.keys())
         results = Parallel(n_jobs=workers)(
-            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in tqdm(geneIDs))
+            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
     return annotations
 
