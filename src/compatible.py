@@ -114,7 +114,14 @@ class ReadMapper:
                 out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
-            Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
+            #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
+            Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = [], [], []
+            for result in results:
+                if result is not None:
+                    ind, novelisoform, knownisoform = result
+                    Ind.append(ind)
+                    Read_novelIsoform_metagene.append(novelisoform)
+                    Read_knownIsoform_metagene.append(knownisoform)
             unique_ind = list(set(Ind))
             # logging genes without any reads
             log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
@@ -285,6 +292,16 @@ class ReadMapper:
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
         if not os.path.exists(self.compatible_matrix_folder_path):
             os.makedirs(self.compatible_matrix_folder_path)
+        MetaGenes = list(self.metageneStructureInformation.keys())
+        if total_jobs > 1:
+            step_size = math.ceil(len(MetaGenes) / total_jobs)
+            s = int(list(range(0, len(MetaGenes), step_size))[current_job_index])
+            e = int(s + step_size)
+            MetaGenes_job = MetaGenes[s:e]
+        else:#total_jobs = 1
+            MetaGenes_job = MetaGenes
+        print(str(len(MetaGenes_job)) + ' metagenes for this job')
+
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []
@@ -295,33 +312,26 @@ class ReadMapper:
                 gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
                 genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
         MetaGene_Gene_dict = {}
-        for key, values in self.metageneStructureInformation.items():
-            genes_ = []
-            for value in values:
-                gene = str(value[0]['geneName']) + '_' + str(value[0]['geneID'])
-                if gene not in genes_existing:
-                    genes_.append(gene)
-            if len(genes_) > 0:
-                MetaGene_Gene_dict[key] = genes_
-        MetaGenes = list(MetaGene_Gene_dict.keys())
-        print('total metagene number is: ' + str(len(MetaGenes)))
-        if total_jobs > 1:
-            step_size = math.ceil(len(MetaGenes) / total_jobs)
-            s = int(list(range(0, len(MetaGenes), step_size))[current_job_index])
-            e = int(s + step_size)
-            MetaGenes_ = MetaGenes[s:e]
-            print('processing: ' + str(len(MetaGenes_)) + ' metagenes')
-        else:#total_jobs = 1
-            MetaGenes_ = MetaGenes
+        for metagene_name, genes_info in self.metageneStructureInformation.items():
+            if metagene_name in MetaGenes_job:
+                genes_ = []
+                for gene_info in genes_info:
+                    gene = str(gene_info[0]['geneName']) + '_' + str(gene_info[0]['geneID'])
+                    if gene not in genes_existing:
+                        genes_.append(gene)
+                if len(genes_) > 0:
+                    MetaGene_Gene_dict[metagene_name] = genes_
+        MetaGenes_job = list(MetaGene_Gene_dict.keys())
+        print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
         if self.parse:
-            for meta_gene in MetaGenes_:
+            for meta_gene in MetaGenes_job:
                 self.map_reads_parse(meta_gene, save=True)
         else:
-            for meta_gene in MetaGenes_:
+            for meta_gene in MetaGenes_job:
                 self.map_reads(meta_gene, save=True)
-    def save_annotation_w_novel_isoform(self):
-        with open(self.annotation_path_meta_gene_novel, 'wb') as file:
-            pickle.dump(self.metageneStructureInformationwNovel, file)
+    #def save_annotation_w_novel_isoform(self):
+    #    with open(self.annotation_path_meta_gene_novel, 'wb') as file:
+    #        pickle.dump(self.metageneStructureInformationwNovel, file)
 
 
 

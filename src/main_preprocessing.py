@@ -60,8 +60,8 @@ def main():
         print('generating compatible matrix')
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
                                   current_job_index=args.job_index)
-        print('saving annotations with identified novel isoforms')
-        readmapper.save_annotation_w_novel_isoform()
+        #print('saving annotations with identified novel isoforms')
+        #readmapper.save_annotation_w_novel_isoform()
 
     if args.task == 'count matrix': # task is to generate count matrix
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.target,
@@ -91,8 +91,8 @@ def main():
         print('generating compatible matrix')
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing, total_jobs=args.total_jobs,
                                       current_job_index=args.job_index)
-        print('saving annotations with identified novel isoforms')
-        readmapper.save_annotation_w_novel_isoform()
+        #print('saving annotations with identified novel isoforms')
+        #readmapper.save_annotation_w_novel_isoform()
         #count matrix
         countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.target,
                                      platform=args.platform, workers=args.workers)
