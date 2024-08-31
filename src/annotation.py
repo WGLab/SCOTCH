@@ -177,7 +177,7 @@ def get_splicejuction_from_read(read):
             ref_pos += cigarlen
     return junctions #this returns introns e.g. (103, 105) is 0 based containing 2 bases
 
-def cut_exons_by_derivative(exons, coverage, sigma = 1):
+def cut_exons_by_derivative(exons, coverage, sigma = 1, z_score_threshold = 3):
     #exon_dict: just one exon
     #coverage: the whole coverage object {1000:100, 1001:101}
     derivatives, positions = [], []
@@ -196,7 +196,7 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1):
     mean_derivative = np.mean(derivatives)
     std_derivative = np.std(derivatives)
     z_scores = (derivatives - mean_derivative) / std_derivative
-    cut_positions = positions[np.abs(z_scores) > 3]
+    cut_positions = positions[np.abs(z_scores) > z_score_threshold]
     if len(cut_positions)==0:
         return exons
     cut_positions_valid = [cut_positions[0]]
@@ -217,7 +217,9 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1):
     return new_exons
 
 
-def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_threshold=0.01, boundary_threshold=0.01):
+def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
+                              coverage_threshold=0.01, boundary_threshold=0.01,
+                              z_score_threshold = 3):
     if isinstance(bam_file,str):
         bam = pysam.AlignmentFile(bam_file, "rb")
     else:
@@ -235,7 +237,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
                         coverage[pos] = 1
     if len(coverage)==0:
         return exons
-    coverage_threshold_absolute = max(max(coverage.values())*coverage_threshold,10)
+    coverage_threshold_absolute = max(max(coverage.values())*coverage_threshold,20)
     #only keep positions that meet the coverage threshold
     coverage = {pos: cov for pos, cov in coverage.items() if cov > coverage_threshold_absolute}
     coverage_blocks = get_continuous_blocks(coverage)
@@ -258,21 +260,22 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
     exons = coverage_blocks
     #partition1: use splicing junctions to find sub-exons
     boundaries = count_and_sort_tuple_elements(junctions)
+    boundary_threshold_absolute = max(max(list(boundaries.values())) * boundary_threshold, 20)
+    #filter out splicing positions with few support
     if len(boundaries)>1:
         #group boundaries by meta-exons
         filtered_boundaries = [{} for _ in coverage_blocks]
         for boundary, freq in boundaries.items():
-            for i, (start, end) in enumerate(coverage_blocks):
-                if start < boundary < end:
-                    filtered_boundaries[i][boundary] = freq
-                    break
+            if freq >= boundary_threshold_absolute:
+                for i, (start, end) in enumerate(coverage_blocks):
+                    if start < boundary < end:
+                        filtered_boundaries[i][boundary] = freq
+                        break
         Filtered_Boundaries= []
-        boundary_threshold_absolute = max(max(list(boundaries.values()))*boundary_threshold,10)
         for filtered_boundaries_ in filtered_boundaries:
             merged_boundaries = merge_boundaries_by_evidence(filtered_boundaries_, merge_distance=10)
             sorted_boundaries = dict(sorted(merged_boundaries.items()))
-            filtered_sorted_boundaries = {k: v for k, v in sorted_boundaries.items() if v >= boundary_threshold_absolute}
-            Filtered_Boundaries.append(filtered_sorted_boundaries)
+            Filtered_Boundaries.append(sorted_boundaries)
         #futher filter the boundaries that are too close to a boundary of an exon_block
         for i, block_boundaries in enumerate(Filtered_Boundaries):
             for boundary in list(block_boundaries.keys()):
@@ -286,7 +289,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end, coverage_th
             for ii in range(len(positions)-1):
                 exons.append((positions[ii], positions[ii+1]))
     #partition2: partition meta-exons using read coverage derivatives
-    exons = cut_exons_by_derivative(exons, coverage)
+    exons = cut_exons_by_derivative(exons, coverage, sigma=1, z_score_threshold=z_score_threshold)
     return exons
 
 
@@ -326,10 +329,10 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
 
 
 
-def update_exons(A, B):
+def update_exons(A, B, distance_threshold = 20):
     ##B is reference
     ##A is based on bam
-    def correct_point(point, reference_points, threshold = 10):
+    def correct_point(point, reference_points, threshold = distance_threshold):
         closest_point = None
         min_distance = float('inf')
         for ref_point in reference_points:

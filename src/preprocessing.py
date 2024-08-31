@@ -43,14 +43,14 @@ def convert_to_gtf(geneStructureInformation, output_file, meta = False):
             gene_end = geneInfo['geneEnd']
             gene_strand = geneInfo['geneStrand']
             # Write gene entry
-            gtf.write(f"{gene_chr}\tsource\tgene\t{gene_start}\t{gene_end}\t.\t{gene_strand}\t.\t"
+            gtf.write(f"{gene_chr}\tSCOTCH\tgene\t{gene_start}\t{gene_end}\t.\t{gene_strand}\t.\t"
                       f"gene_id \"{gene_id}\"; gene_name \"{gene_name}\";\n")
             # Write isoform and exon entries
             for isoform_name, exon_indices in isoformInfo.items():
                 isoform_start = exonInfo[exon_indices[0]][0]
                 isoform_end = exonInfo[exon_indices[0]][1]
                 # Write transcript entry
-                gtf.write(f"{gene_chr}\tsource\ttranscript\t{isoform_start}\t{isoform_end}\t.\t{gene_strand}\t.\t"
+                gtf.write(f"{gene_chr}\tSCOTCH\ttranscript\t{isoform_start}\t{isoform_end}\t.\t{gene_strand}\t.\t"
                           f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; gene_name \"{gene_name}\";\n")
                 # Write exon entries
                 exons_transcript = []
@@ -58,7 +58,7 @@ def convert_to_gtf(geneStructureInformation, output_file, meta = False):
                     exons_transcript.append(exonInfo[exon_index])
                 merged_exons_transcript = merge_exons(exons_transcript)
                 for exon_num, (exon_start, exon_end) in enumerate(merged_exons_transcript, start=1):
-                    gtf.write(f"{gene_chr}\tsource\texon\t{exon_start}\t{exon_end}\t.\t{gene_strand}\t.\t"
+                    gtf.write(f"{gene_chr}\tSCOTCH\texon\t{exon_start}\t{exon_end}\t.\t{gene_strand}\t.\t"
                           f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; exon_number \"{exon_num}\"; "
                           f"gene_name \"{gene_name}\";\n")
 
