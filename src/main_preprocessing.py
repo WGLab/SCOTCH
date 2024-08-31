@@ -3,15 +3,12 @@ import count_matrix as cm
 import os
 import annotation as annot
 import compatible as cp
-#from scipy.sparse import csr_matrix, save_npz
-from scipy.io import mmwrite
-import pickle
 
 parser = argparse.ArgumentParser(description='Preprocess files')
 #mandatory options
-parser.add_argument('--target',type=str,help="path to target root folder for output files")
+parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")
 parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix or all")
-parser.add_argument('--bam',type=str,help="Path to bam file or bam folder")
+parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")
 parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
 #mandatory for parse
 parser.add_argument('--build',type=str, default='hg38',help="genome build")

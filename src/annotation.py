@@ -319,7 +319,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
     return exons
 
 
-def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=50, workers = 1):
+def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=50):
     def process_bam_file(bam_file, coverage_threshold, min_region_size):
         #bam_file: a single path or a list of paths for consensus results
         if isinstance(bam_file, str):
@@ -518,7 +518,6 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         # isoformInfo
         isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation_copy[geneID][2])
         return {geneID:[geneInfo, exonInfo, isoformInfo]}
-
     #generate gene annotation solely based on bam file
     if geneStructureInformation is None:
         all_genes = get_genes_from_bam(bamfile_path, coverage_threshold_gene, min_gene_size) #{'chr1':[(100,200),(300,400)]}
@@ -648,10 +647,12 @@ class Annotator:
         """
         target: root path to save annotation files. SCOTCH will automatically create sub folders
         reference_gtf: path to gtf annotation (optional)
-        bam_path: path to bam file, or path to the bam file folder
+        bam_path: path to bam file, or path to the bam file folder; can be a str for a single sample, or a list for multiple samples
         update_gtf: whether to update gtf annotation using bam file
         build: parse parameter
         """
+        self.multiple_bam = True if isinstance(bam_path, list) else False
+        self.multiple_samples = True if isinstance(target, list) else False
         self.workers = workers
         self.target = target
         self.reference_gtf_path = reference_gtf_path
@@ -661,16 +662,28 @@ class Annotator:
         self.platform = platform
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
-        # gene annotation information
-        self.annotation_folder_path = os.path.join(target, "reference")
-        self.annotation_path_single_gene = os.path.join(target, "reference/geneStructureInformation.pkl")
-        self.annotation_path_meta_gene = os.path.join(target, "reference/metageneStructureInformation.pkl")
-        # bam information
-        self.bamInfo_folder_path = os.path.join(target, "bam")
-        self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')
-        self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')
-        self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl') #only available for parse
-        self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
+        if self.multiple_samples:
+            # gene annotation information
+            self.annotation_folder_path = os.path.join(target, "reference")
+            self.annotation_path_single_gene = os.path.join(target, "reference/geneStructureInformation.pkl")
+            self.annotation_path_meta_gene = os.path.join(target, "reference/metageneStructureInformation.pkl")
+            # bam information
+            self.bamInfo_folder_path = os.path.join(target, "bam")
+            self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')
+            self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')
+            self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl') #only available for parse
+            self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
+        else:
+            # gene annotation information
+            self.annotation_folder_path = [os.path.join(t, "reference") for t in target]
+            self.annotation_path_single_gene = [os.path.join(t, "reference/geneStructureInformation.pkl") for t in target]
+            self.annotation_path_meta_gene = [os.path.join(t, "reference/metageneStructureInformation.pkl") for t in target]
+            # bam information
+            self.bamInfo_folder_path = [os.path.join(t, "bam") for t in target]
+            self.bamInfo_pkl_path = [os.path.join(t, 'bam/bam.Info.pkl') for t in target]
+            self.bamInfo2_pkl_path = [os.path.join(t, 'bam/bam.Info2.pkl') for t in target]
+            self.bamInfo3_pkl_path = [os.path.join(t, 'bam/bam.Info3.pkl') for t in target]  # only available for parse
+            self.bamInfo_csv_path = [os.path.join(t, 'bam/bam.Info.csv') for t in target]
         # some parameters
         self.coverage_threshold_gene = coverage_threshold_gene
         self.coverage_threshold_exon = coverage_threshold_exon
@@ -678,71 +691,79 @@ class Annotator:
         self.z_score_threshold = z_score_threshold
         self.min_gene_size = min_gene_size
     def annotate_genes(self):
-        if not os.path.exists(self.annotation_folder_path):
-            os.makedirs(self.annotation_folder_path)
-        if os.path.isfile(self.annotation_path_single_gene) and os.path.isfile(self.annotation_path_meta_gene):
-            print('complete gene annotation information exist')
-        else:
-            print('complete gene annotation information does not exist, we will generate')
-            #annotation free mode
-            if self.reference_gtf_path is None:
-                print('Annotation-free Mode: we will rely on given bam files to generate gene annotations')
-                _ = extract_annotation_info(None, self.bam_path, self.workers,
-                                self.annotation_path_single_gene, self.build,
-                                self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                            self.coverage_threshold_splicing,self.z_score_threshold,
-                                            self.min_gene_size)
-            if self.update_gtf:
-                print('Semi-annotation Mode: we will update existing gene annotations using given bam files')
-                _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
-                                            self.annotation_path_single_gene, self.build,
-                                            self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                            self.coverage_threshold_splicing,self.z_score_threshold,
-                                            self.min_gene_size)
+        for i in range(len(target)):
+            if not os.path.exists(self.annotation_folder_path[i]):
+                os.makedirs(self.annotation_folder_path[i])
+            if os.path.isfile(self.annotation_path_single_gene[i]) and os.path.isfile(self.annotation_path_meta_gene[i]):
+                print('complete gene annotation information exist')
             else:
-                print('Annotation-only Mode: we will only use existing gene annotations')
-                _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
-                                            self.annotation_path_single_gene, self.build,
-                                            self.coverage_threshold_gene, self.coverage_threshold_exon,
-                                            self.coverage_threshold_splicing,self.z_score_threshold,
-                                            self.min_gene_size)
-    def annotation_bam(self):
-        if not os.path.exists(self.bamInfo_folder_path):
-            os.makedirs(self.bamInfo_folder_path)
-        if os.path.isfile(self.bamInfo_pkl_path) == True and os.path.isfile(self.bamInfo_csv_path) == True:
-            print('bam file information exist')
-        if os.path.isfile(self.bamInfo_pkl_path) == False and os.path.isfile(self.bamInfo_csv_path) == True:
-            print('extracting bam file pickle information')
-            bam_info = pd.read_csv(self.bamInfo_csv_path)
-            qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
-            with open(self.bamInfo_pkl_path, 'wb') as file:
-                pickle.dump(qname_dict, file)
-            with open(self.bamInfo2_pkl_path, 'wb') as file:
-                pickle.dump(qname_cbumi_dict, file)
-            if qname_sample_dict is not None:
-                with open(self.bamInfo3_pkl_path, 'wb') as file:
-                    pickle.dump(qname_sample_dict, file)
-        if os.path.isfile(self.bamInfo_pkl_path) == False and os.path.isfile(self.bamInfo_csv_path) == False:
-            print('extracting bam file information')
-            if os.path.isfile(self.bam_path)==False:
-                bam_info = extract_bam_info_folder(self.bam_path, self.workers, self.parse, self.pacbio)
-            else:
-                if self.parse:
-                    bam_info = extract_bam_info_parse(self.bam_path)
-                elif self.pacbio:
-                    bam_info = extract_bam_info_pacbio(self.bam_path)
+                if i==0:
+                    print('complete gene annotation information does not exist, we will generate')
+                    #annotation free mode
+                    if self.reference_gtf_path is None:
+                        print('Annotation-free Mode: we will rely on given bam files to generate gene annotations')
+                        _ = extract_annotation_info(None, self.bam_path, self.workers,
+                                        self.annotation_path_single_gene[i], self.build,
+                                        self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                                    self.coverage_threshold_splicing,self.z_score_threshold,
+                                                    self.min_gene_size)
+                    if self.update_gtf:
+                        print('Semi-annotation Mode: we will update existing gene annotations using given bam files')
+                        _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
+                                                    self.annotation_path_single_gene[i], self.build,
+                                                    self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                                    self.coverage_threshold_splicing,self.z_score_threshold,
+                                                    self.min_gene_size)
+                    else:
+                        print('Annotation-only Mode: we will only use existing gene annotations')
+                        _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
+                                                    self.annotation_path_single_gene[i], self.build,
+                                                    self.coverage_threshold_gene, self.coverage_threshold_exon,
+                                                    self.coverage_threshold_splicing,self.z_score_threshold,
+                                                    self.min_gene_size)
                 else:
-                    bam_info = extract_bam_info(self.bam_path)
-            bam_info.to_csv(self.bamInfo_csv_path)
-            print('generating bam file pickle information')
-            qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
-            with open(self.bamInfo_pkl_path, 'wb') as file:
-                pickle.dump(qname_dict, file)
-            with open(self.bamInfo2_pkl_path, 'wb') as file:
-                pickle.dump(qname_cbumi_dict, file)
-            if qname_sample_dict is not None:
-                with open(self.bamInfo3_pkl_path, 'wb') as file:
-                    pickle.dump(qname_sample_dict, file)
+                    # Copy the generated files from the first target to the current target
+                    print(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
+                    shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
+
+    def annotation_bam(self):
+        for i in range(len(self.target)):
+            if not os.path.exists(self.bamInfo_folder_path[i]):
+                os.makedirs(self.bamInfo_folder_path[i])
+            if os.path.isfile(self.bamInfo_pkl_path[i]) == True and os.path.isfile(self.bamInfo_csv_path[i]) == True:
+                print('bam file information exist')
+            if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == True:
+                print('extracting bam file pickle information')
+                bam_info = pd.read_csv(self.bamInfo_csv_path[i])
+                qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                with open(self.bamInfo_pkl_path[i], 'wb') as file:
+                    pickle.dump(qname_dict, file)
+                with open(self.bamInfo2_pkl_path[i], 'wb') as file:
+                    pickle.dump(qname_cbumi_dict, file)
+                if qname_sample_dict is not None:
+                    with open(self.bamInfo3_pkl_path[i], 'wb') as file:
+                        pickle.dump(qname_sample_dict, file)
+            if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
+                print('extracting bam file information')
+                if os.path.isfile(self.bam_path)==False:
+                    bam_info = extract_bam_info_folder(self.bam_path, self.workers, self.parse, self.pacbio)
+                else:
+                    if self.parse:
+                        bam_info = extract_bam_info_parse(self.bam_path)
+                    elif self.pacbio:
+                        bam_info = extract_bam_info_pacbio(self.bam_path)
+                    else:
+                        bam_info = extract_bam_info(self.bam_path)
+                bam_info.to_csv(self.bamInfo_csv_path)
+                print('generating bam file pickle information')
+                qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                with open(self.bamInfo_pkl_path[i], 'wb') as file:
+                    pickle.dump(qname_dict, file)
+                with open(self.bamInfo2_pkl_path[i], 'wb') as file:
+                    pickle.dump(qname_cbumi_dict, file)
+                if qname_sample_dict is not None:
+                    with open(self.bamInfo3_pkl_path[i], 'wb') as file:
+                        pickle.dump(qname_sample_dict, file)
 
 
 
