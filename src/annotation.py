@@ -454,6 +454,9 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     #update existing gene annotation using bam file
     else:
         geneIDs = list(geneStructureInformation.keys())
+        #re-order geneID
+        chunks = np.array_split(geneIDs, workers)
+        geneIDs = [item for sublist in zip(*chunks) for item in sublist]
         results = Parallel(n_jobs=workers)(
             delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
