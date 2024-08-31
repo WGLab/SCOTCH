@@ -17,9 +17,10 @@ parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, par
 parser.add_argument('--ref',type=str, help="Path to gene annotation file in gtf format, output pickel file, leave it blank if using annotation-free mode")
 parser.add_argument('--update_gtf', action='store_true', help='use bam file to update existing gtf annotations')
 parser.add_argument('--update_gtf_off', action='store_false',dest='update_gtf',help='do NOT use bam file to update existing gtf annotations')
-parser.add_argument('--coverage_threshold_gene',type=int, default= 5, help="coverage threshold to support gene discovery")
-parser.add_argument('--coverage_threshold_exon',type=int, default=0.01, help="coverage threshold to support exon discovery, percentage to the maximum coverage")
-parser.add_argument('--coverage_threshold_splicing',type=int, default=0.01, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
+parser.add_argument('--coverage_threshold_gene',type=int, default= 20, help="coverage threshold to support gene discovery")
+parser.add_argument('--coverage_threshold_exon',type=float, default=0.02, help="coverage threshold to support exon discovery, percentage to the maximum coverage")
+parser.add_argument('--coverage_threshold_splicing',type=float, default=0.02, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
+parser.add_argument('--z_score_threshold',type=int, default=10, help="threshold to support exon coverage sharp change discovery")
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
 
 #task is matrix
@@ -46,7 +47,9 @@ def main():
         annotator = annot.Annotator(target=args.target, reference_gtf_path = args.ref,
                                     bam_path = args.bam, update_gtf = args.update_gtf,
                                     workers = args.workers,coverage_threshold_gene = args.coverage_threshold_gene,
-                                    coverage_threshold_exon = args.coverage_threshold_exon, coverage_threshold_splicing = args.coverage_threshold_splicing,
+                                    coverage_threshold_exon = args.coverage_threshold_exon,
+                                    coverage_threshold_splicing = args.coverage_threshold_splicing,
+                                    z_score_threshold = args.z_score_threshold,
                                     min_gene_size = args.min_gene_size, build=args.build, platform = args.platform)
         #generate gene annotation
         annotator.annotate_genes()
@@ -80,6 +83,7 @@ def main():
                                     workers=args.workers, coverage_threshold_gene=args.coverage_threshold_gene,
                                     coverage_threshold_exon=args.coverage_threshold_exon,
                                     coverage_threshold_splicing=args.coverage_threshold_splicing,
+                                    z_score_threshold = args.z_score_threshold,
                                     min_gene_size=args.min_gene_size, build=args.build, platform=args.platform)
         annotator.annotate_genes()
         annotator.annotation_bam()
