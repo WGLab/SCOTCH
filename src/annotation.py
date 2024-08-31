@@ -222,23 +222,45 @@ def cut_exons_by_derivative(exons, coverage, sigma = 1, z_score_threshold = 3):
 
 
 def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
-                              coverage_threshold=0.01, boundary_threshold=0.01,
-                              z_score_threshold = 3):
+                              coverage_threshold=0.02, boundary_threshold=0.02,
+                              z_score_threshold = 10):
+    """
+    get non overlapping exons based on bam files given a gene region
+    :param bam_file: a single bam file path/oject or a list of multiple bam file paths/objects that will be used for concensus result
+    :param chrom: chromosome
+    :param gene_start: start position of gene
+    :param gene_end: end position of gene
+    :param coverage_threshold: threshold of coverage to filter out exons, percentage to maximum coverage
+    :param boundary_threshold: threshold of read number to filter out splicing positions, percentage to maximum read supports of splicing positions
+    :param z_score_threshold: threshold to filter out within exon partitions based on sharp changes of derivatives
+    :return: a list of tuples representing coordinates of exons
+    """
     if isinstance(bam_file,str):
-        bam = pysam.AlignmentFile(bam_file, "rb")
+        # a single path
+        bams = [pysam.AlignmentFile(bam_file, "rb")]
+    elif isinstance(bam_file,list):
+        # a list of path
+        if isinstance(bam_file[0],str):
+            bams = [pysam.AlignmentFile(bam_, "rb") for bam_ in bam_file]
+        else:
+            # a list of objects
+            bams = bam_file
     else:
-        bam = bam_file
+        # a single object
+        bams = [bam_file] #a pysam object
+    #--> bams is a list of pysam objects
     exons, coverage, junctions = [], {}, []
     #get read coverage
-    for read in bam.fetch(chrom, gene_start, gene_end):
-        if read.reference_start >= gene_start and read.reference_end < gene_end:
-            junctions += get_splicejuction_from_read(read)
-            for read_start, read_end in read.get_blocks():
-                for pos in range(read_start, read_end):
-                    if pos in coverage:
-                        coverage[pos] += 1
-                    else:
-                        coverage[pos] = 1
+    for bam in bams:
+        for read in bam.fetch(chrom, gene_start, gene_end):
+            if read.reference_start >= gene_start and read.reference_end < gene_end:
+                junctions += get_splicejuction_from_read(read)
+                for read_start, read_end in read.get_blocks():
+                    for pos in range(read_start, read_end):
+                        if pos in coverage:
+                            coverage[pos] += 1
+                        else:
+                            coverage[pos] = 1
     if len(coverage)==0:
         return exons
     coverage_threshold_absolute = max(max(coverage.values())*coverage_threshold,20)
@@ -299,36 +321,49 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
 
 def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=50, workers = 1):
     def process_bam_file(bam_file, coverage_threshold, min_region_size):
-        bam = pysam.AlignmentFile(bam_file, "rb")
+        #bam_file: a single path or a list of paths for consensus results
+        if isinstance(bam_file, str):
+            bams = pysam.AlignmentFile(bam_file, "rb")
+        else: #list
+            bams = [ pysam.AlignmentFile(bam, "rb") for bam in bam_file]
         coverage = defaultdict(lambda: defaultdict(int))
-        chromosomes = bam.references
+        chromosomes = list(set([bam.references for bam in bams]))
         for chrom in chromosomes:
-            for read in bam.fetch(chrom):
-                if not read.is_unmapped:
-                    for pos in range(read.reference_start, read.reference_end):
-                        coverage[chrom][pos] += 1
+            for bam in bams:
+                if chrom in bam.references:
+                    for read in bam.fetch(chrom):
+                        if not read.is_unmapped:
+                            for pos in range(read.reference_start, read.reference_end):
+                                coverage[chrom][pos] += 1
         genes = {}
         for chrom, cov_dict in coverage.items():
             cov_dict = {pos: cov for pos, cov in cov_dict.items() if cov > coverage_threshold}
             coverage_blocks = get_continuous_blocks(cov_dict)
             genes[chrom] = [(a, b) for a, b in coverage_blocks if b - a > min_region_size]
         return genes
-    if os.path.isdir(input_bam_path):
-        bam_files = [os.path.join(input_bam_path, f) for f in os.listdir(input_bam_path) if f.endswith('.bam')]
-    else:
-        bam_files = [input_bam_path]
-    results = Parallel(n_jobs=workers)(delayed(process_bam_file)(bam_file, coverage_threshold, min_region_size) for bam_file in bam_files)
-    all_genes={}
-    for result in results:
-        for chrom, gene_list in result.items():
-            if chrom not in all_genes:
-                all_genes[chrom] = gene_list
-            else:
-                all_genes[chrom].extend(gene_list)
+    if isinstance(input_bam_path, list):
+        if os.path.isdir(input_bam_path[0]): # a list of folders
+            bam_files = [os.path.join(folder, file) for folder in input_bam_path for file in folder]
+            #bam_files = [os.path.join(input_bam_path, f) for f in os.listdir(input_bam_path) if f.endswith('.bam')]
+        else: # a list of paths
+            bam_files = input_bam_path
+    else:#single sample
+        if os.path.isdir(input_bam_path):
+            bam_files = [os.path.join(input_bam_path, f) for f in os.listdir(input_bam_path) if f.endswith('.bam')]
+        else:
+            bam_files = [input_bam_path]
+    all_genes = process_bam_file(bam_files, coverage_threshold, min_region_size)
+    #results = Parallel(n_jobs=workers)(delayed(process_bam_file)(bam_file, coverage_threshold, min_region_size) for bam_file in bam_files)
+    #all_genes={}
+    #for result in results:
+    #    for chrom, gene_list in result.items():
+    #        if chrom not in all_genes:
+    #            all_genes[chrom] = gene_list
+    #        else:
+    #            all_genes[chrom].extend(gene_list)
     sorted_all_genes = {}
     for chrom in sorted(all_genes.keys()):
-        sorted_all_genes[chrom] = sorted(all_genes[chrom],
-                                         key=lambda x: (x[0], x[1]))
+        sorted_all_genes[chrom] = sorted(all_genes[chrom], key=lambda x: (x[0], x[1]))
     return sorted_all_genes
 
 
@@ -388,7 +423,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     """
     generate geneStructureInformation either using bamfile alone (leave geneStructureInformation blank) or update existing annotation file using bam file
     :param geneStructureInformation: pickle file object of existing gene annotation, not path
-    :param bamfile_path: can be a folder path of multiple bams or a single bam file
+    :param bamfile_path: can be (1) a single bam file from one sample, (2) a folder path of multiple bams from one sample, (3) a list of bam files from multiple samples, (4) a list of bam folder paths from multiple samples
     :param coverage_threshold_gene: minimal read coverage for gene
     :param coverage_threshold_exon: minimal read coverage for exon, percentage to the maximum coverage
     :param coverage_threshold_splicing: minimal read coverage to support splicing, percentage to the maximum splicing
@@ -398,15 +433,33 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     """
     def novel_gene_annotation(chrom, all_genes_dict, bamfile, coverage_threshold_exon=0.01, coverage_threshold_splicing=0.01,z_score_threshold = 10):
         #all_genes: {'chr1':[(100,200),(300,400)]}, bamfile: path to one bam file
-        if os.path.isfile(bamfile) == False:  # bamfile is a folder
-            bamFile_name = [f for f in os.listdir(bamfile) if
-                            f.endswith('.bam') and '.' + str(chrom) + '.' in f]
-            bamfile = os.path.join(bamfile, bamFile_name[0])
-        bamfile = pysam.AlignmentFile(bamfile, "rb")
+        bamfiles = None
+        #----from one sample
+        if isinstance(bamfile, str):
+            if os.path.isfile(bamfile) == False:  # bamfile is a folder path
+                bamFile_name = [f for f in os.listdir(bamfile) if
+                                f.endswith('.bam') and '.' + str(chrom) + '.' in f]
+                bamfiles = [pysam.AlignmentFile(os.path.join(bamfile, bamFile_name[0]))]# bamfile is a file path now
+            else:
+                bamfiles = [pysam.AlignmentFile(bamfile, "rb")] # bamfile is a file path
+        #-----from multiple samples
+        elif isinstance(bamfile, list):
+            if os.path.isfile(bamfile[0]) == False:  # bamfile = [folderpath1, folderpath2, ...]
+                bamFile_name = [] #bamFile_name = [folderpath1/bamname1, folderpath2/bamname2, ...]
+                for folder in bamfile:
+                    for file in os.listdir(folder):
+                        if file.endswith('.bam') and '.' + str(chrom) + '.' in file:
+                            bamFile_name.append(os.path.join(folder,file))
+                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamFile_name]
+            else:
+                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamfile]
+        else:
+            print('bamfile must be a list or str')
+        #bamfiles is a list of pysam ojects
         genes = all_genes_dict[chrom]  # [(100,200),(300,400)]
         gene_annotations = {}
         for i, (gene_start, gene_end) in enumerate(genes):
-            exonInfo = get_non_overlapping_exons(bamfile, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing,
+            exonInfo = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing,
                                                  z_score_threshold)
             geneInfo = {'geneName': 'gene_'+ str(i+1)+'_'+chrom, 'geneID': 'gene_'+ str(i+1)+'_'+chrom,
                         'geneChr': chrom, 'geneStart':gene_start, 'geneEnd':gene_end, 'geneStrand': '.',
@@ -431,11 +484,29 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold):
         chrom, gene_start, gene_end = geneStructureInformation[geneID][0]['geneChr'], \
         geneStructureInformation[geneID][0]['geneStart'], geneStructureInformation[geneID][0]['geneEnd']
-        if os.path.isfile(bamfile_path) == False:  # bamfile is a folder
-            bamFile_name = [f for f in os.listdir(bamfile_path) if
-                            f.endswith('.bam') and '.' + str(chrom) + '.' in f]
-            bamfile_path = os.path.join(bamfile_path, bamFile_name[0])
-        exons_bam = get_non_overlapping_exons(bamfile_path, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
+        bamfiles = None
+        # ----from one sample
+        if isinstance(bamfile_path, str):
+            if os.path.isfile(bamfile_path) == False:  # bamfile is a folder path
+                bamFile_name = [f for f in os.listdir(bamfile_path) if
+                                f.endswith('.bam') and '.' + str(chrom) + '.' in f]
+                bamfiles = [pysam.AlignmentFile(os.path.join(bamfile_path, bamFile_name[0]))]  # bamfile is a file path now
+            else:
+                bamfiles = [pysam.AlignmentFile(bamfile_path, "rb")]  # bamfile is a file path
+        # -----from multiple samples
+        elif isinstance(bamfile_path, list):
+            if os.path.isfile(bamfile_path[0]) == False:  # bamfile = [folderpath1, folderpath2, ...]
+                bamFile_name = []  # bamFile_name = [folderpath1/bamname1, folderpath2/bamname2, ...]
+                for folder in bamfile_path:
+                    for file in os.listdir(folder):
+                        if file.endswith('.bam') and '.' + str(chrom) + '.' in file:
+                            bamFile_name.append(os.path.join(folder, file))
+                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamFile_name]
+            else:
+                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamfile_path]
+        else:
+            print('bamfile must be a list or str')
+        exons_bam = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
         original_exons = geneStructureInformation[geneID][1]
         updated_exons = update_exons(exons_bam, original_exons)
         geneStructureInformation_copy = geneStructureInformation.copy()
@@ -447,6 +518,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         # isoformInfo
         isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation_copy[geneID][2])
         return {geneID:[geneInfo, exonInfo, isoformInfo]}
+
     #generate gene annotation solely based on bam file
     if geneStructureInformation is None:
         all_genes = get_genes_from_bam(bamfile_path, coverage_threshold_gene, min_gene_size) #{'chr1':[(100,200),(300,400)]}
@@ -463,7 +535,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         results = Parallel(n_jobs=workers)(
             delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
-    return annotations
+    return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
 
 def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                             output="geneStructureInformation.pkl", build=None,
