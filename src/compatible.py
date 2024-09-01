@@ -2,6 +2,32 @@ from preprocessing import *
 import pysam
 
 
+
+
+def summarise_annotation(target):
+    file_name_final = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
+    output_file = os.path.join(target, "reference/metageneStructureInformationwNovel.gtf")
+    file_names = [os.path.join(target, 'reference/'+f) for f in os.listdir(os.path.join(target, "reference")) if f.endswith(r'_\d+.pkl')]
+    if os.path.exists(file_name_final):
+        print('novel isoform annotations exist, transforming to gtf format')
+        metageneStructureInformation = load_pickle(file_name_final)
+        convert_to_gtf(metageneStructureInformation, output_file, meta=True)
+    elif len(file_names)>0:
+        print('novel isoform annotations exist, merging and transforming to gtf format')
+        metageneStructureInformation = {}
+        for file_name in file_names:
+            metageneStructureInformation_ = load_pickle(file_name)
+            metageneStructureInformation.update(metageneStructureInformation_)
+        with open(file_name_final, 'wb') as file:
+            pickle.dump(metageneStructureInformation, file)
+        convert_to_gtf(metageneStructureInformation, output_file, meta=True)
+        print('removing sub-files of annotations')
+        for file_name in file_names:
+            os.remove(file_name)
+    else:
+        print('novel isoform annotations does not exist!')
+
+
 class ReadMapper:
     def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x'):
         self.target = target
@@ -292,7 +318,7 @@ class ReadMapper:
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
         if not os.path.exists(self.compatible_matrix_folder_path):
             os.makedirs(self.compatible_matrix_folder_path)
-        MetaGenes = list(self.metageneStructureInformation.keys())
+        MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
         if total_jobs > 1:
             step_size = math.ceil(len(MetaGenes) / total_jobs)
             s = int(list(range(0, len(MetaGenes), step_size))[current_job_index])
@@ -301,7 +327,6 @@ class ReadMapper:
         else:#total_jobs = 1
             MetaGenes_job = MetaGenes
         print(str(len(MetaGenes_job)) + ' metagenes for this job')
-
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []
@@ -329,9 +354,16 @@ class ReadMapper:
         else:
             for meta_gene in MetaGenes_job:
                 self.map_reads(meta_gene, save=True)
-    #def save_annotation_w_novel_isoform(self):
-    #    with open(self.annotation_path_meta_gene_novel, 'wb') as file:
-    #        pickle.dump(self.metageneStructureInformationwNovel, file)
+        for key in MetaGenes:
+            if key not in MetaGenes_job:
+                del self.metageneStructureInformationwNovel[key]
+    def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
+        if total_jobs>1:
+            file_name = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
+        else:
+            file_name = self.annotation_path_meta_gene_novel
+        with open(self.annotation_path_meta_gene_novel, 'wb') as file:
+            pickle.dump(file_name, file)
 
 
 
