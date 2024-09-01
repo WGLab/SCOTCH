@@ -1,14 +1,11 @@
 import pysam
 import pandas as pd
-from joblib import Parallel, delayed
-from tqdm import tqdm
 import pickle
 from itertools import chain
 import numpy as np
 import os
 from Bio.Seq import Seq
 import math
-import reference as ref
 import networkx as nx
 import community.community_louvain as community_louvain
 from collections import defaultdict
@@ -20,7 +17,6 @@ from collections import defaultdict
 
 
 #some utility functions
-
 # Function to convert the dictionary to GTF
 def convert_to_gtf(geneStructureInformation, output_file, meta = False):
     def partition_metagene(metageneStructureInformation):
@@ -135,132 +131,6 @@ def merge_exons(exons):
                 current_start, current_end = start, end
         merged_exons.append((current_start, current_end))
     return merged_exons
-
-######################################################################
-##############################annotation##############################
-######################################################################
-
-#def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
-#    files = os.listdir(bam_folder)
-#    bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
-#    if parse:
-#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
-#    elif pacbio:
-#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
-#    else:
-#        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam) for bam in bamfiles)
-#    ReadTagsDF = pd.concat(df).reset_index(drop=True)
-#    return ReadTagsDF
-
-#def extract_bam_info(bam):
-    #extract readname, cb, umi from bam file
-    # bam: path to bam file
-#    bamFilePysam = pysam.Samfile(bam, "rb")
-#    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('UB'), read.qend-read.qstart) for read in bamFilePysam]
-#    ReadTagsDF = pd.DataFrame(ReadTags)
-#    if ReadTagsDF.shape[0]>0:
-#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-#        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-#        ReadTagsDF['CBUMI']=ReadTagsDF.CB.astype(str)+'_'+ReadTagsDF.UMI.astype(str)
-#    else:
-#        ReadTagsDF = None
-#    return ReadTagsDF
-
-#def extract_bam_info_parse(bam):
-#    bamFilePysam = pysam.Samfile(bam, "rb")
-#    #qname cb umi cbumi length
-#    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3], read.qname.split('_')[-1] , len(read.query_alignment_sequence), read.get_tag('pS')) for read in bamFilePysam]
-#    ReadTagsDF = pd.DataFrame(ReadTags)
-#    if ReadTagsDF.shape[0] > 0:
-#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE']
-#        ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
-#        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-#    else:
-#        ReadTagsDF = None
-#    return ReadTagsDF
-
-#def extract_bam_info_pacbio(bam):
-#    bamFilePysam = pysam.Samfile(bam, "rb")
-    #qname cb umi cbumi length
-#    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('XM'), read.reference_end-read.reference_start) for read in bamFilePysam]
-#    ReadTagsDF = pd.DataFrame(ReadTags)
-#    if ReadTagsDF.shape[0] > 0:
-#        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-#        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-#        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-#        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
-#    else:
-#        ReadTagsDF = None
-#    return ReadTagsDF
-
-
-#def bam_info_to_dict(bam_info, parse=False):
-    #input bam_info is a dataframe(bam_info is sorted already when generating)
-    #the output dict qname_dict: key: qname, value: the right qname to keep; qname_CBUMI_dict: qname_cbumi
-    #generate qname_dict
-#    max_length_df = bam_info.drop_duplicates(subset='CBUMI', keep='first')
-#    cbumi_to_max_qname = pd.Series(max_length_df.QNAME.values, index=max_length_df.CBUMI).to_dict()
-#    qname_dict = {row['QNAME']: cbumi_to_max_qname[row['CBUMI']] for index, row in bam_info.iterrows()}
-    #generate qname_cbumi_dict
-    # Assuming 'bam_info' is your pandas DataFrame
-#    qname_cbumi_dict = dict(zip(bam_info['QNAME'], bam_info['CBUMI']))
-#    if parse:
-#        qname_sample_dict = dict(zip(bam_info['QNAME'], bam_info['SAMPLE']))
-#        return qname_dict, qname_cbumi_dict, qname_sample_dict
-#    else:
-#        return qname_dict, qname_cbumi_dict
-
-#def process_gene(geneID, geneName, genes ,exons, build=None):
-#    GeneDf = genes[genes.iloc[:, 3] == geneID].reset_index(drop=True)
-#    ExonsDf = exons[exons.iloc[:, 3] == geneID].reset_index(drop=True)
-#    exonsdf = ExonsDf.iloc[:, :3].drop_duplicates().reset_index(drop=True)
-#    exonsdf['exon_num'] = list(range(exonsdf.shape[0]))
-#    geneChr, geneStart, geneEnd = GeneDf.iloc[0, 0], GeneDf.iloc[0, 1], GeneDf.iloc[0, 2]
-#    if build is not None:
-#        geneChr = str(build) + '_'+str(geneChr)
-#    geneStrand = GeneDf.iloc[0, 6]
-#    isoformNames = ExonsDf.TRANSCRIPT.unique().tolist()
-#    GeneInfo = {'geneName': geneName, 'geneID': geneID, 'geneChr': geneChr, 'geneStart': geneStart, 'geneEnd': geneEnd,
-#                'geneStrand':geneStrand, 'numofExons': exonsdf.shape[0], 'numofIsoforms': len(isoformNames),
-#                'isoformNames': isoformNames}
-#    ExonPositions = list(zip(exonsdf.iloc[:, 1], exonsdf.iloc[:, 2]))
-#    ExonsDf = ExonsDf.merge(exonsdf, how='left')
-#    ExonIsoformDict = dict()
-#    for isoform in isoformNames:
-#        ExonIsoformDict[isoform] = ExonsDf[ExonsDf.TRANSCRIPT == isoform].exon_num.tolist()
-#    return geneID, [GeneInfo, ExonPositions, ExonIsoformDict]
-
-#def extract_annotation_info(refGeneFile, num_cores=8, output="geneStructureInformation.pkl", build=None):
-#    metageneStructureInformation = None
-#    meta_output = os.path.join(os.path.dirname(output),'meta'+os.path.basename(output))
-#    genes, exons = ref.generate_reference_df(gtf_path = refGeneFile)
-#    Genes = list(zip(genes.iloc[:,3].tolist(), genes.iloc[:,4].tolist()))#id, name
-#    if os.path.isfile(output)==False:
-#        geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName,genes ,exons, build) for geneID, geneName in tqdm(Genes))
-#        geneStructureInformation = dict(geneStructureInformation)
-#        if output is not None:
-#            with open(output, 'wb') as file:
-#                pickle.dump(geneStructureInformation, file)
-#    else:
-#        geneStructureInformation = load_pickle(output)
-#    if os.path.isfile(meta_output)==False:
-#        #group genes
-#        genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND' ,'META_GENE']
-#        grouped = genes.groupby("META_GENE")
-#        grouped_dict = {key: group.iloc[:, 3].tolist() for key, group in grouped}  # META_GENE STARTS FROM 1
-#        metageneStructureInformation = {}
-#        for i in range(1, 1 + len(grouped_dict)):
-#            meta_gene = 'meta_gene_' + str(i)
-#            gene_ids = grouped_dict[i]
-#            meta_gene_info = []
-#            for id in gene_ids:
-#                meta_gene_info.append(geneStructureInformation[id])
-#            metageneStructureInformation[meta_gene] = meta_gene_info
-#        with open(meta_output, 'wb') as file:
-#            pickle.dump(metageneStructureInformation, file)
-#    return metageneStructureInformation
-
-######################################################################
 
 
 def summarise_metagene(Info_multigenes):
@@ -1533,9 +1403,5 @@ def add_novel_isoform_to_gtf(gtf_path, gene_id, gene_name, novel_dict_list, outp
             gtf_data = gtf_data.append(new_entry, ignore_index=True)
     # Write the updated DataFrame to a new GTF file
     gtf_data.to_csv(output_gtf_path, sep='\t', index=False, header=False, quoting=3)
-
-#bamFile='/scr1/users/xu3/singlecell/project_singlecell/LH/bam/LH.filtered.bam'
-#gene_pkl='/scr1/users/xu3/singlecell/project_singlecell/LH/reference/geneStructureInformation.pkl'
-
 
 
