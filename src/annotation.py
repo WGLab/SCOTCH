@@ -617,15 +617,15 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
             for i, geneID in enumerate(geneIDs):
                 row = [geneStructureInformation[geneID][0]['geneChr'], geneStructureInformation[geneID][0]['geneStart'],
                 geneStructureInformation[geneID][0]['geneEnd'], geneStructureInformation[geneID][0]['geneID'],
-                geneStructureInformation[geneID][0]['geneName'], '.', i]
+                geneStructureInformation[geneID][0]['geneName'], '.','.', i]
                 rows.append(row)
             genes = pd.DataFrame(rows)
         genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND', 'META_GENE']
         grouped = genes.groupby("META_GENE")
         grouped_dict = {key: group.iloc[:, 3].tolist() for key, group in grouped}  # META_GENE STARTS FROM 1
         metageneStructureInformation = {}
-        for i in range(1, 1 + len(grouped_dict)):
-            meta_gene = 'meta_gene_' + str(i)
+        for i in range(len(grouped_dict)):
+            meta_gene = 'meta_gene_' + str(i+1)
             gene_ids = grouped_dict[i]
             meta_gene_info = []
             for id in gene_ids:
