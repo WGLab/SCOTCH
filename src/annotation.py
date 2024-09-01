@@ -734,15 +734,15 @@ class Annotator:
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 print('extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
-                    bam_info = extract_bam_info_folder(self.bam_path, self.workers, self.parse, self.pacbio)
+                    bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio)
                 else:
                     if self.parse:
-                        bam_info = extract_bam_info_parse(self.bam_path)
+                        bam_info = extract_bam_info_parse(self.bam_path[i])
                     elif self.pacbio:
-                        bam_info = extract_bam_info_pacbio(self.bam_path)
+                        bam_info = extract_bam_info_pacbio(self.bam_path[i])
                     else:
-                        bam_info = extract_bam_info(self.bam_path)
-                bam_info.to_csv(self.bamInfo_csv_path)
+                        bam_info = extract_bam_info(self.bam_path[i])
+                bam_info.to_csv(self.bamInfo_csv_path[i])
                 print('generating bam file pickle information')
                 qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
                 with open(self.bamInfo_pkl_path[i], 'wb') as file:

@@ -6,7 +6,7 @@ import compatible as cp
 
 parser = argparse.ArgumentParser(description='Preprocess files')
 #mandatory options
-parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix or all")
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all")
 parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
 parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")#a list
@@ -21,17 +21,15 @@ parser.add_argument('--coverage_threshold_exon',type=float, default=0.02, help="
 parser.add_argument('--coverage_threshold_splicing',type=float, default=0.02, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
 parser.add_argument('--z_score_threshold',type=int, default=10, help="threshold to support exon coverage sharp change discovery")
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
-
-#task is matrix
+#task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
 parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork")
 parser.add_argument('--cover_existing',action='store_true')
 parser.add_argument('--cover_existing_false', action='store_false',dest='cover_existing')
-
+parser.add_argument('--match',type=float,default=0.8, help="the lowest base percentage for matching an exon")
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
-#optional
-parser.add_argument('--match',type=float,default=0.8, help="the lowest base percentage for matching an exon")
+#general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")
 
 
