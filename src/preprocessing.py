@@ -898,10 +898,6 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
 
 def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished,
                                lowest_match, geneInfo, exonInfo, Read_novelIsoform, poly=True):
-    #this function is for all reads mapped to one gene
-    #input are output of map_read_to_gene
-    #novel isoforms
-    #poly can be True/False or a list of True/False
     read_novelisoform_df = None
     #make novel isoform df
     if len(Read_novelIsoform_polished) > 0:
@@ -916,32 +912,37 @@ def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_pol
         duplicated_reads_df = read_novelisoform_df[read_novelisoform_df.duplicated(subset=['read'], keep=False)]
         unique_reads_df = read_novelisoform_df.drop_duplicates(subset=['read'], keep=False)
         #remap duplicated reads
-        qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= 20]
-        geneStrand = geneInfo['geneStrand']
-        novel_isoform_exon_map_list = isoformInfo_to_onehot(novel_isoformInfo_polished, geneInfo)
-        duplicated_reads_list = list(set(duplicated_reads_df.read.tolist()))
-        read_exon_map_list_all = [readmapping for readname, readpct, readmapping in Read_novelIsoform if
+        read_novelisoform_df_duplicated = None
+        if len(duplicated_reads_df)>0:
+            qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= 20]
+            geneStrand = geneInfo['geneStrand']
+            novel_isoform_exon_map_list = isoformInfo_to_onehot(novel_isoformInfo_polished, geneInfo)
+            duplicated_reads_list = list(set(duplicated_reads_df.read.tolist()))
+            read_exon_map_list_all = [readmapping for readname, readpct, readmapping in Read_novelIsoform if
                               readname in duplicated_reads_list]
-        exon_map_pct_all = [readpct for readname, readpct, readmapping in Read_novelIsoform if
+            exon_map_pct_all = [readpct for readname, readpct, readmapping in Read_novelIsoform if
                         readname in duplicated_reads_list]
-        rows = []
-        for i in range(len(duplicated_reads_list)):
-            read_exon_map_list, exon_map_pct = read_exon_map_list_all[i], exon_map_pct_all[i]
-            row = map_read_to_isoform_known(novel_isoform_exon_map_list, read_exon_map_list, exon_map_pct,
-                                            max(lowest_match,1-lowest_match),min(lowest_match,1-lowest_match),
-                                            geneStrand, qualifyExon, duplicated_reads_list[i])
-            rows.append(row)
-        read_novelisoform_df_duplicated = pd.DataFrame(rows)
-        read_novelisoform_df_duplicated.index = duplicated_reads_list
-        read_novelisoform_df_duplicated.columns = list(novel_isoformInfo_polished.keys())
+            rows = []
+            for i in range(len(duplicated_reads_list)):
+                read_exon_map_list, exon_map_pct = read_exon_map_list_all[i], exon_map_pct_all[i]
+                row = map_read_to_isoform_known(novel_isoform_exon_map_list, read_exon_map_list, exon_map_pct,
+                                                max(lowest_match,1-lowest_match),min(lowest_match,1-lowest_match),
+                                                geneStrand, qualifyExon, duplicated_reads_list[i])
+                rows.append(row)
+            read_novelisoform_df_duplicated = pd.DataFrame(rows)
+            read_novelisoform_df_duplicated.index = duplicated_reads_list
+            read_novelisoform_df_duplicated.columns = list(novel_isoformInfo_polished.keys())
         # manipulate unique reads
         read_novelisoform_df_unique_indicator = pd.get_dummies(unique_reads_df['isoform'])
         read_novelisoform_df_unique = pd.concat([unique_reads_df['read'], read_novelisoform_df_unique_indicator], axis=1)
         read_novelisoform_df_unique.set_index('read', inplace=True, drop=True)
         novel_isoformInfo = dict(sorted(novel_isoformInfo_polished.items(), key=lambda x: len(x[1]), reverse=True))
         read_novelisoform_df_unique = read_novelisoform_df_unique[list(novel_isoformInfo.keys())]
-        read_novelisoform_df_duplicated = read_novelisoform_df_duplicated[list(novel_isoformInfo.keys())]
-        read_novelisoform_df = pd.concat([read_novelisoform_df_unique,read_novelisoform_df_duplicated])
+        if read_novelisoform_df_duplicated is not None:
+            read_novelisoform_df_duplicated = read_novelisoform_df_duplicated[list(novel_isoformInfo.keys())]
+            read_novelisoform_df = pd.concat([read_novelisoform_df_unique,read_novelisoform_df_duplicated])
+        else:
+            read_novelisoform_df = read_novelisoform_df_unique
         #read_novelisoform_df = read_novelisoform_df.groupby(read_novelisoform_df.index).sum()
     #combine existing/uncharacterized isoforms with novel
     read_annoisoform_df = pd.DataFrame.from_dict(dict(Read_knownIsoform_polished), orient='index',columns=geneInfo['isoformNames'])
