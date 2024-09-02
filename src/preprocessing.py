@@ -912,7 +912,8 @@ def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_pol
         duplicated_reads_df = read_novelisoform_df[read_novelisoform_df.duplicated(subset=['read'], keep=False)]
         unique_reads_df = read_novelisoform_df.drop_duplicates(subset=['read'], keep=False)
         #remap duplicated reads
-        read_novelisoform_df_duplicated = None
+        read_novelisoform_df_duplicated, read_novelisoform_df_unique = None, None
+        novel_isoformInfo = dict(sorted(novel_isoformInfo_polished.items(), key=lambda x: len(x[1]), reverse=True))
         if len(duplicated_reads_df)>0:
             qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= 20]
             geneStrand = geneInfo['geneStrand']
@@ -932,16 +933,19 @@ def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_pol
             read_novelisoform_df_duplicated = pd.DataFrame(rows)
             read_novelisoform_df_duplicated.index = duplicated_reads_list
             read_novelisoform_df_duplicated.columns = list(novel_isoformInfo_polished.keys())
-        # manipulate unique reads
-        read_novelisoform_df_unique_indicator = pd.get_dummies(unique_reads_df['isoform'])
-        read_novelisoform_df_unique = pd.concat([unique_reads_df['read'], read_novelisoform_df_unique_indicator], axis=1)
-        read_novelisoform_df_unique.set_index('read', inplace=True, drop=True)
-        novel_isoformInfo = dict(sorted(novel_isoformInfo_polished.items(), key=lambda x: len(x[1]), reverse=True))
-        read_novelisoform_df_unique = read_novelisoform_df_unique[list(novel_isoformInfo.keys())]
-        if read_novelisoform_df_duplicated is not None:
-            read_novelisoform_df_duplicated = read_novelisoform_df_duplicated[list(novel_isoformInfo.keys())]
+            read_novelisoform_df_duplicated = read_novelisoform_df_duplicated[
+                [col for col in novel_isoformInfo.keys() if col in read_novelisoform_df_duplicated.columns]]
+        if len(unique_reads_df)>0:
+            # manipulate unique reads
+            read_novelisoform_df_unique_indicator = pd.get_dummies(unique_reads_df['isoform'])
+            read_novelisoform_df_unique = pd.concat([unique_reads_df['read'], read_novelisoform_df_unique_indicator], axis=1)
+            read_novelisoform_df_unique.set_index('read', inplace=True, drop=True)
+            read_novelisoform_df_unique = read_novelisoform_df_unique[[col for col in novel_isoformInfo.keys() if col in read_novelisoform_df_unique.columns]]
+        if read_novelisoform_df_duplicated is not None and read_novelisoform_df_unique is not None:
             read_novelisoform_df = pd.concat([read_novelisoform_df_unique,read_novelisoform_df_duplicated])
-        else:
+        if read_novelisoform_df_duplicated is not None and read_novelisoform_df_unique is None:
+            read_novelisoform_df = read_novelisoform_df_duplicated
+        if read_novelisoform_df_unique is not None and read_novelisoform_df_duplicated is None:
             read_novelisoform_df = read_novelisoform_df_unique
         #read_novelisoform_df = read_novelisoform_df.groupby(read_novelisoform_df.index).sum()
     #combine existing/uncharacterized isoforms with novel

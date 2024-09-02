@@ -376,9 +376,11 @@ class ReadMapper:
         print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
         if self.parse:
             for meta_gene in MetaGenes_job:
+                print(meta_gene)
                 self.map_reads_parse(meta_gene, save=True)
         else:
             for meta_gene in MetaGenes_job:
+                print(meta_gene)
                 self.map_reads(meta_gene, save=True)
         for key in MetaGenes:
             if key not in MetaGenes_job:
