@@ -110,11 +110,15 @@ class ReadMapper:
                     Read_knownIsoform.append(result_known)
             #expand uncategorized novel reads into Read_knownIsoform
             if len(Read_novelIsoform) > 0:
-                Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
+                Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                     Read_novelIsoform, Read_knownIsoform, n_isoforms)
+            else:
+                Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (Read_novelIsoform, novel_isoformInfo,
+                                                                                                      Read_knownIsoform)
             #compile output into compatible matrix
             geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, geneInfo)
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,
+                geneInfo, exonInfo, Read_novelIsoform, True)
             #update annotation information in self
             self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'] = \
                 self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']+list(novel_isoformInfo.keys())
@@ -170,10 +174,14 @@ class ReadMapper:
                     if i == index and Read_knownIsoform_metagene[j] is not None:
                         Read_knownIsoform.append(Read_knownIsoform_metagene[j])
                 if len(Read_novelIsoform) > 0:
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                         Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]))
+                else:
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
+                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                 geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, Info_multigenes[index][0])
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,
+                    Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, True)
                 # update annotation information in self
                 self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] = \
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] + list(
@@ -206,30 +214,39 @@ class ReadMapper:
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             samples_novel, samples_known = [], []
+            Read_novelIsoform_poly = []
             for read in reads:
+                poly, _ = detect_poly_parse(read, window=20, n=10)
                 result = process_read(read, geneInfo, exonInfo, isoformInfo, self.qname_dict, self.lowest_match,
                                       Info_multigenes, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
                     samples_novel.append(self.qname_sample_dict[read.qname])
+                    Read_novelIsoform_poly.append(poly)
                 if result_known is not None:
                     Read_knownIsoform.append(result_known)
                     samples_known.append(self.qname_sample_dict[read.qname])
             unique_samples = list(set(samples_novel+samples_known))
             return_samples = []
             for sample in unique_samples:
-                Read_novelIsoform_sample, Read_knownIsoform_sample = [], []
+                Read_novelIsoform_sample, Read_knownIsoform_sample, Read_novelIsoform_poly_sample = [], [], []
                 sample_target = os.path.join(self.target, 'samples/'+sample)
                 sample_index_novel = [i for i, s in enumerate(samples_novel) if s == sample]
                 sample_index_known = [i for i, s in enumerate(samples_known) if s == sample]
                 if len(sample_index_novel) > 0:
                     Read_novelIsoform_sample = [Read_novelIsoform[i] for i in sample_index_novel]
+                    Read_novelIsoform_poly_sample = [Read_novelIsoform_poly[i] for i in sample_index_novel]
                 if len(sample_index_known) > 0:
                     Read_knownIsoform_sample = [Read_knownIsoform[i] for i in sample_index_known]
                 if len(Read_novelIsoform_sample) > 0:
-                    Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample = polish_compatible_vectors(Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms)
-                geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(Read_novelIsoform_sample, novel_isoformInfo,Read_knownIsoform_sample, geneInfo)
+                    Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = polish_compatible_vectors(Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms)
+                else:
+                    Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = (
+                    Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample)
+                geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(
+                    Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished, self.lowest_match,
+                    geneInfo, exonInfo, Read_novelIsoform, Read_novelIsoform_poly_sample)
                 # update annotation information in self
                 for novel_isoform_name in list(novel_isoformInfo.keys()):
                     if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
@@ -253,10 +270,12 @@ class ReadMapper:
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
             reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
             # process reads metagene
-            results, samples = [], []
+            results, samples, polies = [], [], []
             for read in reads:
+                poly, _ = detect_poly_parse(read, window=20, n=10)
                 out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
+                    polies.append(poly)
                     results.append(out)
                     samples.append(self.qname_sample_dict[read.qname])
             unique_samples = list(set(samples))
@@ -265,13 +284,15 @@ class ReadMapper:
                 sample_target = os.path.join(self.target, 'samples/'+sample)
                 sample_index = [i for i, s in enumerate(samples) if s == sample]
                 result_sample = [results[i] for i in sample_index]
-                Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = [], [], []
-                for result in result_sample:
+                poly_sample = [polies[i] for i in sample_index]
+                Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, poly_sample_filtered = [], [], [], []
+                for ri, result in enumerate(result_sample):
                     if result is not None:
                         ind, novelisoform, knownisoform = result
                         Ind.append(ind)
                         Read_novelIsoform_metagene.append(novelisoform)
                         Read_knownIsoform_metagene.append(knownisoform)
+                        poly_sample_filtered.append(poly_sample[ri])
                 unique_ind = list(set(Ind))
                 # logging genes without any reads
                 log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
@@ -286,17 +307,22 @@ class ReadMapper:
                 for index in unique_ind:
                     print('processing gene' + str(index))
                     # loop over genes within metagene; for one single gene:
-                    Read_novelIsoform, Read_knownIsoform, novel_isoformInfo = [], [], {}
+                    Read_novelIsoform, Read_knownIsoform, novel_isoformInfo, Read_novelIsoform_poly = [], [], {}, []
                     for j, i in enumerate(Ind):#i: gene index; j: index of index---# loop for reads
                         if i == index and Read_novelIsoform_metagene[j] is not None:
                             Read_novelIsoform.append(Read_novelIsoform_metagene[j])
+                            Read_novelIsoform_poly.append(poly_sample_filtered[j])
                         if i == index and Read_knownIsoform_metagene[j] is not None:
                             Read_knownIsoform.append(Read_knownIsoform_metagene[j])
                     if len(Read_novelIsoform) > 0:
-                        Read_novelIsoform, novel_isoformInfo, Read_knownIsoform = polish_compatible_vectors(
+                        Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                             Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]))
+                    else:
+                        Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
+                            Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                     geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                        Read_novelIsoform, novel_isoformInfo, Read_knownIsoform, Info_multigenes[index][0])
+                        Read_novelIsoform_polished, novel_isoformInfo_polished,Read_knownIsoform_polished, self.lowest_match,
+                        Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, Read_novelIsoform_poly)
                     # update annotation information in self
                     for novel_isoform_name in list(novel_isoformInfo.keys()):
                         if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
