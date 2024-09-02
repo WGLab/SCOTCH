@@ -907,7 +907,6 @@ def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_pol
     if len(Read_novelIsoform_polished) > 0:
         read_poly_dict = {}
         for i, (readname, readpct, readmapping) in enumerate(Read_novelIsoform):
-            read_poly_dict[readname] = poly[i]
             if isinstance(poly, list):
                 read_poly_dict[readname] = poly[i]
             else:
