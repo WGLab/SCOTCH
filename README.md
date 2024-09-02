@@ -53,11 +53,12 @@ In this step, SCOTCH will generate annotation files for the reference genome and
 
 Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously.
 
-`--bam`: path(s) to the folder(s) saving separated bam files or path(s) to a single/multiple bam file(s).
-`--workers`: number of threads for parallel computing. 
-`--coverage_threshold_exon`: coverage threshold to support exon discovery, percentage to the maximum coverage, larger values will be more conservative.
-`--coverage_threshold_splicing`: threshold to support splicing discovery, percentage to the maximum splicing junctions, larger values will be more conservative.
-`--z_score_threshold`: z score threshold to discovery sharp changes of read coverage, larger values will be more conservative.
+
+- `--bam`: path(s) to the folder(s) saving separated bam files or path(s) to a single/multiple bam file(s).
+- `--workers`: number of threads for parallel computing. 
+- `--coverage_threshold_exon`: coverage threshold to support exon discovery, percentage to the maximum coverage, larger values will be more conservative.
+- `--coverage_threshold_splicing`: threshold to support splicing discovery, percentage to the maximum splicing junctions, larger values will be more conservative.
+- `--z_score_threshold`: z score threshold to discovery sharp changes of read coverage, larger values will be more conservative.
 
 
 ```
