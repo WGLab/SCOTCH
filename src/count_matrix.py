@@ -115,6 +115,8 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, gene, novel_read_n = 10,
     #CompatibleMatrixPath: path to compatible matrix directory
     #CompatibleMatrixPath = '/scr1/users/xu3/singlecell/project_singlecell/LH/compatible_matrix'
     #cells
+    if output_folder is not None:
+        os.makedirs(output_folder)
     pattern = re.compile(r'_ENS.+\.csv')
     files = [i for i in os.listdir(CompatibleMatrixPath) if '.csv' in i and pattern.sub('',i)==gene]
     df_list = []
