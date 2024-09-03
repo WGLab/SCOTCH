@@ -51,8 +51,7 @@ In this step, SCOTCH will generate annotation files for the reference genome and
 2. **Semi-Annotation Mode**: SCOTCH can use BAM files from one or multiple samples to update and refine existing gene annotations. This mode allows for the discovery of de novo (sub)exons with more types of novel isoforms than annotation-only mode. Set `--reference` as path to gene annotation .gtf file, or use default annotation file pre-computated by SCOTCH (human hg38). In addition, set `--update_gtf`.
 3. **Annotation-Free Mode**: SCOTCH can generate gene and isoform annotations based solely on BAM files, allowing for the discovery of novel genes and isoforms. Set `--reference` as `None`. 
 
-Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously.
-
+Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously. See `example/annotation.sh` for an implementation in slurm.
 
 - `--bam`: path(s) to the folder(s) saving separated bam files or path(s) to a single/multiple bam file(s).
 - `--workers`: number of threads for parallel computing. 
@@ -75,36 +74,47 @@ python3 src/main_preprocessing.py \
 
 ### Step2: generate compatible matrix
 
-This step will generate read-isoform compatible matrix. `-o` and `--bam` are the same with step1. Set `-match` argument for the threshold of read-exon mapping percentage. For example, setting 0.2 means reads covers >80% of the exon length as mapped, and reads covers <20% of the exon length as unmapped.
+In this step, SCOTCH will align reads to existing and novel identified gene isoforms. Compatible matrix will be generated with each row being a read and each column being a gene isoform. More details about read-isoform mappings can be found under the `auxiliary` folder. To speed up the step, job arrays can be submitted in SLURM. See `example/compatible.sh` for an implementation of 100 job arries.
+
+
+- `--target`: the same with step1
+- `--bam` the same with step1
+- `--match` exon percentage threshold to call a read-exon mapping/unmapping. For example, setting 0.2 means reads covers >80% of the exon length as mapped, and reads covers <20% of the exon length as unmapped.
 
 ```
-prepare.sh -t matrix -o $outputfolder --bam $bamfolder -match 0.2 
+python3 src/main_preprocessing.py \
+--task 'compatible matrix' \
+--target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
+--bam path/to/bam/file/or/bamfolder/sample1 path/to/bam/file/or/bamfolder/sample2 \
+--match 0.2 
 ```
 
-To speed up the step, job arrays can be submitted in SLURM. For example:
+### Step3: generate count matrix
+This step SCOTCH will generate gene- and isoform-level copunt matrix. See `example/count.sh` for an implementation in SLURM.
+
+- `--target`: the same with step1
+- '--novel_read_n' filter out novel isoform is the number of reads mapped for the sample less than `novel_read_n`, and reads mapped to this novel isoform will be treated as uncategorized.
+- `--workers`: number of threads for parallel computing. 
 
 ```
-#! /bin/bash -l
-#SBATCH --nodes=1
-#SBATCH --ntasks=1 
-#SBATCH --cpus-per-task=1
-#SBATCH --mem=200G
-#SBATCH --array=0-99
-source ~/.bashrc
-conda activate SCOTCH
-
-bamfolder="path/to/tagged/bamfile"
-outputfolder="path/to/output"
-
-prepare.sh -t matrix -o $outputfolder --bam $bamfolder -match 0.2 --job_index ${SLURM_ARRAY_TASK_ID} --jobs 100
+python3 src/main_preprocessing.py \
+--task 'count matrix' \
+--target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
+--novel_read_n 20 --workers 20
 ```
 
-### Step2: generate count matrix
-This step will generate gene- and isoform-level copunt matrix. `-o` and `--bam` are the same with step1. Set '-novel_read_n' for the threshold of filtering novel isoform. Novel isoform with the number of mapped reads below this threshold will be treated as uncategorized.
+### Step4: update gene annotations with novel identified isoforms
+
 
 ```
-prepare.sh -t count -o $outputfolder --novel_read_n 10 --workers 20
+python3 src/main_preprocessing.py \
+--task 'summary' \
+--target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
+--novel_read_n 20 --workers 20
 ```
+
+
+
 
 ## Run SCOTCH statistical pipeline
 
