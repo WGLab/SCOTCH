@@ -109,8 +109,7 @@ python3 src/main_preprocessing.py \
 ```
 python3 src/main_preprocessing.py \
 --task 'summary' \
---target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
---novel_read_n 20 --workers 20
+--target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 
 ```
 
 
