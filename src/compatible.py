@@ -57,8 +57,7 @@ class ReadMapper:
         self.qname_dict = load_pickle(self.bamInfo_pkl_path)
         self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
         self.sorted_bam_path = None
-        if self.parse:
-            self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path)
+        self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path)
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene)
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
     def merge_bam(self):
@@ -390,7 +389,7 @@ class ReadMapper:
             file_name = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
         else:
             file_name = self.annotation_path_meta_gene_novel
-        with open(self.annotation_path_meta_gene_novel, 'wb') as file:
+        with open(self.metageneStructureInformationwNovel, 'wb') as file:
             pickle.dump(file_name, file)
 
 

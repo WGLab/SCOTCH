@@ -31,6 +31,8 @@ parser.add_argument('--match',type=float,default=0.8, help="the lowest base perc
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
 #general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")
+parser.add_argument('--single_cell',action='store_true',help="default setting for preprocessing single cell data")
+parser.add_argument('--bulk', action='store_false',dest='single_cell',help="bulk data")
 
 
 #bam = '/scr1/users/xu3/singlecell/project_singlecell/sample8_R9/bam/sample8_R9.filtered.bam'

@@ -472,7 +472,6 @@ class CountMatrix:
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
-
         self.platform = platform
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'

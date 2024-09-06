@@ -81,8 +81,11 @@ def summarise_metagene(Info_multigenes):
     return geneChr, start, end
 
 def load_pickle(file):
-    with open(file,'rb') as file:
-        data=pickle.load(file)
+    if os.path.exists(file):
+        with open(file,'rb') as file:
+            data=pickle.load(file)
+    else:
+        data = None
     return data
 
 def unpack_list(x):
@@ -386,12 +389,8 @@ def exon_hit(mapPositions, exonInfo):
 
 ##TODO: this function is for 3' kit, should consider 5'kit
 def detect_poly(read, window = 20, n = 15):
-    if isinstance(read, dict):
-        query_sequence = read['query_sequence']
-        umi = read['umi']
-    else:
-        query_sequence = read.query_sequence
-        umi = read.get_tag('UR')
+    query_sequence = read.query_sequence
+    umi = read.get_tag('UR')
     res = False
     nT,nA=0,0
     seq = Seq(query_sequence)
@@ -979,19 +978,21 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         for readname, indicators in Read_Isoform_compatibleVector.items():
             for idx, value in enumerate(indicators):
                 if value == 1:  # Only consider mappings where the indicator is 1
+                    if qname_cbumi_dict is not None:
+                        cb, umi = qname_cbumi_dict[readname].split('_')[0], qname_cbumi_dict[readname].split('_')[0]
+                    else:
+                        cb, umi = '.', '.'
                     isoform_name = colNames[idx]
                     if isoform_name != 'uncategorized':
                         exon_indices = isoformInfo[isoform_name]
                         exon_coords = ",".join([f"({exonInfo[i][0]},{exonInfo[i][1]})" for i in exon_indices])
-                        readmapping_data.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords,
-                                             qname_cbumi_dict[readname].split('_')[0],
-                                             qname_cbumi_dict[readname].split('_')[1]])
+                        readmapping_data.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords, cb, umi])
                     else:
-                        readmapping_data.append([readname, isoform_name, "-", "-",qname_cbumi_dict[readname].split('_')[0],
-                                             qname_cbumi_dict[readname].split('_')[1]])
+                        readmapping_data.append([readname, isoform_name, "-", "-",cb, umi])
         mat = np.array(list(dict(Read_Isoform_compatibleVector).values()))
         rowNames = list(dict(Read_Isoform_compatibleVector).keys())
-        rowNames = [qname_cbumi_dict[rn] for rn in rowNames]
+        if qname_cbumi_dict is not None:
+            rowNames = [qname_cbumi_dict[rn] for rn in rowNames]
         output = dict({'Gene': geneName, 'compatibleMatrix': mat, 'rowNames_cbumi': rowNames, 'colNames_isoforms': colNames})
     else:
         rowNames=[]
@@ -1038,6 +1039,9 @@ def process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match
         readName = readName + '_' + str(readEnd - readStart)
     novelIsoformResults = None
     isoformCompatibleVectorResults = None
+    if qname_dict is None: #for bulk
+        qname_dict = {}
+        qname_dict[readName] = readName
     if parse:
         poly_bool, poly = detect_poly_parse(read, window=20, n=10)
         if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
@@ -1067,6 +1071,9 @@ def process_read(read, geneInfo, exonInfo, isoformInfo, qname_dict, lowest_match
     return novelIsoformResults, isoformCompatibleVectorResults
 def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_match, parse=False, pacbio = False):
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    if qname_dict is None: #for bulk
+        qname_dict = {}
+        qname_dict[readName] = readName
     if pacbio:
         readName = readName + '_' + str(readEnd - readStart)
     if parse:
