@@ -389,8 +389,8 @@ class ReadMapper:
             file_name = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
         else:
             file_name = self.annotation_path_meta_gene_novel
-        with open(self.metageneStructureInformationwNovel, 'wb') as file:
-            pickle.dump(file_name, file)
+        with open(file_name, 'wb') as file:
+            pickle.dump(self.metageneStructureInformationwNovel, file)
 
 
 
