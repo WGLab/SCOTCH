@@ -27,7 +27,9 @@ conda activate SCOTCH
 
 ## Run SCOTCH preprocessing pipeline
 
-SCOTCH accepts BAM files tagged by vendor-supplied pipelines for its preprocessing pipeline. Users can process one sample at a time or multiple samples simultaneously. When preprocessing multiple samples together, SCOTCH generates a unified gene/isoform annotation based on all BAM files. This approach is particularly beneficial in studies involving multiple samples, as it ensures consistent identification and consolidation of novel isoforms across different samples, addressing the common challenge of comparing isoforms identified independently.
+SCOTCH accepts BAM file(s) tagged by vendor-supplied pipelines for its preprocessing pipeline. For ONT data, please see [here](https://github.com/epi2me-labs/wf-single-cell) for more details. 
+
+The SCOTCH pipeline allows users to process one sample at a time or multiple samples simultaneously depending on study design. When preprocessing multiple samples together, SCOTCH generates a unified gene/isoform annotation based on all BAM files. This approach is particularly beneficial in studies involving multiple samples, as it ensures consistent identification and consolidation of novel isoforms across different samples.
 
 ### Output Directory Structure
 
@@ -47,18 +49,19 @@ The main function for the preprocessing pipeline is `main_preprocessing.py`. Sim
 ### Step1: prepare annotation file
 
 In this step, SCOTCH will generate annotation files for the reference genome and tagged BAM files. SCOTCH offers three modes for generating gene annotations: 
-1. **Annotation-Only Mode**: SCOTCH can rely entirely on existing gene annotations. This mode allows for the discovery of novel isoforms defined by combinations of known exons. Set `--reference` as path to gene annotation .gtf file, or use default annotation file pre-computated by SCOTCH (human hg38). In addition, set `--update_gtf_off`.
+1. **Annotation-Only Mode**: SCOTCH can rely entirely on existing gene annotations. This mode allows for the discovery of novel isoforms defined by combinations of known exons. This mode will fail to identify novel isoforms involving unknown exons, such as intron retention. Set `--reference` as path to gene annotation .gtf file, or use default annotation file pre-computated by SCOTCH (human hg38). In addition, set `--update_gtf_off`.
 2. **Semi-Annotation Mode**: SCOTCH can use BAM files from one or multiple samples to update and refine existing gene annotations. This mode allows for the discovery of de novo (sub)exons with more types of novel isoforms than annotation-only mode. Set `--reference` as path to gene annotation .gtf file, or use default annotation file pre-computated by SCOTCH (human hg38). In addition, set `--update_gtf`.
 3. **Annotation-Free Mode**: SCOTCH can generate gene and isoform annotations based solely on BAM files, allowing for the discovery of novel genes and isoforms. Set `--reference` as `None`. 
 
-Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously. See `example/annotation.sh` for an implementation in slurm.
-
+#### arguments
 - `--bam`: path(s) to the folder(s) saving separated bam files or path(s) to a single/multiple bam file(s).
 - `--workers`: number of threads for parallel computing. 
 - `--coverage_threshold_exon`: coverage threshold to support exon discovery, percentage to the maximum coverage, larger values will be more conservative.
 - `--coverage_threshold_splicing`: threshold to support splicing discovery, percentage to the maximum splicing junctions, larger values will be more conservative.
 - `--z_score_threshold`: z score threshold to discovery sharp changes of read coverage, larger values will be more conservative.
 
+#### examples
+Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously. See `example/annotation.sh` for an implementation in slurm.
 
 ```
 python3 src/main_preprocessing.py \
