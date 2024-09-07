@@ -91,7 +91,7 @@ def main():
                 countmatrix.save_single_sample(csv=True, mtx=True)
     def run_summary():
         for i in range(len(args.target)):
-            cp.summarise_annotation(args.target[i], args.reference)
+            cp.summarise_annotation(args.target[i], args.reference, args.workers)
 
     if args.task=='annotation':
         run_annotation()
