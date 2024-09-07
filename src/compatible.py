@@ -448,7 +448,7 @@ class ReadMapper:
         for key in MetaGenes:
             if key not in MetaGenes_job:
                 del self.metageneStructureInformationwNovel[key]
-        gene_ids = [g_name_id.split('_')[1] for g_name_id in list(MetaGene_Gene_dict.values())]
+        gene_ids = [g_name_id.split('_')[1] for g_name_ids in list(MetaGene_Gene_dict.values()) for g_name_id in g_name_ids]
         gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
         self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
