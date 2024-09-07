@@ -3,8 +3,59 @@ import pysam
 import re
 
 
+def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
+    def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
+        gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
+        geneInfo, exonInfo, isoformInfo = geneStructureInformationwNovel[geneID]
+        if gtf_df_sub.shape[0] > 0:
+            new_row_gene = []
+        else:
+            new_row_gene = [geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.',
+                            geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']
+        new_rows_isoforms = []
+        for isoform_name, exon_indices in isoformInfo.items():
+            isoform_start = exonInfo[exon_indices[0]][0]
+            isoform_end = exonInfo[exon_indices[-1]][1]
+            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[
+                0] == 0:
+                new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
+                                    geneInfo['geneStrand'], '.',
+                                    f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"']
+                new_rows_isoforms.append(new_rows_isoform)
+                exons_isoform = []
+                for exon_index in exon_indices:
+                    exons_isoform.append(exonInfo[exon_index])
+                merged_exons_isoform = merge_exons(exons_isoform)
+                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
+                    new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start, exon_end, '.',
+                                     geneInfo['geneStrand'], '.',
+                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"; exon_number \"{exon_num}\"']
+                    new_rows_isoforms.append(new_rows_exon)
+        new_row = new_row_gene + new_rows_isoforms
+        gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)
+        gtf_df_gene = pd.concat([gtf_df_sub, gtf_df_sub_new], ignore_index=True)
+        return gtf_df_gene
+    def partition_metagene(metageneStructureInformation):
+        meta_gene_names = list(metageneStructureInformation.keys())
+        geneStructureInformation = {}
+        for meta_gene in meta_gene_names:
+            genes_info_list = metageneStructureInformation[meta_gene]
+            for gene_info in genes_info_list:
+                geneInfo, exonInfo, isoformInfo = gene_info
+                geneID = geneInfo['geneID']
+                geneStructureInformation[geneID] = [geneInfo, exonInfo, isoformInfo]
+        return geneStructureInformation
+    geneStructureInformationwNovel = partition_metagene(metageneStructureInformationNovel)
+    geneIDs = list(geneStructureInformationwNovel.keys())
+    column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
+    if gtf_df is None:
+        gtf_df = pd.DataFrame(columns=column_names)
+    gtf_df_gene_list = Parallel(n_jobs=num_cores)(delayed(update_annotation_gene)(geneID, gtf_df, geneStructureInformationwNovel) for geneID in geneIDs)
+    gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
+    gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=False)
 
 
+##TODO: just merge
 def summarise_annotation(target, gtf_path, workers):
     def get_numeric_key(key):
         return int(key.split('_')[-1])
@@ -36,14 +87,20 @@ def summarise_annotation(target, gtf_path, workers):
 
 
 class ReadMapper:
-    def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x'):
+    def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x', reference_gtf_path = None):
         self.target = target
         self.bam_path = bam_path
+        column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
+        if reference_gtf_path is not None:
+            self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
+        else:
+            self.gtf_df = pd.DataFrame(columns=column_names)
         # gene annotation information
         self.annotation_folder_path = os.path.join(target, "reference")
         self.annotation_path_single_gene = os.path.join(target, "reference/geneStructureInformation.pkl")
         self.annotation_path_meta_gene = os.path.join(target, "reference/metageneStructureInformation.pkl")
         self.annotation_path_meta_gene_novel = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
+        self.annotation_path_gtf_novel = os.path.join(target, "reference/gene_annotations_scotch.gtf")
         # bam information path
         self.bamInfo_folder_path = os.path.join(target, "bam")
         self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')#bamInfo_pkl_file
@@ -391,15 +448,21 @@ class ReadMapper:
         for key in MetaGenes:
             if key not in MetaGenes_job:
                 del self.metageneStructureInformationwNovel[key]
+        gene_ids = [g_name_id.split('_')[1] for g_name_id in list(MetaGene_Gene_dict.values())]
+        gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
+        self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
         if total_jobs>1:
-            file_name = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
+            file_name_pkl = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
+            file_name_gtf = self.annotation_path_gtf_novel[:-4] + '_' + str(current_job_index) +'.gtf'
         else:
-            file_name = self.annotation_path_meta_gene_novel
-        with open(file_name, 'wb') as file:
+            file_name_pkl = self.annotation_path_meta_gene_novel
+            file_name_gtf = self.annotation_path_gtf_novel
+        #save pickle file
+        with open(file_name_pkl, 'wb') as file:
             pickle.dump(self.metageneStructureInformationwNovel, file)
-
-
+        #save gtf file
+        convert_to_gtf(self.metageneStructureInformationwNovel, file_name_gtf, self.gtf_df_job, num_cores=1)
 
 
 
