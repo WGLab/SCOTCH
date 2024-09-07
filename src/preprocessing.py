@@ -25,8 +25,9 @@ def convert_to_gtf(geneStructureInformation, output_file, meta = False):
         for meta_gene in meta_gene_names:
             genes_info_list = metageneStructureInformation[meta_gene]
             for gene_info in genes_info_list:
-                geneID, single_gene_info = gene_info.items()
-                geneStructureInformation[geneID] = single_gene_info
+                geneInfo, exonInfo, isoformInfo = gene_info
+                geneID = geneInfo['geneID']
+                geneStructureInformation[geneID] = [geneInfo, exonInfo, isoformInfo]
         return geneStructureInformation
     if meta:
         geneStructureInformation = partition_metagene(geneStructureInformation)
