@@ -1,13 +1,17 @@
 from preprocessing import *
 import pysam
+import re
 
 
 
 
 def summarise_annotation(target):
+    def get_numeric_key(key):
+        return int(key.split('_')[-1])
     file_name_final = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
     output_file = os.path.join(target, "reference/metageneStructureInformationwNovel.gtf")
-    file_names = [os.path.join(target, 'reference/'+f) for f in os.listdir(os.path.join(target, "reference")) if f.endswith(r'_\d+.pkl')]
+    pattern = re.compile(r".*_\d+\.pkl$")
+    file_names = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern.match(f)]
     if os.path.exists(file_name_final):
         print('novel isoform annotations exist, transforming to gtf format')
         metageneStructureInformation = load_pickle(file_name_final)
@@ -18,6 +22,9 @@ def summarise_annotation(target):
         for file_name in file_names:
             metageneStructureInformation_ = load_pickle(file_name)
             metageneStructureInformation.update(metageneStructureInformation_)
+        metageneStructureInformation = dict(
+            sorted(metageneStructureInformation.items(), key=lambda item: get_numeric_key(item[0]))
+        )
         with open(file_name_final, 'wb') as file:
             pickle.dump(metageneStructureInformation, file)
         convert_to_gtf(metageneStructureInformation, output_file, meta=True)
