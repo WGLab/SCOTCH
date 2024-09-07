@@ -18,20 +18,7 @@ from collections import defaultdict
 
 #---------------some utility functions----------------------#
 # Function to convert the dictionary to GTF
-def convert_to_gtf(geneStructureInformation, output_file, meta = False, gtf_path = None):
-    def find_existing_source(reference_df=None, gene_name=None, transcript_name=None, exon_start= None, exon_end=None):
-        source = 'SCOTCH'
-        if reference_df is not None:
-            match = reference_df
-            if gene_name is not None:
-                match = match[match['attribute'].str.contains(f'gene_name "{gene_name}"', regex=False)]
-            if transcript_name is not None:
-                match = match[match['attribute'].str.contains(f'transcript_id "{transcript_name}"', regex=False)]
-            if exon_start is not None and exon_end is not None:
-                match = match[(match['start'] == exon_start) & (match['end'] == exon_end)]
-            if not match.empty:
-                source = match.iloc[0]['source']
-        return source
+def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_path = None):
     def partition_metagene(metageneStructureInformation):
         meta_gene_names = list(metageneStructureInformation.keys())
         geneStructureInformation = {}
@@ -42,43 +29,45 @@ def convert_to_gtf(geneStructureInformation, output_file, meta = False, gtf_path
                 geneID = geneInfo['geneID']
                 geneStructureInformation[geneID] = [geneInfo, exonInfo, isoformInfo]
         return geneStructureInformation
-    if meta:
-        geneStructureInformation = partition_metagene(geneStructureInformation)
+    geneStructureInformationwNovel = partition_metagene(metageneStructureInformationNovel)
+    geneIDs = list(geneStructureInformationwNovel.keys())
+    column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
     if gtf_path is not None:
-        columns = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
-        reference_df = pd.read_csv(gtf_path, sep='\t', comment='#', names=columns)
+        gtf_df = pd.read_csv(gtf_path, sep='\t', comment='#', header=None, names=column_names)
     else:
-        reference_df = None
-    with (open(output_file, 'w') as gtf):
-        for gene_id, info in geneStructureInformation.items():
-            geneInfo, exonInfo, isoformInfo = info
-            gene_name = geneInfo['geneName']
-            gene_chr = geneInfo['geneChr']
-            gene_start = geneInfo['geneStart']
-            gene_end = geneInfo['geneEnd']
-            gene_strand = geneInfo['geneStrand']
-            gene_source = find_existing_source(reference_df = reference_df, gene_name = gene_name)
-            # Write gene entry
-            gtf.write(f"{gene_chr}\t{gene_source}\tgene\t{gene_start}\t{gene_end}\t.\t{gene_strand}\t.\t"
-                      f"gene_id \"{gene_id}\"; gene_name \"{gene_name}\";\n")
-            # Write isoform and exon entries
-            for isoform_name, exon_indices in isoformInfo.items():
-                isoform_start = exonInfo[exon_indices[0]][0]
-                isoform_end = exonInfo[exon_indices[0]][1]
-                isoform_source = find_existing_source(reference_df = reference_df, transcript_name = isoform_name)
-                # Write transcript entry
-                gtf.write(f"{gene_chr}\t{isoform_source}\ttranscript\t{isoform_start}\t{isoform_end}\t.\t{gene_strand}\t.\t"
-                          f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; gene_name \"{gene_name}\";\n")
-                # Write exon entries
-                exons_transcript = []
+        gtf_df = pd.DataFrame(columns=column_names)
+    gtf_df_genes_list = []
+    for geneID in geneIDs:
+        gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
+        geneInfo, exonInfo, isoformInfo =geneStructureInformationwNovel[geneID]
+        if gtf_df_sub.shape[0]>0:
+            new_row_gene = []
+        else:
+            new_row_gene = [geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.', geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']
+        new_rows_isoforms = []
+        for isoform_name, exon_indices in isoformInfo.items():
+            isoform_start = exonInfo[exon_indices[0]][0]
+            isoform_end = exonInfo[exon_indices[-1]][1]
+            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[0]==0:
+                new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
+                                          geneInfo['geneStrand'], '.',
+                                          f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"']
+                new_rows_isoforms.append(new_rows_isoform)
+                exons_isoform = []
                 for exon_index in exon_indices:
-                    exons_transcript.append(exonInfo[exon_index])
-                merged_exons_transcript = merge_exons(exons_transcript)
-                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_transcript, start=1):
-                    exon_source = find_existing_source(reference_df=reference_df, exon_start= exon_start, exon_end=exon_end)
-                    gtf.write(f"{gene_chr}\t{exon_source}\texon\t{exon_start}\t{exon_end}\t.\t{gene_strand}\t.\t"
-                          f"gene_id \"{gene_id}\"; transcript_id \"{isoform_name}\"; exon_number \"{exon_num}\"; "
-                          f"gene_name \"{gene_name}\";\n")
+                    exons_isoform.append(exonInfo[exon_index])
+                merged_exons_isoform = merge_exons(exons_isoform)
+                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
+                    new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start, exon_end, '.',
+                                        geneInfo['geneStrand'], '.',
+                                        f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"; exon_number \"{exon_num}\"']
+                    new_rows_isoforms.append(new_rows_exon)
+        new_row = new_row_gene + new_rows_isoforms
+        gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)
+        gtf_df_gene = pd.concat([gtf_df_sub, gtf_df_sub_new], ignore_index=True)
+        gtf_df_genes_list.append(gtf_df_gene)
+    gtf_df_geness = pd.concat(gtf_df_genes_list, ignore_index=True)
+    gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=False)
 
 def sort_multigeneInfo(Info_multigenes):
     Info_multigenes_sort = []

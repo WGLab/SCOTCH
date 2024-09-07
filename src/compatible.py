@@ -15,7 +15,7 @@ def summarise_annotation(target, gtf_path):
     if os.path.exists(file_name_final):
         print('novel isoform annotations exist, transforming to gtf format')
         metageneStructureInformation = load_pickle(file_name_final)
-        convert_to_gtf(metageneStructureInformation, output_file, meta=True, gtf_path=gtf_path)
+        convert_to_gtf(metageneStructureInformation, output_file, gtf_path=gtf_path)
     elif len(file_names)>0:
         print('novel isoform annotations exist, merging and transforming to gtf format')
         metageneStructureInformation = {}
@@ -27,7 +27,7 @@ def summarise_annotation(target, gtf_path):
         )
         with open(file_name_final, 'wb') as file:
             pickle.dump(metageneStructureInformation, file)
-        convert_to_gtf(metageneStructureInformation, output_file, meta=True, gtf_path=gtf_path)
+        convert_to_gtf(metageneStructureInformation, output_file, gtf_path=gtf_path)
         print('removing sub-files of annotations')
         for file_name in file_names:
             os.remove(file_name)
