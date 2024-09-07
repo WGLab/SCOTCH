@@ -143,7 +143,7 @@ python3 src/main_preprocessing.py \
 
 
 
-## Run SCOTCH statistical pipeline
+## Part2: Statistical Pipeline
 
 ### Installation
 
