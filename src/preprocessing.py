@@ -9,7 +9,7 @@ import math
 import networkx as nx
 import community.community_louvain as community_louvain
 from collections import defaultdict
-
+from joblib import Parallel, delayed
 
 #bam="/scr1/users/xu3/singlecell/project_singlecell/sample8_R10/bam/sample8_R10.filtered.bam"
 #gene_pkl="/scr1/users/xu3/singlecell/project_singlecell/M4/reference/geneStructureInformation.pkl"
@@ -18,7 +18,38 @@ from collections import defaultdict
 
 #---------------some utility functions----------------------#
 # Function to convert the dictionary to GTF
-def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_path = None):
+def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_path = None, num_cores=1):
+    def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
+        gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
+        geneInfo, exonInfo, isoformInfo = geneStructureInformationwNovel[geneID]
+        if gtf_df_sub.shape[0] > 0:
+            new_row_gene = []
+        else:
+            new_row_gene = [geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.',
+                            geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']
+        new_rows_isoforms = []
+        for isoform_name, exon_indices in isoformInfo.items():
+            isoform_start = exonInfo[exon_indices[0]][0]
+            isoform_end = exonInfo[exon_indices[-1]][1]
+            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[
+                0] == 0:
+                new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
+                                    geneInfo['geneStrand'], '.',
+                                    f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"']
+                new_rows_isoforms.append(new_rows_isoform)
+                exons_isoform = []
+                for exon_index in exon_indices:
+                    exons_isoform.append(exonInfo[exon_index])
+                merged_exons_isoform = merge_exons(exons_isoform)
+                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
+                    new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start, exon_end, '.',
+                                     geneInfo['geneStrand'], '.',
+                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"; exon_number \"{exon_num}\"']
+                    new_rows_isoforms.append(new_rows_exon)
+        new_row = new_row_gene + new_rows_isoforms
+        gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)
+        gtf_df_gene = pd.concat([gtf_df_sub, gtf_df_sub_new], ignore_index=True)
+        return gtf_df_gene
     def partition_metagene(metageneStructureInformation):
         meta_gene_names = list(metageneStructureInformation.keys())
         geneStructureInformation = {}
@@ -36,37 +67,8 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_path = No
         gtf_df = pd.read_csv(gtf_path, sep='\t', comment='#', header=None, names=column_names)
     else:
         gtf_df = pd.DataFrame(columns=column_names)
-    gtf_df_genes_list = []
-    for geneID in geneIDs:
-        gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
-        geneInfo, exonInfo, isoformInfo =geneStructureInformationwNovel[geneID]
-        if gtf_df_sub.shape[0]>0:
-            new_row_gene = []
-        else:
-            new_row_gene = [geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.', geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']
-        new_rows_isoforms = []
-        for isoform_name, exon_indices in isoformInfo.items():
-            isoform_start = exonInfo[exon_indices[0]][0]
-            isoform_end = exonInfo[exon_indices[-1]][1]
-            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[0]==0:
-                new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
-                                          geneInfo['geneStrand'], '.',
-                                          f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"']
-                new_rows_isoforms.append(new_rows_isoform)
-                exons_isoform = []
-                for exon_index in exon_indices:
-                    exons_isoform.append(exonInfo[exon_index])
-                merged_exons_isoform = merge_exons(exons_isoform)
-                for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
-                    new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start, exon_end, '.',
-                                        geneInfo['geneStrand'], '.',
-                                        f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"; exon_number \"{exon_num}\"']
-                    new_rows_isoforms.append(new_rows_exon)
-        new_row = new_row_gene + new_rows_isoforms
-        gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)
-        gtf_df_gene = pd.concat([gtf_df_sub, gtf_df_sub_new], ignore_index=True)
-        gtf_df_genes_list.append(gtf_df_gene)
-    gtf_df_geness = pd.concat(gtf_df_genes_list, ignore_index=True)
+    gtf_df_gene_list = Parallel(n_jobs=num_cores)(delayed(update_annotation_gene)(geneID, gtf_df, geneStructureInformationwNovel) for geneID in geneIDs)
+    gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=False)
 
 def sort_multigeneInfo(Info_multigenes):
