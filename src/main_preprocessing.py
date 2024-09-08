@@ -43,10 +43,13 @@ def main():
     args = parser.parse_args()
     if args.reference_pkl=='None' and args.reference=='None':
         reference = None
+        print('no reference annotation provided, use annotation-free mode')
     elif args.reference_pkl=='None' and args.reference!='None':
         reference = args.reference
+        print('use reference from '+str(reference))
     else:
         reference = args.reference_pkl
+        print('use reference from ' + str(reference))
     for t in args.target:
         if not os.path.exists(t):
             os.makedirs(t)
