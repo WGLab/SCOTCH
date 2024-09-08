@@ -91,7 +91,7 @@ class ReadMapper:
         self.target = target
         self.bam_path = bam_path
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
-        if reference_gtf_path is not None:
+        if reference_gtf_path is not None or reference_gtf_path=='None':
             self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
         else:
             self.gtf_df = pd.DataFrame(columns=column_names)

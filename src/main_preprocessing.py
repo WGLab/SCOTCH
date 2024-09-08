@@ -68,7 +68,8 @@ def main():
         for i in range(len(args.target)):
             print('processing the sample of: '+str(args.bam[i]))
             readmapper = cp.ReadMapper(target=args.target[i], bam_path = args.bam[i],
-                                       lowest_match=args.match, platform = args.platform)
+                                       lowest_match=args.match, platform = args.platform,
+                                       reference_gtf_path=args.reference)
             if args.platform == 'parse':
                 readmapper.merge_bam()
             print('generating compatible matrix')
