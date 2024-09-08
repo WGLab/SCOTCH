@@ -20,7 +20,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
                 0] == 0:
                 new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
                                     geneInfo['geneStrand'], '.',
-                                    f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"']
+                                    f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id "{isoform_name}"; transcript_name "{isoform_name}"']
                 new_rows_isoforms.append(new_rows_isoform)
                 exons_isoform = []
                 for exon_index in exon_indices:
@@ -29,7 +29,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
                 for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
                     new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start, exon_end, '.',
                                      geneInfo['geneStrand'], '.',
-                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id \"{isoform_name}\"; transcript_name \"{isoform_name}\"; exon_number \"{exon_num}\"']
+                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id "{isoform_name}"; transcript_name "{isoform_name}"; exon_number "{exon_num}"']
                     new_rows_isoforms.append(new_rows_exon)
         new_row = new_row_gene + new_rows_isoforms
         gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)
