@@ -1,7 +1,7 @@
 from preprocessing import *
 import pysam
 import re
-
+import csv
 
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
@@ -10,14 +10,13 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
         if gtf_df_sub.shape[0] > 0:
             new_row_gene = []
         else:
-            new_row_gene = [geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.',
-                            geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']
+            new_row_gene = [[geneInfo['geneChr'], 'SCOTCH', 'gene', geneInfo['geneStart'], geneInfo['geneEnd'], '.',
+                            geneInfo['geneStrand'], '.', f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"']]
         new_rows_isoforms = []
         for isoform_name, exon_indices in isoformInfo.items():
             isoform_start = exonInfo[exon_indices[0]][0]
             isoform_end = exonInfo[exon_indices[-1]][1]
-            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[
-                0] == 0:
+            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[0] == 0:
                 new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start, isoform_end, '.',
                                     geneInfo['geneStrand'], '.',
                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id "{isoform_name}"; transcript_name "{isoform_name}"']
@@ -52,7 +51,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
         gtf_df = pd.DataFrame(columns=column_names)
     gtf_df_gene_list = Parallel(n_jobs=num_cores)(delayed(update_annotation_gene)(geneID, gtf_df, geneStructureInformationwNovel) for geneID in geneIDs)
     gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
-    gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=False)
+    gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
 
 
 ##TODO: just merge
