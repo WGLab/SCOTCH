@@ -59,29 +59,42 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
 def summarise_annotation(target, gtf_path, workers):
     def get_numeric_key(key):
         return int(key.split('_')[-1])
-    file_name_final = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
-    output_file = os.path.join(target, "reference/metageneStructureInformationwNovel.gtf")
-    pattern = re.compile(r".*_\d+\.pkl$")
-    file_names = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern.match(f)]
-    if os.path.exists(file_name_final):
-        print('novel isoform annotations exist, transforming to gtf format')
-        metageneStructureInformation = load_pickle(file_name_final)
-        convert_to_gtf(metageneStructureInformation, output_file, gtf_path=gtf_path, num_cores=workers)
-    elif len(file_names)>0:
-        print('novel isoform annotations exist, merging and transforming to gtf format')
-        metageneStructureInformation = {}
-        for file_name in file_names:
-            metageneStructureInformation_ = load_pickle(file_name)
-            metageneStructureInformation.update(metageneStructureInformation_)
-        metageneStructureInformation = dict(
-            sorted(metageneStructureInformation.items(), key=lambda item: get_numeric_key(item[0]))
+    output_pkl = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
+    output_gtf = os.path.join(target, "reference/metageneStructureInformationwNovel.gtf")
+    pattern_pkl = re.compile(r".*_\d+\.pkl$")
+    pattern_gtf = re.compile(r".*_\d+\.gtf$")
+    file_names_pkl = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern_pkl.match(f)]
+    file_names_gtf = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if
+                      pattern_gtf.match(f)]
+    if len(file_names_pkl)>0 and len(file_names_gtf)>0:
+        # merge pkl annotation file
+        print('merging new isoform annotations')
+        metageneStructureInformationwNovel = {}
+        for file_name_pkl in file_names_pkl:
+            metageneStructureInformation = load_pickle(file_name_pkl)
+            metageneStructureInformationwNovel.update(metageneStructureInformation)
+        metageneStructureInformationwNovel = dict(
+            sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0]))
         )
-        with open(file_name_final, 'wb') as file:
-            pickle.dump(metageneStructureInformation, file)
-        convert_to_gtf(metageneStructureInformation, output_file, gtf_path=gtf_path, num_cores=workers)
-        print('removing sub-files of annotations')
-        for file_name in file_names:
-            os.remove(file_name)
+        with open(output_pkl, 'wb') as file:
+            pickle.dump(metageneStructureInformationwNovel, file)
+        for file_name_pkl in file_names_pkl:
+            os.remove(file_name_pkl)
+        print('mergered new isoform annotation saved at: '+str(file_names_pkl))
+        # merge gtf annotation file
+        print('Merging new GTF annotations...')
+        gtf_lines = []
+        for file_name_gtf in file_names_gtf:
+            with open(file_name_gtf, 'r') as gtf_file:
+                for line in gtf_file:
+                    if not line.startswith('#'):  # Skip any header lines
+                        gtf_lines.append(line.strip())
+        with open(output_gtf, 'w') as output_gtf_file:
+            for line in gtf_lines:
+                output_gtf_file.write(line + '\n')
+        for file_name_gtf in file_names_gtf:
+            os.remove(file_name_gtf)
+        print('Merged GTF annotations saved at: ' + output_gtf)
     else:
         print('novel isoform annotations does not exist!')
 
