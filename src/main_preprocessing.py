@@ -54,7 +54,6 @@ def main():
         if not os.path.exists(t):
             os.makedirs(t)
     def run_annotation():
-
         annotator = annot.Annotator(target=args.target, reference_gtf_path=reference,
                                     bam_path=args.bam, update_gtf=args.update_gtf,
                                     workers=args.workers, coverage_threshold_gene=args.coverage_threshold_gene,
@@ -66,7 +65,6 @@ def main():
         annotator.annotate_genes()
         # bam information
         annotator.annotation_bam()
-
     def run_compatible():
         for i in range(len(args.target)):
             print('processing the sample of: '+str(args.bam[i]))
@@ -95,22 +93,21 @@ def main():
                 countmatrix.save_single_sample(csv=True, mtx=True)
     def run_summary():
         for i in range(len(args.target)):
-            cp.summarise_annotation(args.target[i], args.reference, args.workers)
+            cp.summarise_annotation(args.target[i])
 
     if args.task=='annotation':
         run_annotation()
     if args.task=='compatible matrix':#task is to generate compatible matrix
         run_compatible()
     if args.task == 'count matrix': # task is to generate count matrix
-        run_count()
-    if args.task =='summary': # task is to summarize novel annotations
         run_summary()
+        run_count()
 
     if args.task =='all':
         run_annotation()
         run_compatible()
-        run_count()
         run_summary()
+        run_count()
 
 
 

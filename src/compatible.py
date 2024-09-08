@@ -56,7 +56,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
 
 
 ##TODO: just merge
-def summarise_annotation(target, gtf_path, workers):
+def summarise_annotation(target):
     def get_numeric_key(key):
         return int(key.split('_')[-1])
     output_pkl = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
