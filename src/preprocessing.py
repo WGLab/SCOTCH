@@ -5,11 +5,9 @@ from itertools import chain
 import numpy as np
 import os
 from Bio.Seq import Seq
-import math
 import networkx as nx
 import community.community_louvain as community_louvain
 from collections import defaultdict
-from joblib import Parallel, delayed
 
 #bam="/scr1/users/xu3/singlecell/project_singlecell/sample8_R10/bam/sample8_R10.filtered.bam"
 #gene_pkl="/scr1/users/xu3/singlecell/project_singlecell/M4/reference/geneStructureInformation.pkl"
