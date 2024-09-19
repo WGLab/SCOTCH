@@ -355,14 +355,6 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
         else:
             bam_files = [input_bam_path]
     all_genes = process_bam_file(bam_files, coverage_threshold, min_region_size)
-    #results = Parallel(n_jobs=workers)(delayed(process_bam_file)(bam_file, coverage_threshold, min_region_size) for bam_file in bam_files)
-    #all_genes={}
-    #for result in results:
-    #    for chrom, gene_list in result.items():
-    #        if chrom not in all_genes:
-    #            all_genes[chrom] = gene_list
-    #        else:
-    #            all_genes[chrom].extend(gene_list)
     sorted_all_genes = {}
     for chrom in sorted(all_genes.keys()):
         sorted_all_genes[chrom] = sorted(all_genes[chrom], key=lambda x: (x[0], x[1]))
@@ -538,6 +530,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         annotations = {k: v for result in results for k, v in result.items()}
     return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
 
+
 def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                             output="geneStructureInformation.pkl", build=None,
                             coverage_threshold_gene=5, coverage_threshold_exon=0.01,coverage_threshold_splicing=0.01, z_score_threshold = 10,
@@ -566,7 +559,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
                                                   coverage_threshold_splicing = coverage_threshold_splicing,
                                                   z_score_threshold = z_score_threshold,
                                                   min_gene_size=min_gene_size,
-                                                  workers=num_cores)
+                                                  workers=num_cores)#no need to add build
         if output is not None:
             with open(output, 'wb') as file:
                 pickle.dump(geneStructureInformation, file)
@@ -582,6 +575,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
             if os.path.isfile(output) == False:
                 geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
                 geneStructureInformation = dict(geneStructureInformation)
+                geneStructureInformation = add_build(geneStructureInformation, build)
                 print('finish generating geneStructureInformation.pkl')
                 #save to output, single gene
                 if output is not None:
@@ -593,6 +587,10 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         elif refGeneFile_path.endswith('pkl'):
             print('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_path))
             geneStructureInformation = load_pickle(refGeneFile_path)
+            #check if geneStructureInformation contains build
+            if build is not None:
+                if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
+                    geneStructureInformation = add_build(geneStructureInformation, build)
             shutil.copy(refGeneFile_path, output)
         else:
             print('Only gtf and pkl files are supported!')
@@ -641,9 +639,15 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         metageneStructureInformation = load_pickle(meta_output)
     return metageneStructureInformation
 
+def add_build(geneStructureInformation, build):
+    if build is not None:
+        keys = list(geneStructureInformation.keys())
+        for key in keys:
+            geneStructureInformation[key][0]['geneChr'] = build + '_' + geneStructureInformation[key][0]['geneChr']
+    return geneStructureInformation
 
 class Annotator:
-    def __init__(self, target:list, reference_gtf_path, bam_path:list, update_gtf, workers,
+    def __init__(self, target:list, reference_gtf_path:str, bam_path:list, update_gtf, workers,
                  coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,z_score_threshold,
                  min_gene_size, build = None, platform = '10x'):
         """
@@ -657,7 +661,7 @@ class Annotator:
         self.multiple_samples = True if len(target)>1 else False
         self.workers = workers
         self.target = target
-        self.reference_gtf_path = reference_gtf_path
+        self.reference_gtf_path = reference_gtf_path # can also be pickle file
         self.bam_path = bam_path
         self.update_gtf = update_gtf
         self.build = build
