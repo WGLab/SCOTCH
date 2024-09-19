@@ -389,10 +389,10 @@ def detect_poly_parse(read, window = 20, n = 10):
     query_sequence0 = read.query_sequence[:(read.query_alignment_start + 1)] #soft clip 0
     query_sequence1 = read.query_sequence[read.query_alignment_end:] #soft clip 1
     poly_bool = False
-    if read.is_reverse==True and detect_poly_parse_(query_sequence0,window, n,'T'):
+    if detect_poly_parse_(query_sequence0,window, n,'T'):
         poly = 'T'
         poly_bool = True
-    elif read.is_reverse==False and detect_poly_parse_(query_sequence1, window, n, 'A'):
+    elif detect_poly_parse_(query_sequence1, window, n, 'A'):
         poly = 'A'
         poly_bool = True
     else:
