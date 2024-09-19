@@ -2,6 +2,7 @@ from preprocessing import *
 import pysam
 import re
 import csv
+import math
 
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
@@ -307,6 +308,8 @@ class ReadMapper:
             for sample in unique_samples:
                 Read_novelIsoform_sample, Read_knownIsoform_sample, Read_novelIsoform_poly_sample = [], [], []
                 sample_target = os.path.join(self.target, 'samples/'+sample)
+                if not os.path.exists(sample_target):
+                    os.makedirs(sample_target)
                 sample_index_novel = [i for i, s in enumerate(samples_novel) if s == sample]
                 sample_index_known = [i for i, s in enumerate(samples_known) if s == sample]
                 if len(sample_index_novel) > 0:

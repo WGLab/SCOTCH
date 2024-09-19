@@ -71,8 +71,6 @@ def main():
             readmapper = cp.ReadMapper(target=args.target[i], bam_path = args.bam[i],
                                        lowest_match=args.match, platform = args.platform,
                                        reference_gtf_path=args.reference)
-            if args.platform == 'parse':
-                readmapper.merge_bam()
             print('generating compatible matrix')
             readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                           total_jobs=args.total_jobs,current_job_index=args.job_index)
