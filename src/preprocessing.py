@@ -369,18 +369,35 @@ def detect_poly(read, window = 20, n = 15):
     return res, poly
 
 def detect_poly_parse(read, window = 20, n = 10):
-    query_sequence = read.query_sequence
+    def detect_poly_parse_(query_sequence, window, n, AorT):
+        if len(query_sequence) == 0:
+            return False
+        poly_bool = False
+        seq = Seq(query_sequence)
+        for i in range(len(seq) - window + 1):
+            window_seq = seq[i:i + window]
+            poly_bool = None
+            if AorT == 'T':
+                if window_seq.count('T') > n:
+                    poly_bool = True
+                    break
+            else:
+                if window_seq.count('A') > n:
+                    poly_bool = True
+                    break
+        return poly_bool
+
+    query_sequence0 = read.query_sequence[:(read.query_alignment_start + 1)] #soft clip 0
+    query_sequence1 = read.query_sequence[read.query_alignment_end:] #soft clip 1
     poly_bool = False
-    seq = Seq(query_sequence)
-    nT = max([seq[:window].count('T'),seq[-window].count('T')])
-    nA = max([seq[:window].count('A'),seq[-window].count('A')])
-    poly=None
-    if nT>=n:
+    if read.is_reverse==True and detect_poly_parse_(query_sequence0,window, n,'T'):
         poly = 'T'
-    if nA >= n:
-        poly = 'A'
-    if nT>=n or nA>=n:
         poly_bool = True
+    elif read.is_reverse==False and detect_poly_parse_(query_sequence1, window, n, 'A'):
+        poly = 'A'
+        poly_bool = True
+    else:
+        poly = None
     return poly_bool, poly
 
 def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, pacbio = False):
