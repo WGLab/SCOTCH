@@ -386,7 +386,6 @@ def detect_poly_parse(read, window = 20, n = 10):
                     poly_bool = True
                     break
         return poly_bool
-
     query_sequence0 = read.query_sequence[:(read.query_alignment_start + 1)] #soft clip 0
     query_sequence1 = read.query_sequence[read.query_alignment_end:] #soft clip 1
     poly_bool = False
