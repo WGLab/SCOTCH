@@ -4,6 +4,7 @@ import re
 import csv
 import math
 import glob
+import copy
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
         gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
@@ -170,7 +171,7 @@ class ReadMapper:
         return bamFilePysam
     def map_reads(self, meta_gene, save = True):
         #used for ont and pacbio
-        Info_multigenes = self.metageneStructureInformation[meta_gene].copy()
+        Info_multigenes = copy.deepcopy(self.metageneStructureInformation[meta_gene])
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
         if len(Info_multigenes)==1:
@@ -283,7 +284,7 @@ class ReadMapper:
             if save==False:
                 return return_list
     def map_reads_parse(self, meta_gene, save = True):
-        Info_multigenes = self.metageneStructureInformation[meta_gene].copy()
+        Info_multigenes = copy.deepcopy(self.metageneStructureInformation[meta_gene])
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam()
         if len(Info_multigenes)==1:
