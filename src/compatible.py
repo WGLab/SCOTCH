@@ -170,7 +170,7 @@ class ReadMapper:
         return bamFilePysam
     def map_reads(self, meta_gene, save = True):
         #used for ont and pacbio
-        Info_multigenes = self.metageneStructureInformation[meta_gene]
+        Info_multigenes = self.metageneStructureInformation[meta_gene].copy()
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
         if len(Info_multigenes)==1:
@@ -283,7 +283,7 @@ class ReadMapper:
             if save==False:
                 return return_list
     def map_reads_parse(self, meta_gene, save = True):
-        Info_multigenes = self.metageneStructureInformation[meta_gene]
+        Info_multigenes = self.metageneStructureInformation[meta_gene].copy()
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam()
         if len(Info_multigenes)==1:
@@ -322,7 +322,8 @@ class ReadMapper:
                 if len(sample_index_known) > 0:
                     Read_knownIsoform_sample = [Read_knownIsoform[i] for i in sample_index_known]
                 if len(Read_novelIsoform_sample) > 0:
-                    Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = polish_compatible_vectors(Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms)
+                    Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = polish_compatible_vectors(
+                        Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms)
                 else:
                     Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = (
                     Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample)
