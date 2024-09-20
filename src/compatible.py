@@ -364,6 +364,8 @@ class ReadMapper:
             return_samples = []
             for sample in unique_samples:
                 sample_target = os.path.join(self.target, 'samples/'+sample)
+                if not os.path.exists(sample_target):
+                    os.makedirs(sample_target)
                 sample_index = [i for i, s in enumerate(samples) if s == sample]
                 result_sample = [results[i] for i in sample_index]
                 poly_sample = [polies[i] for i in sample_index]
