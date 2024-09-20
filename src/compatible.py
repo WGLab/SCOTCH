@@ -3,7 +3,7 @@ import pysam
 import re
 import csv
 import math
-
+import glob
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
         gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
@@ -126,10 +126,14 @@ class ReadMapper:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         # some paths
-        if platform!='parse':
+        if platform != 'parse':
             self.compatible_matrix_folder_path = os.path.join(target, "compatible_matrix")#not for parse
             self.read_mapping_path = os.path.join(target, "auxillary")#not for parse
             self.count_matrix_folder_path = os.path.join(target, "count_matrix")#not for parse
+        else:
+            self.compatible_matrix_folder_paths = glob.glob(os.path.join(target, "sample*/compatible_matrix"))
+            self.read_mapping_paths = glob.glob(os.path.join(target, "sample*/auxillary"))
+            self.count_matrix_folder_paths = glob.glob(os.path.join(target, "sample*/count_matrix"))
         # bam information file
         self.qname_dict = load_pickle(self.bamInfo_pkl_path)
         self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
@@ -420,8 +424,9 @@ class ReadMapper:
                 if save==False:
                     return return_samples
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
-        if not os.path.exists(self.compatible_matrix_folder_path):
-            os.makedirs(self.compatible_matrix_folder_path)
+        if self.parse==False:
+            if not os.path.exists(self.compatible_matrix_folder_path):
+                os.makedirs(self.compatible_matrix_folder_path)
         MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
         if total_jobs > 1:
             step_size = math.ceil(len(MetaGenes) / total_jobs)
@@ -436,10 +441,19 @@ class ReadMapper:
             genes_existing = []
         else:
             print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
-            genes_existing = [g[:-4] for g in os.listdir(self.compatible_matrix_folder_path)]
-            if os.path.isfile(os.path.join(self.compatible_matrix_folder_path, 'log.txt')):
-                gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
-                genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
+            if self.parse:
+                genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
+                                  for file in os.listdir(folder_path) if file.endswith('.csv')]
+                for folder_path in self.compatible_matrix_folder_paths:
+                    log_file_path = os.path.join(folder_path, 'log.txt')
+                    if os.path.isfile(log_file_path):
+                        gene_df = pd.read_csv(log_file_path, header=None)
+                        genes_existing += gene_df.iloc[:, 0].tolist()
+            else:
+                genes_existing = [g[:-4] for g in os.listdir(self.compatible_matrix_folder_path)]
+                if os.path.isfile(os.path.join(self.compatible_matrix_folder_path, 'log.txt')):
+                    gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
+                    genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
         MetaGene_Gene_dict = {}
         for metagene_name, genes_info in self.metageneStructureInformation.items():
             if metagene_name in MetaGenes_job:
