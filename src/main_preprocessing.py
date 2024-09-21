@@ -74,9 +74,9 @@ def main():
             print('generating compatible matrix')
             readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                           total_jobs=args.total_jobs,current_job_index=args.job_index)
-            if (args.update_gtf and reference is not None) or (reference is None):
-                print('saving annotations with identified novel isoforms')
-                readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
+            #if (args.update_gtf and reference is not None) or (reference is None):
+            print('saving annotations with identified novel isoforms')
+            readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
 
     def run_count():
         for i in range(len(args.target)):
