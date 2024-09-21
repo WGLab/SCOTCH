@@ -626,7 +626,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
         metageneStructureInformation = {}
         for i in range(len(grouped_dict)):
             meta_gene = 'meta_gene_' + str(i+1)
-            gene_ids = grouped_dict[i]
+            gene_ids = grouped_dict[i+1]
             meta_gene_info = []
             for id in gene_ids:
                 meta_gene_info.append(geneStructureInformation[id])
