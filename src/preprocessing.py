@@ -132,6 +132,8 @@ def find_novel(df_assign):
         if len(read_groups[k]) > 1:
             assign = df_assign.iloc[read_groups[k]].mode().iloc[0].tolist()
             isoform_index = [i for i, a in enumerate(assign) if a==1]
+            if len(isoform_index)==0:
+                continue
             isoform_id = 'novelIsoform_' + str(sum([2 ** e for e in isoform_index]))
             if len(assign) > -sum(assign) and isoform_id not in novelisoform_dict.keys():
                 assigns.append(assign)
