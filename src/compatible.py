@@ -175,15 +175,16 @@ class ReadMapper:
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
         if len(Info_multigenes)==1:
-            geneInfo, exonInfo, isoformInfo = Info_multigenes[0]
+            Info_singlegene = Info_multigenes[0]
+            geneInfo, exonInfo, isoformInfo = Info_singlegene
             n_isoforms = len(isoformInfo)
             reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
-                result = process_read(read, geneInfo, exonInfo, isoformInfo, self.qname_dict, self.lowest_match,
-                                      Info_multigenes, self.parse, self.pacbio)
+                result = process_read(read, self.qname_dict, self.lowest_match,
+                                      Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
@@ -288,7 +289,8 @@ class ReadMapper:
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam()
         if len(Info_multigenes)==1:
-            geneInfo, exonInfo, isoformInfo = Info_multigenes[0]
+            Info_singlegene = Info_multigenes[0]
+            geneInfo, exonInfo, isoformInfo = Info_singlegene
             n_isoforms = len(isoformInfo)
             reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
@@ -298,8 +300,8 @@ class ReadMapper:
             Read_novelIsoform_poly = []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                result = process_read(read, geneInfo, exonInfo, isoformInfo, self.qname_dict, self.lowest_match,
-                                      Info_multigenes, self.parse, self.pacbio)
+                result = process_read(read, self.qname_dict, self.lowest_match,
+                                      Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
