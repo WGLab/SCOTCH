@@ -411,16 +411,16 @@ class ReadMapper:
                         Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, Read_novelIsoform_poly)
                     # update annotation information in self
                     for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
-                        if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
-                            self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'].append(novel_isoform_name)
-                    self.metageneStructureInformationwNovel[meta_gene][0][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'])
-                    self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo_polished)
+                        if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames']:
+                            self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'].append(novel_isoform_name)
+                    self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'])
+                    self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
                     if save:
                         save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
-                                                      self.qname_cbumi_dict,
-                                                      self.metageneStructureInformationwNovel[meta_gene][index][1],
-                                                      self.metageneStructureInformationwNovel[meta_gene][index][2],
-                                                      sample_target)
+                                                      qname_cbumi_dict = self.qname_cbumi_dict,
+                                                      exonInfo = self.metageneStructureInformationwNovel[meta_gene][index][1],
+                                                      isoformInfo=self.metageneStructureInformationwNovel[meta_gene][index][2],
+                                                      output_folder = sample_target)
                     else:
                         return_samples.append({'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
                                 'exonInfo': self.metageneStructureInformationwNovel[meta_gene][index][1],
