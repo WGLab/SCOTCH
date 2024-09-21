@@ -560,7 +560,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2,poly = False)
                                                                                 max(lowest_match, 1 - lowest_match),
                                                                                 min(lowest_match, 1 - lowest_match),
                                                                                 geneInfo['geneStrand'], qualifyExon)
-            if read_isoform_compatibleVector_secondary > 0:
+            if sum(read_isoform_compatibleVector_secondary) > 0:
                 read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
         # when not accounting for small exons lead to multiple mappings -- try out account for small exons
         if sum(read_isoform_compatibleVector) > 1:
@@ -571,7 +571,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2,poly = False)
                                                                                 max(lowest_match, 1 - lowest_match),
                                                                                 min(lowest_match, 1 - lowest_match),
                                                                                 geneInfo['geneStrand'], qualifyExon)
-            if read_isoform_compatibleVector_secondary == 1:
+            if sum(read_isoform_compatibleVector_secondary) == 1:
                 read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
     else:
         # uncharacterized type3: not map to any exons---intron
@@ -631,7 +631,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, pacbio = False):
                                                                       max(lowest_match, 1 - lowest_match),
                                                                       min(lowest_match, 1 - lowest_match),
                                                                       geneInfo['geneStrand'], qualifyExon)
-            if read_isoform_compatibleVector_secondary>0:
+            if sum(read_isoform_compatibleVector_secondary)>0:
                 read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
         # when not accounting for small exons lead to multiple mappings -- try out account for small exons
         if sum(read_isoform_compatibleVector)>1:
@@ -641,7 +641,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, pacbio = False):
                                                                       max(lowest_match, 1 - lowest_match),
                                                                       min(lowest_match, 1 - lowest_match),
                                                                       geneInfo['geneStrand'], qualifyExon)
-            if read_isoform_compatibleVector_secondary==1:
+            if sum(read_isoform_compatibleVector_secondary)==1:
                 read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
     else:
         # uncharacterized type3: not map to any exons---intron
