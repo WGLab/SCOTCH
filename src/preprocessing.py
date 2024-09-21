@@ -1,4 +1,3 @@
-import pysam
 import pandas as pd
 import pickle
 from itertools import chain
@@ -115,11 +114,10 @@ def novelid_to_exonid(novelid):
         position += 1
     return exonid
 
-
-def find_novel(df_assign, df_pct):
+def find_novel(df_assign):
     similarity_matrix_assign = read_similarity(df_assign)
     G = nx.Graph()
-    for i in range(len(df_pct)):
+    for i in range(len(df_assign)):
         G.add_node(i)
     for i in range(len(similarity_matrix_assign)):
         for j in range(i + 1, len(similarity_matrix_assign)):
@@ -132,31 +130,56 @@ def find_novel(df_assign, df_pct):
     novelisoform_dict, assigns = {}, []  ##this is what i want
     for k in range(len(read_groups)):
         if len(read_groups[k]) > 1:
-            assign = df_assign.iloc[read_groups[k]].mean(axis=0).round().tolist()
-            pct = df_pct.iloc[read_groups[k]].mean(axis=0).round().tolist()
-            for i, j in enumerate(pct):
-                if assign[i] > -1 and j > 0:
-                    assign[i] = 1
-                else:
-                    assign[i] = -1
-            isoform_index = [i for i, p in enumerate(pct) if assign[i] > -1 and p > 0]
+            assign = df_assign.iloc[read_groups[k]].mode().iloc[0].tolist()
+            isoform_index = [i for i, a in enumerate(assign) if a==1]
             isoform_id = 'novelIsoform_' + str(sum([2 ** e for e in isoform_index]))
             if len(assign) > -sum(assign) and isoform_id not in novelisoform_dict.keys():
                 assigns.append(assign)
                 novelisoform_dict[isoform_id] = (isoform_index)
     return novelisoform_dict, assigns
 
-def find_novel_by_chunk(df_pct, df_assign, chunk_size=1500):
-    row_count = df_pct.shape[0]
+
+#def find_novel(df_assign, df_pct):
+#    similarity_matrix_assign = read_similarity(df_assign)
+#    G = nx.Graph()
+#    for i in range(len(df_pct)):
+#        G.add_node(i)
+#    for i in range(len(similarity_matrix_assign)):
+#        for j in range(i + 1, len(similarity_matrix_assign)):
+#            if similarity_matrix_assign[i][j] > 0:
+#                G.add_edge(i, j, weight=similarity_matrix_assign[i][j])
+#    partition = community_louvain.best_partition(G)
+#    read_groups = defaultdict(list)
+#    for read, group in partition.items():
+#        read_groups[group].append(read)
+#    novelisoform_dict, assigns = {}, []  ##this is what i want
+#    for k in range(len(read_groups)):
+#        if len(read_groups[k]) > 1:
+#            assign = df_assign.iloc[read_groups[k]].mean(axis=0).round().tolist()
+#            pct = df_pct.iloc[read_groups[k]].mean(axis=0).round().tolist()
+#            for i, j in enumerate(pct):
+#                if assign[i] > -1 and j > 0:
+#                    assign[i] = 1
+#                else:
+#                    assign[i] = -1
+#            isoform_index = [i for i, p in enumerate(pct) if assign[i] > -1 and p > 0]
+#            isoform_id = 'novelIsoform_' + str(sum([2 ** e for e in isoform_index]))
+#            if len(assign) > -sum(assign) and isoform_id not in novelisoform_dict.keys():
+#                assigns.append(assign)
+#                novelisoform_dict[isoform_id] = (isoform_index)
+#    return novelisoform_dict, assigns
+
+def find_novel_by_chunk(df_assign, chunk_size=1500):
+    row_count = df_assign.shape[0]
     num_chunks = max(1, np.ceil(row_count / chunk_size).astype(int))
-    df_pct_list = np.array_split(df_pct, num_chunks)
+    #df_pct_list = np.array_split(df_pct, num_chunks)
     df_assign_list = np.array_split(df_assign, num_chunks)
     novelisoform_dict_list, novel_df_list, novel_df_empty = [], [], []
     i = 0
     print(str(len(df_assign_list)) + ' chunks in total')
     while i < len(df_assign_list):
         print('chunk ' + str(i) + ' out of ' + str(len(df_assign_list)))
-        novelisoform_dict, assigns = find_novel(df_assign_list[i], df_pct_list[i])
+        novelisoform_dict, assigns = find_novel(df_assign_list[i])
         novelisoform_dict, novel_df, novel_df_empty = map_read_to_isoform(novelisoform_dict, assigns, df_assign)
         if novel_df is not None:
             if novel_df.shape[0] > 10:
@@ -164,10 +187,10 @@ def find_novel_by_chunk(df_pct, df_assign, chunk_size=1500):
                 novel_df_list.append(novel_df)
                 # update split
                 df_assign = df_assign.loc[novel_df_empty]
-                df_pct = df_pct.loc[novel_df_empty]
-                row_count = df_pct.shape[0]
+                #df_pct = df_pct.loc[novel_df_empty]
+                row_count = df_assign.shape[0]
                 num_chunks = max(1, np.ceil(row_count / chunk_size).astype(int))
-                df_pct_list = np.array_split(df_pct, num_chunks)
+                #df_pct_list = np.array_split(df_pct, num_chunks)
                 df_assign_list = np.array_split(df_assign, num_chunks)
             else:
                 i += 1
@@ -763,11 +786,11 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
         read_novelisoform_tuples = []
         novelisoform_dict ={}
     else:
-        novel_dict_pct = {readname: readpct for readname, readpct, readassignment in Read_novelIsoform}
+        #novel_dict_pct = {readname: readpct for readname, readpct, readassignment in Read_novelIsoform}
         novel_dict_assign = {readname: readassignment for readname, readpct, readassignment in Read_novelIsoform}
-        df_pct = pd.DataFrame.from_dict(novel_dict_pct, orient='index')
+        #df_pct = pd.DataFrame.from_dict(novel_dict_pct, orient='index')
         df_assign = pd.DataFrame.from_dict(novel_dict_assign, orient='index')
-        novelisoform_dict, novel_df_list, novel_df_empty = find_novel_by_chunk(df_pct, df_assign, chunk_size=1500)
+        novelisoform_dict, novel_df_list, novel_df_empty = find_novel_by_chunk(df_assign, chunk_size=1500)
         if len(novelisoform_dict) > 0:
             read_novelisoform_tuples = [
                 (row, col)
