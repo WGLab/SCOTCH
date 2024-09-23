@@ -460,6 +460,7 @@ class ReadMapper:
                 if os.path.isfile(os.path.join(self.compatible_matrix_folder_path, 'log.txt')):
                     gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
                     genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
+            print('there exist ' + str(len(genes_existing)) + ' genes')
         MetaGene_Gene_dict = {}
         for metagene_name, genes_info in self.metageneStructureInformation.items():
             if metagene_name in MetaGenes_job:
