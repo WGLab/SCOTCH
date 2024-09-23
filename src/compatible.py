@@ -101,9 +101,10 @@ def summarise_annotation(target):
 
 
 class ReadMapper:
-    def __init__(self, target, bam_path, lowest_match=0.2, platform = '10x', reference_gtf_path = None):
+    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 50, platform = '10x', reference_gtf_path = None):
         self.target = target
         self.bam_path = bam_path
+        self.small_exon_threshold = small_exon_threshold
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         if reference_gtf_path is not None or reference_gtf_path=='None':
             self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
@@ -183,7 +184,7 @@ class ReadMapper:
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
-                result = process_read(read, self.qname_dict, self.lowest_match,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,
                                       Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
@@ -223,7 +224,7 @@ class ReadMapper:
             # process reads metagene
             results = []
             for read in reads:
-                out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.parse, self.pacbio)
+                out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
             #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
@@ -300,7 +301,7 @@ class ReadMapper:
             Read_novelIsoform_poly = []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                result = process_read(read, self.qname_dict, self.lowest_match,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,
                                       Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
@@ -359,7 +360,7 @@ class ReadMapper:
             results, samples, polies = [], [], []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.parse, self.pacbio)
+                out = process_read_metagene(read, start, end, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     polies.append(poly)
                     results.append(out)
