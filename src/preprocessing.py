@@ -393,7 +393,7 @@ def detect_poly(read, window = 20, n = 15):
         res = True
     return res, poly
 
-def detect_poly_parse(read, window = 20, n = 10):
+def detect_poly_parse(read, window = 20, n = 15):
     def detect_poly_parse_(query_sequence, window, n, AorT):
         if len(query_sequence) == 0:
             return False
@@ -1021,9 +1021,9 @@ def process_read(read, qname_dict, lowest_match, small_exon_threshold, Info_Sing
         qname_dict = {}
         qname_dict[readName] = readName
     if parse:
-        poly_bool, poly = detect_poly_parse(read, window=20, n=10)
+        poly_bool, poly = detect_poly_parse(read, window=20, n=15)
         if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
-            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read, Info_Singlegenes, lowest_match, poly_bool)
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read, Info_Singlegenes, lowest_match, small_exon_threshold, poly_bool)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
@@ -1054,7 +1054,7 @@ def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_
     if pacbio:
         readName = readName + '_' + str(readEnd - readStart)
     if parse:
-        poly_bool, poly = detect_poly_parse(read, window=20, n=10)
+        poly_bool, poly = detect_poly_parse(read, window=20, n=15)
         if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta_parse(read,
                                                                                                       Info_multigenes,
