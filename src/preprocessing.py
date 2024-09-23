@@ -873,7 +873,7 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
     return read_novelisoform_tuples, novelisoform_dict, Read_Isoform_compatibleVector
 
 def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished,
-                               lowest_match, geneInfo, exonInfo, Read_novelIsoform, small_exon_threshold, poly=True):
+                               lowest_match, small_exon_threshold, geneInfo, exonInfo, Read_novelIsoform, poly=True):
     read_novelisoform_df = None
     #make novel isoform df
     if len(Read_novelIsoform_polished) > 0:

@@ -101,7 +101,7 @@ def summarise_annotation(target):
 
 
 class ReadMapper:
-    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 50, platform = '10x', reference_gtf_path = None):
+    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 20, platform = '10x', reference_gtf_path = None):
         self.target = target
         self.bam_path = bam_path
         self.small_exon_threshold = small_exon_threshold
@@ -200,7 +200,7 @@ class ReadMapper:
                                                                                                       Read_knownIsoform)
             #compile output into compatible matrix
             geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,self.small_exon_threshold,
                 geneInfo, exonInfo, Read_novelIsoform, True)
             #update annotation information in self
             self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'] = \
@@ -263,7 +263,7 @@ class ReadMapper:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
                     Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                 geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,self.small_exon_threshold,
                     Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, True)
                 # update annotation information in self
                 self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] = \
@@ -333,7 +333,7 @@ class ReadMapper:
                     Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample)
                 geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(
                     Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished, self.lowest_match,
-                    geneInfo, exonInfo, Read_novelIsoform_sample, Read_novelIsoform_poly_sample)
+                    self.small_exon_threshold,geneInfo, exonInfo, Read_novelIsoform_sample, Read_novelIsoform_poly_sample)
                 # update annotation information in self
                 for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                     if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
@@ -411,7 +411,7 @@ class ReadMapper:
                             Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                     geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
                         Read_novelIsoform_polished, novel_isoformInfo_polished,Read_knownIsoform_polished, self.lowest_match,
-                        Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, Read_novelIsoform_poly)
+                        self.small_exon_threshold, Info_multigenes[index][0], Info_multigenes[index][1], Read_novelIsoform, Read_novelIsoform_poly)
                     # update annotation information in self
                     for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                         if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames']:
