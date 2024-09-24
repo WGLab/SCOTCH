@@ -101,10 +101,12 @@ def summarise_annotation(target):
 
 
 class ReadMapper:
-    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 20, truncation_match=0.5, platform = '10x', reference_gtf_path = None):
+    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match=0.5, platform = '10x',
+                 reference_gtf_path = None):
         self.target = target
         self.bam_path = bam_path
         self.small_exon_threshold = small_exon_threshold
+        self.small_exon_threshold1 = small_exon_threshold1
         self.truncation_match = truncation_match
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         if reference_gtf_path is not None or reference_gtf_path=='None':
@@ -185,8 +187,8 @@ class ReadMapper:
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.truncation_match,
-                                      Info_singlegene, self.parse, self.pacbio)
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
+                                      self.truncation_match,Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
@@ -227,7 +229,8 @@ class ReadMapper:
             results = []
             for read in reads:
                 out = process_read_metagene(read,self.qname_dict, Info_multigenes, self.lowest_match,
-                                            self.small_exon_threshold,self.truncation_match, self.parse, self.pacbio)
+                                            self.small_exon_threshold,self.small_exon_threshold1,
+                                            self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
             #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
@@ -304,8 +307,8 @@ class ReadMapper:
             Read_novelIsoform_poly = []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.truncation_match,
-                                      Info_singlegene, self.parse, self.pacbio)
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
+                                      self.truncation_match, Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
@@ -363,7 +366,8 @@ class ReadMapper:
             results, samples, polies = [], [], []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold, self.truncation_match, self.parse, self.pacbio)
+                out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold,self.small_exon_threshold1,
+                                            self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     polies.append(poly)
                     results.append(out)
