@@ -194,6 +194,7 @@ class ReadMapper:
                     Read_knownIsoform.append(result_known)
             #expand uncategorized novel reads into Read_knownIsoform
             if len(Read_novelIsoform) > 0:
+                #novel_isoformInfo_polished: novel isoform annotation: {'novelIsoform_7':[0,1,2]}
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                     Read_novelIsoform, Read_knownIsoform, n_isoforms)
             else:

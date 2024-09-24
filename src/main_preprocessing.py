@@ -3,6 +3,7 @@ import count_matrix as cm
 import os
 import annotation as annot
 import compatible as cp
+import logging
 
 parser = argparse.ArgumentParser(description='Preprocess files')
 #mandatory options
@@ -41,21 +42,20 @@ parser.add_argument('--bulk', action='store_false',dest='single_cell',help="bulk
 #bam = '/scr1/users/xu3/singlecell/project_singlecell/sample8_R9/bam/sample8_R9.filtered.bam'
 
 def main():
+    logger = logging.getLogger()
     global args
     args = parser.parse_args()
     if args.reference_pkl=='None' and args.reference=='None':
         reference = None
-        print('no reference annotation provided, use annotation-free mode')
     elif args.reference_pkl=='None' and args.reference!='None':
         reference = args.reference
-        print('use reference from '+str(reference))
     else:
         reference = args.reference_pkl
-        print('use reference from ' + str(reference))
     for t in args.target:
         if not os.path.exists(t):
             os.makedirs(t)
     def run_annotation():
+        logger.info('Start annotation step:')
         annotator = annot.Annotator(target=args.target, reference_gtf_path=reference,
                                     bam_path=args.bam, update_gtf=args.update_gtf,
                                     workers=args.workers, coverage_threshold_gene=args.coverage_threshold_gene,
@@ -68,17 +68,17 @@ def main():
         # bam information
         annotator.annotation_bam()
     def run_compatible():
+        logger.info('Start generating compatible matrix step:')
         for i in range(len(args.target)):
-            print('processing the sample of: '+str(args.bam[i]))
+            logger.info('processing the sample of: '+str(args.bam[i]))
             readmapper = cp.ReadMapper(target=args.target[i], bam_path = args.bam[i],
                                        lowest_match=args.match, small_exon_threshold = args.small_exon_threshold,
                                        truncation_match = args.truncation_match,
                                        platform = args.platform, reference_gtf_path=args.reference)
-            print('generating compatible matrix')
             readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                           total_jobs=args.total_jobs,current_job_index=args.job_index)
             #if (args.update_gtf and reference is not None) or (reference is None):
-            print('saving annotations with identified novel isoforms')
+            logger.info('saving annotations with identified novel isoforms')
             readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
 
     def run_count():
