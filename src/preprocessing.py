@@ -545,11 +545,11 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
     #read-exon mapping percentage
     mapExons = exon_hit(referencePositions, exonInfo)
     exon_map_pct, exon_map_vector_trunct = [], []
-    exon_map_pct0 = exon_map_pct.copy()
     if len(mapExons) > 0:
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
         exon_map_pct = [round(base / (exonInfo[i][1] - exonInfo[i][0]), 2) if base else 0 for i, base in enumerate(exon_map_base)]
+        exon_map_pct0 = exon_map_pct.copy()
         #adjusted pct based on truncation
         if poly:
             if geneInfo['geneStrand']=="+": # check if the first non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
@@ -684,7 +684,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
         exon_map_pct = [round(base / (exonInfo[i][1] - exonInfo[i][0]), 2) if base else 0 for i, base in enumerate(exon_map_base)]
-        exon_map_pct0 = exon_map_pct.copy() #report original pct for novel isoform
+        exon_map_pct0 = exon_map_pct.copy()  # report original pct for novel isoform
         #adjust for truncation pct
         if geneInfo['geneStrand'] == "+":  # check if the first non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
             for i, pct in enumerate(exon_map_pct):
@@ -1072,7 +1072,8 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         return output
 
 
-def process_read(read, qname_dict, lowest_match, small_exon_threshold,small_exon_threshold1, truncation_match, Info_Singlegenes, parse=False, pacbio = False):
+def process_read(read, qname_dict, lowest_match, small_exon_threshold,small_exon_threshold1, truncation_match, Info_Singlegenes,
+                 parse=False, pacbio = False):
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     #geneInfo, exonInfo, isoformInfo = Info_Singlegenes
     if pacbio:

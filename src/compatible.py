@@ -306,7 +306,7 @@ class ReadMapper:
             samples_novel, samples_known = [], []
             Read_novelIsoform_poly = []
             for read in reads:
-                poly, _ = detect_poly_parse(read, window=20, n=10)
+                poly, _ = detect_poly_parse(read, window=20, n=15)
                 result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match, Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
