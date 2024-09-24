@@ -121,7 +121,7 @@ class ReadMapper:
         self.bamInfo_folder_path = os.path.join(target, "bam")
         self.bamInfo_pkl_path = os.path.join(target, 'bam/bam.Info.pkl')#bamInfo_pkl_file
         self.bamInfo2_pkl_path = os.path.join(target, 'bam/bam.Info2.pkl')#bamInfo2_pkl_file
-        self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl')  # bamInfo2_pkl_file
+        self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl') # bamInfo2_pkl_file
         self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
         # parameters
         self.lowest_match = lowest_match
