@@ -28,6 +28,7 @@ parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork"
 parser.add_argument('--cover_existing',action='store_true')
 parser.add_argument('--cover_existing_false', action='store_false',dest='cover_existing')
 parser.add_argument('--small_exon_threshold',type=int,default=20, help="dynamic exon length threshold to ignore for includsion and exclusion")
+parser.add_argument('--truncation_match',type =float, default=0.5, help="higher than this threshold at the truncation end will be adjusted to 1")
 parser.add_argument('--match',type=float,default=0.8, help="the lowest base percentage for matching an exon")
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
@@ -71,6 +72,7 @@ def main():
             print('processing the sample of: '+str(args.bam[i]))
             readmapper = cp.ReadMapper(target=args.target[i], bam_path = args.bam[i],
                                        lowest_match=args.match, small_exon_threshold = args.small_exon_threshold,
+                                       truncation_match = args.truncation_match,
                                        platform = args.platform, reference_gtf_path=args.reference)
             print('generating compatible matrix')
             readmapper.map_reads_allgenes(cover_existing=args.cover_existing,

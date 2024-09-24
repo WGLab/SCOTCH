@@ -424,7 +424,7 @@ def detect_poly_parse(read, window = 20, n = 15):
         poly = None
     return poly_bool, poly
 
-def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, pacbio = False):
+def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, truncation_match=0.5, pacbio = False):
     geneName, readDist, geneLength, nMapExons,index = [], [], [], [],[]
     for i, info_singlegene in enumerate(Info_multigenes):
         gene_name, read_dist, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
@@ -441,7 +441,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_t
         ind = df_intron['index'][0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read,
                                                                                         Info_multigenes[ind],
-                                                                                        lowest_match,  small_exon_threshold, pacbio = pacbio)
+                                                                                        lowest_match,  small_exon_threshold, truncation_match, pacbio = pacbio)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
         df_exon = df_exon.sort_values(by=['nMapExons', 'readDist', 'geneLength'], ascending=[False, True, False])
         if sum(df_exon.nMapExons) >= 2:
@@ -452,7 +452,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_t
             for ind in inds:
                 read_novelisoform_tuple_, read_isoform_compatibleVector_tuple_ = map_read_to_gene(read,
                                                                                                   Info_multigenes[ind],
-                                                                                                  lowest_match,small_exon_threshold, pacbio = pacbio)
+                                                                                                  lowest_match,small_exon_threshold, truncation_match, pacbio = pacbio)
                 read_novelisoform_tuple_dict[ind] = read_novelisoform_tuple_
                 read_isoform_compatibleVector_tuple_dict[ind] = read_isoform_compatibleVector_tuple_
                 if read_novelisoform_tuple_ is not None:
@@ -471,12 +471,13 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_t
             ind = df_exon['index'].tolist()[0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read,
                                                                                             Info_multigenes[ind],
-                                                                                            lowest_match, pacbio=pacbio)
+                                                                                            lowest_match,small_exon_threshold,
+                                                                                            truncation_match, pacbio=pacbio)
     else:
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, poly=False):
+def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, truncation_match =0.5, poly=False):
     geneName, readDist, geneLength, nMapExons,index = [], [], [], [],[]
     for i, info_singlegene in enumerate(Info_multigenes):
         gene_name, read_dist, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
@@ -493,7 +494,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_
         ind = df_intron['index'][0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read,
                                                                                         Info_multigenes[ind],
-                                                                                        lowest_match, small_exon_threshold, poly=poly)
+                                                                                        lowest_match, small_exon_threshold,truncation_match, poly=poly)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
         df_exon = df_exon.sort_values(by=['nMapExons', 'readDist', 'geneLength'], ascending=[False, True, False])
         if sum(df_exon.nMapExons) >= 2:
@@ -504,7 +505,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_
             for ind in inds:
                 read_novelisoform_tuple_, read_isoform_compatibleVector_tuple_ = map_read_to_gene_parse(read,
                                                                                                   Info_multigenes[ind],
-                                                                                                  lowest_match, small_exon_threshold, poly=poly)
+                                                                                                  lowest_match, small_exon_threshold, truncation_match, poly=poly)
                 read_novelisoform_tuple_dict[ind] = read_novelisoform_tuple_
                 read_isoform_compatibleVector_tuple_dict[ind] = read_isoform_compatibleVector_tuple_
                 if read_novelisoform_tuple_ is not None:
@@ -523,12 +524,12 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_
             ind = df_exon['index'].tolist()[0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read,
                                                                                             Info_multigenes[ind],
-                                                                                            lowest_match, small_exon_threshold, poly=poly)
+                                                                                            lowest_match, small_exon_threshold, truncation_match, poly=poly)
     else:
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, poly = False):
+def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, truncation_match = 0.5, poly = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     referencePositions = read.get_reference_positions(full_length=False)
@@ -536,8 +537,9 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
     isoformInfo = dict(sorted(isoformInfo.items(), key=lambda item: len(item[1]), reverse=True))  # long to short
     geneInfo['isoformNames'] = list(isoformInfo.keys())
     qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= small_exon_threshold]
-    exonMatch1 = [max(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold high
-    exonMatch2 = [min(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold low
+    lower_match , upper_match= min(lowest_match,1-lowest_match), max(lowest_match,1-lowest_match)
+    #exonMatch1 = [max(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold high
+    #exonMatch2 = [min(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold low
     #read_isoform_compatibleVector = [1] * len(geneInfo['isoformNames'])#initialize read isoform compativle vector
     #read-exon mapping percentage
     mapExons = exon_hit(referencePositions, exonInfo)
@@ -546,10 +548,51 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
         exon_map_pct = [round(base / (exonInfo[i][1] - exonInfo[i][0]), 2) if base else 0 for i, base in enumerate(exon_map_base)]
+        #adjusted pct based on truncation
+        if poly:
+            if geneInfo['geneStrand']=="+": # check if the first non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
+                for i, pct in enumerate(exon_map_pct):
+                    if pct > 0 and pct >= truncation_match:
+                        exon_map_pct[i] = 1
+                    elif pct > 0 and pct < truncation_match:
+                        break
+            else:# check if the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
+                for i in range(len(exon_map_pct) - 1, -1, -1):
+                    pct = exon_map_pct[i]
+                    if pct > 0 and pct >= truncation_match:
+                        exon_map_pct[i] = 1
+                    elif pct > 0 and pct < truncation_match:
+                        break
+        else:
+            #check if the first and the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
+            map_base_left = map_base_right = 0
+            exon_map_pct_left = exon_map_pct.copy()
+            for i, pct in enumerate(exon_map_pct_left):
+                if pct > 0 and pct >= truncation_match:
+                    map_base_left = pct*(exonInfo[i][1]-exonInfo[i][0])
+                    exon_map_pct_left[i] = 1
+                elif pct > 0:
+                    break
+            # Check last non-zero element
+            exon_map_pct_right = exon_map_pct.copy()
+            for i in range(len(exon_map_pct_right) - 1, -1, -1):
+                if exon_map_pct_right[i] > 0 and exon_map_pct_right[i] >= truncation_match:
+                    exon_map_pct_right[i] = 1
+                    map_base_right = exon_map_pct_right[i] * (exonInfo[i][1] - exonInfo[i][0])
+                elif exon_map_pct_right[i] > 0:
+                    break
+            if map_base_left >= map_base_right:
+                exon_map_pct = exon_map_pct_left
+            else:
+                exon_map_pct = exon_map_pct_right
         #read-exon mapping vector
-        exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
-        exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
-        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
+        #exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
+        #exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
+        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
+        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
         if poly:
             if geneInfo['geneStrand']=="+":
                 index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
@@ -561,22 +604,19 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
             if 1 in exon_map_vector_notrunct:
                 index_of_one = exon_map_vector_notrunct.index(1)
                 last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1)
-                exon_map_vector_trunct = [
-                    exon_map_vector_notrunct[i] if index_of_one <= i <= last_index_of_one else 0
-                    for i in range(len(exon_map_vector_notrunct))
-                ]
+                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if index_of_one <= i <= last_index_of_one else 0
+                    for i in range(len(exon_map_vector_notrunct))]
             else:
                 # If there are no '1's in the vector, set the whole vector to 0
                 exon_map_vector_trunct = [0] * len(exon_map_vector_notrunct)
         #do not consider non-qualified exons
-        #exon_map_vector_notrunct = [vec if i in qualifyExon else 0 for i,vec in enumerate(exon_map_vector_notrunct)]
         isoform_exon_map_list = isoformInfo_to_onehot(isoformInfo, geneInfo)
         exon_map_vector_trunct_conservative = [vec if i in qualifyExon else 0 for i,vec in enumerate(exon_map_vector_trunct)]
         read_exon_map_list = exon_map_vector_trunct_conservative
         read_isoform_compatibleVector = map_read_to_isoform_known(isoform_exon_map_list, read_exon_map_list, exon_map_pct,
                                   max(lowest_match,1-lowest_match), min(lowest_match,1-lowest_match), geneInfo['geneStrand'],
                                                                   qualifyExon, poly)
-        # when not accounting for small exons lead to no mappings -- try out account for smaller exons
+        # when accounting for small exons lead to no mappings -- try out lifting threshold of small exons
         if sum(read_isoform_compatibleVector) == 0:
             for new_threshold in range(small_exon_threshold+10, 110, 10):
             #read_exon_map_list = exon_map_vector_trunct
@@ -592,7 +632,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
                     read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
                     small_exon_threshold = new_threshold
                     break
-        # when not accounting for small exons lead to multiple mappings -- try out account for smaller exons
+        # when accounting for small exons lead to multiple mappings -- try out lifting threshold of small exons
         if sum(read_isoform_compatibleVector) > 1:
             for new_threshold in range(small_exon_threshold+10, 110, 10):
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
@@ -621,7 +661,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
 
-def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, pacbio = False):
+def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, truncation_match = 0.5, pacbio = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     if pacbio:
@@ -631,8 +671,9 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
     isoformInfo = dict(sorted(isoformInfo.items(), key=lambda item: len(item[1]), reverse=True))  # long to short
     geneInfo['isoformNames'] = list(isoformInfo.keys())
     qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= small_exon_threshold]
-    exonMatch1 = [max(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold high
-    exonMatch2 = [min(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold low
+    lower_match, upper_match = min(lowest_match, 1 - lowest_match), max(lowest_match, 1 - lowest_match)
+    #exonMatch1 = [max(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold high
+    #exonMatch2 = [min(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold low
     #read_isoform_compatibleVector = [1] * len(geneInfo['isoformNames'])#initialize read isoform compativle vector
     #read-exon mapping percentage
     mapExons = exon_hit(referencePositions, exonInfo)
@@ -641,10 +682,28 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
         exon_map_pct = [round(base / (exonInfo[i][1] - exonInfo[i][0]), 2) if base else 0 for i, base in enumerate(exon_map_base)]
+        #adjust for truncation pct
+        if geneInfo['geneStrand'] == "+":  # check if the first non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
+            for i, pct in enumerate(exon_map_pct):
+                if pct > 0 and pct >= truncation_match:
+                    exon_map_pct[i] = 1
+                elif pct > 0 and pct < truncation_match:
+                    break
+        else:  # check if the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
+            for i in range(len(exon_map_pct) - 1, -1, -1):
+                pct = exon_map_pct[i]
+                if pct > 0 and pct >= truncation_match:
+                    exon_map_pct[i] = 1
+                elif pct > 0 and pct < truncation_match:
+                    break
         #read-exon mapping vector
-        exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
-        exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
-        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
+        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
+        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
+        #exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
+        #exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
         if geneInfo['geneStrand']=="+":
             index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
             exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
@@ -652,13 +711,12 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
             last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1) if 1 in exon_map_vector_notrunct else -1
             exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in range(len(exon_map_vector_notrunct))]
         #do not consider non-qualified exons
-        #exon_map_vector_notrunct = [vec if i in qualifyExon else 0 for i,vec in enumerate(exon_map_vector_notrunct)]
         isoform_exon_map_list = isoformInfo_to_onehot(isoformInfo, geneInfo)
         exon_map_vector_trunct_conserve = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
         read_exon_map_list = exon_map_vector_trunct_conserve
         read_isoform_compatibleVector = map_read_to_isoform_known(isoform_exon_map_list, read_exon_map_list, exon_map_pct,
                                   max(lowest_match,1-lowest_match), min(lowest_match,1-lowest_match), geneInfo['geneStrand'], qualifyExon)
-        # when not accounting for small exons lead to no mappings -- try out account for smaller exons
+        # when accounting for small exons lead to no mappings -- try out lifting thresholds for small exons
         if sum(read_isoform_compatibleVector) == 0:
             for new_threshold in range(small_exon_threshold+10, 110, 10):
                 # read_exon_map_list = exon_map_vector_trunct
@@ -674,7 +732,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
                     read_isoform_compatibleVector = read_isoform_compatibleVector_secondary
                     small_exon_threshold = new_threshold
                     break
-        # when not accounting for small exons lead to multiple mappings -- try out account for smaller exons
+        # when accounting for small exons lead to multiple mappings -- try out lifting thresholds for small exons
         if sum(read_isoform_compatibleVector) > 1:
             for new_threshold in range(small_exon_threshold+10, 110, 10):
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
@@ -1010,9 +1068,9 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         return output
 
 
-def process_read(read, qname_dict, lowest_match, small_exon_threshold, Info_Singlegenes, parse=False, pacbio = False):
+def process_read(read, qname_dict, lowest_match, small_exon_threshold, truncation_match, Info_Singlegenes, parse=False, pacbio = False):
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
-    geneInfo, exonInfo, isoformInfo = Info_Singlegenes
+    #geneInfo, exonInfo, isoformInfo = Info_Singlegenes
     if pacbio:
         readName = readName + '_' + str(readEnd - readStart)
     novelIsoformResults = None
@@ -1022,31 +1080,33 @@ def process_read(read, qname_dict, lowest_match, small_exon_threshold, Info_Sing
         qname_dict[readName] = readName
     if parse:
         poly_bool, poly = detect_poly_parse(read, window=20, n=15)
-        if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
-            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read, Info_Singlegenes, lowest_match, small_exon_threshold, poly_bool)
+        #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
+        if (readName == qname_dict[readName]):
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read, Info_Singlegenes, lowest_match, small_exon_threshold, truncation_match, poly_bool)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     elif pacbio:
-        if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName ==
-                qname_dict[readName]):
+        #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
+        if (readName ==qname_dict[readName]):
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read, Info_Singlegenes,
-                                                                                            lowest_match, small_exon_threshold, True)
+                                                                                            lowest_match, small_exon_threshold, truncation_match ,True)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     else:
         poly_bool, poly = detect_poly(read, window=20, n=15)
-        if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and poly_bool and readName == qname_dict[readName]):
-            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read, Info_Singlegenes, lowest_match, small_exon_threshold, False)
+        #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and poly_bool and readName == qname_dict[readName]):
+        if (poly_bool and readName == qname_dict[readName]):
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read, Info_Singlegenes, lowest_match, small_exon_threshold, truncation_match,False)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     return novelIsoformResults, isoformCompatibleVectorResults
-def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_match,small_exon_threshold, parse=False, pacbio = False):
+def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,small_exon_threshold,truncation_match, parse=False, pacbio = False):
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     if qname_dict is None: #for bulk
         qname_dict = {}
@@ -1055,24 +1115,27 @@ def process_read_metagene(read, start, end, qname_dict, Info_multigenes, lowest_
         readName = readName + '_' + str(readEnd - readStart)
     if parse:
         poly_bool, poly = detect_poly_parse(read, window=20, n=15)
-        if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
+        if readName == qname_dict[readName]:
+        #if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta_parse(read,
                                                                                                       Info_multigenes,
-                                                                                                      lowest_match,small_exon_threshold,poly_bool)
+                                                                                                      lowest_match,small_exon_threshold,truncation_match,poly_bool)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     elif pacbio:
-        if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
+        if readName == qname_dict[readName]:
+        #if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta(read,
                                                                                                       Info_multigenes,
-                                                                                                      lowest_match, small_exon_threshold,pacbio=True)
+                                                                                                      lowest_match, small_exon_threshold,truncation_match,pacbio=True)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     else:
         poly_bool, poly = detect_poly(read, window=20, n=15)
-        if (readStart >= start and readEnd < end and poly_bool and readName == qname_dict[readName]):
+        if poly_bool and readName == qname_dict[readName]:
+        #if (readStart >= start and readEnd < end and poly_bool and readName == qname_dict[readName]):
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta(read, Info_multigenes,
-                                                                                                      lowest_match,small_exon_threshold,pacbio=False)
+                                                                                                      lowest_match,small_exon_threshold,truncation_match,pacbio=False)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     return None
