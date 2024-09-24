@@ -185,7 +185,7 @@ class ReadMapper:
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.truncation_match,
                                       Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
@@ -201,8 +201,8 @@ class ReadMapper:
                                                                                                       Read_knownIsoform)
             #compile output into compatible matrix
             geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
-                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,self.small_exon_threshold,
-                geneInfo, exonInfo, Read_novelIsoform, True)
+                    Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished, self.lowest_match,
+                self.small_exon_threshold, geneInfo, exonInfo, Read_novelIsoform, True)
             #update annotation information in self
             self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'] = \
                 self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']+list(novel_isoformInfo_polished.keys())
@@ -225,7 +225,8 @@ class ReadMapper:
             # process reads metagene
             results = []
             for read in reads:
-                out = process_read_metagene(read,self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold,self.truncation_match, self.parse, self.pacbio)
+                out = process_read_metagene(read,self.qname_dict, Info_multigenes, self.lowest_match,
+                                            self.small_exon_threshold,self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
             #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
@@ -302,7 +303,7 @@ class ReadMapper:
             Read_novelIsoform_poly = []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=10)
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.truncation_match,
                                       Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known = result
                 if result_novel is not None:
@@ -334,7 +335,7 @@ class ReadMapper:
                     Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample)
                 geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(
                     Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished, self.lowest_match,
-                    self.small_exon_threshold,geneInfo, exonInfo, Read_novelIsoform_sample, Read_novelIsoform_poly_sample)
+                    self.small_exon_threshold, geneInfo, exonInfo, Read_novelIsoform_sample, Read_novelIsoform_poly_sample)
                 # update annotation information in self
                 for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                     if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
