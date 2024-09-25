@@ -215,8 +215,9 @@ class ReadMapper:
             if save:
                 # save compatible matrix of each gene, save read-isoform mappings
                 save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
-                                      self.qname_cbumi_dict, self.metageneStructureInformationwNovel[meta_gene][0][1],
-                                          self.metageneStructureInformationwNovel[meta_gene][0][2], self.target)
+                                              self.qname_cbumi_dict, self.metageneStructureInformationwNovel[meta_gene][0][1],
+                                              self.metageneStructureInformationwNovel[meta_gene][0][2], self.target,
+                                              self.parse)
             else:
                 return [{'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
                  'exonInfo': self.metageneStructureInformationwNovel[meta_gene][0][1],
@@ -249,7 +250,7 @@ class ReadMapper:
                                               geneStrand=Info_multigenes[index][0]['geneStrand'],
                                               colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
                                               qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
-                                              output_folder=self.target)
+                                              output_folder=self.target, parse=self.parse)
             #save compatible matrix by genes
             return_list = []
             for index in unique_ind:
@@ -283,7 +284,7 @@ class ReadMapper:
                                                   self.qname_cbumi_dict,
                                                   self.metageneStructureInformationwNovel[meta_gene][index][1],
                                                   self.metageneStructureInformationwNovel[meta_gene][index][2],
-                                                  self.target)
+                                                  self.target, self.parse)
                 else:
                     return_list.append({'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
                             'exonInfo': self.metageneStructureInformationwNovel[meta_gene][index][1],
@@ -349,7 +350,7 @@ class ReadMapper:
                                                   Read_Isoform_compatibleVector_sample, self.qname_cbumi_dict,
                                                   self.metageneStructureInformationwNovel[meta_gene][0][1],
                                                   self.metageneStructureInformationwNovel[meta_gene][0][2],
-                                                  sample_target)
+                                                  sample_target, self.parse)
                 else:
                     return_sample = {'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector_sample, 'isoforms': colNames,
                              'exonInfo': self.metageneStructureInformationwNovel[meta_gene][0][1],
@@ -396,7 +397,7 @@ class ReadMapper:
                                                   geneStrand=Info_multigenes[index][0]['geneStrand'],
                                                   colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
                                                   qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
-                                                  output_folder=sample_target)
+                                                  output_folder=sample_target, parse = self.parse)
                 #save compatible matrix by genes
                 for index in unique_ind:
                     print('processing gene' + str(index))
@@ -428,7 +429,7 @@ class ReadMapper:
                                                       qname_cbumi_dict = self.qname_cbumi_dict,
                                                       exonInfo = self.metageneStructureInformationwNovel[meta_gene][index][1],
                                                       isoformInfo=self.metageneStructureInformationwNovel[meta_gene][index][2],
-                                                      output_folder = sample_target)
+                                                      output_folder = sample_target, parse=self.parse)
                     else:
                         return_samples.append({'Read_Isoform_compatibleVector': Read_Isoform_compatibleVector, 'isoforms': colNames,
                                 'exonInfo': self.metageneStructureInformationwNovel[meta_gene][index][1],

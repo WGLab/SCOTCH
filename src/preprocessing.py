@@ -287,7 +287,9 @@ def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_thr
 
 
 
-def group_novel_isoform(df, geneStrand):
+def group_novel_isoform(df, geneStrand, parse = False):
+    if parse:
+        geneStrand = None
     df_novel = df.filter(like='novelIsoform')
     novel_isoform_name_mapping = {}
     if df_novel.shape[1]>1:
@@ -1001,7 +1003,7 @@ def compile_compatible_vectors(Read_novelIsoform_polished, Read_knownIsoform_pol
 
 ##TODO: change functions used this function: exonInfo,isoformInfo
 def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
-                                  qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None):
+                                  qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None, parse = False):
     #save compatible vector
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
@@ -1033,7 +1035,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         output = None
     if (output_folder is not None and len(rowNames)>0):
         data_df = pd.DataFrame(output['compatibleMatrix'], index=output['rowNames_cbumi'],columns=output['colNames_isoforms'])
-        data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand)
+        data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
         # Save read-isoform mappings to a TSV file
         if len(readmapping_data)>0:
             output_folder0 = os.path.join(output_folder, 'auxillary')
