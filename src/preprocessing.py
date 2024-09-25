@@ -283,6 +283,8 @@ def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_thr
     novelisoform_dict, novel_df, novel_df_empty = map_read_to_novelisoform(novelisoform_dict, assigns,
                                                                            df_assign_archive, exonInfo,
                                                                            small_exon_threshold,small_exon_threshold1)
+    if novelisoform_dict is None:
+        novelisoform_dict = {}
     return novelisoform_dict, novel_df, novel_df_empty
 
 
