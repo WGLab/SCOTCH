@@ -79,8 +79,10 @@ def isoformInfo_to_df(isoformInfo, geneInfo):
         df.loc[isoform, exons] = 1
     return df
 
-def isoformInfo_to_onehot(isoformInfo, geneInfo):
-    all_exons = set(range(geneInfo['numofExons']))
+def isoformInfo_to_onehot(isoformInfo, geneInfo = None, nExon=None):
+    if nExon is None:
+        nExon = geneInfo['numofExons']
+    all_exons = set(range(nExon))
     assignment_vectors = []
     for isoform, exons in isoformInfo.items():
         vector = [1 if exon in exons else -1 for exon in all_exons]
@@ -115,6 +117,8 @@ def novelid_to_exonid(novelid):
     return exonid
 
 def find_novel(df_assign):
+    if len(df_assign)==0:
+        return None, None
     similarity_matrix_assign = read_similarity(df_assign)
     G = nx.Graph()
     for i in range(len(df_assign)):
@@ -130,7 +134,11 @@ def find_novel(df_assign):
     novelisoform_dict, assigns = {}, []  ##this is what i want
     for k in range(len(read_groups)):
         if len(read_groups[k]) > 1:
-            assign = df_assign.iloc[read_groups[k]].mode().iloc[0].tolist()
+            #assign = df_assign.iloc[read_groups[k]].mode().iloc[0].tolist()
+            df = df_assign.iloc[read_groups[k]]
+            count_1 = (df == 1).sum()
+            count_neg1 = (df == -1).sum()
+            assign = [(1 if count_1[col] > count_neg1[col] else -1) for col in df.columns]
             isoform_index = [i for i, a in enumerate(assign) if a==1]
             if len(isoform_index)==0:
                 continue
@@ -171,7 +179,75 @@ def find_novel(df_assign):
 #                novelisoform_dict[isoform_id] = (isoform_index)
 #    return novelisoform_dict, assigns
 
-def find_novel_by_chunk(df_assign, chunk_size=1500):
+def map_read_to_novelisoform(isoformInfo_dict, isoform_assignment_vector_list, read_assignment_df, exonInfo, small_exon_threshold = 20,
+                             small_exon_threshold1 = 100):
+    #isoformInfo_dict: annotation of novel isoform {'novelIsoform_7':[0,1,2]}
+    #isoform_assignment_vector_list: novel isoform one hot encoding [1,1,1,0,0]
+    #read_assignment_df: row: read name; col: exon; -1/0/1; already account for poly and gene strand
+    #output: reduced isoformInfo_dict annotation; read - isoform compatible matrix, unmapped reads
+    def map_read_to_isoform_(read_assignment_df):
+        novel_isoform_assignment = np.array(isoform_assignment_vector_list)
+        data = read_assignment_df.to_numpy() #change according to exon size
+        if novel_isoform_assignment.ndim <2 or data.ndim == 1:
+            return None, read_assignment_df
+        novel_ones = (novel_isoform_assignment == 1).astype(int)
+        novel_minus_ones = (novel_isoform_assignment == -1).astype(int)
+        ones = (data == 1).astype(int)
+        minus_ones = (data == -1).astype(int)
+        conflict_matrix = np.tensordot(novel_ones, minus_ones, axes=([1], [1])) + np.tensordot(novel_minus_ones, ones,axes=([1], [1]))
+        compatible_matrix = (conflict_matrix == 0).astype(int).transpose()
+        novel_df = pd.DataFrame(compatible_matrix)
+        novel_df.index = read_assignment_df.index
+        novel_df.columns = list(isoformInfo_dict.keys())
+        novel_df_empty = novel_df[novel_df.sum(axis=1) == 0]
+        novel_df = novel_df[novel_df.sum(axis=1) > 0]
+        return novel_df, novel_df_empty
+    novel_df, novel_df_empty = map_read_to_isoform_(read_assignment_df)
+    if novel_df is None:
+        return None, None, None
+    read_assignment_df_empty = read_assignment_df.loc[novel_df_empty.index]
+    small_exon_thresholds = list(range(small_exon_threshold, small_exon_threshold1+1, 10))
+    for small_exon_threshold in small_exon_thresholds: # can cause multiple mapping
+        qualify_exon_indicator = [1 if b - a > small_exon_threshold else 0 for a, b in exonInfo]
+        read_assignment_df_empty_filtered = read_assignment_df_empty * qualify_exon_indicator
+        novel_df_, novel_df_empty = map_read_to_isoform_(read_assignment_df_empty_filtered)
+        read_assignment_df_empty = read_assignment_df.loc[novel_df_empty.index]
+        novel_df = pd.concat([novel_df, novel_df_])
+    read_novelisoform_tuples = [(row, col) for (row, col), value in novel_df.stack().items() if value == 1]
+    novel_isoform_names = list(set([b for a, b in read_novelisoform_tuples]))
+    novelisoform_dict = {key: value for key, value in isoformInfo_dict.items() if key in novel_isoform_names}
+    novelisoform_dict = dict(sorted(novelisoform_dict.items(), key=lambda item: -len(item[1])))
+    novel_df = novel_df[novelisoform_dict.keys()]
+    return novelisoform_dict, novel_df, novel_df_empty.index.tolist()
+
+def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms, exonInfo, small_exon_threshold,small_exon_threshold1):
+    ####generate novel isoform annotation
+    if len(Read_novelIsoform)==1:
+        Read_Isoform_compatibleVector.append((Read_novelIsoform[0][0], [0] * n_isoforms))
+        read_novelisoform_tuples = []
+        novelisoform_dict ={}
+    else:
+        #novel_dict_pct = {readname: readpct for readname, readpct, readassignment in Read_novelIsoform}
+        novel_dict_assign = {readname: readassignment for readname, readpct, readassignment in Read_novelIsoform}
+        #df_pct = pd.DataFrame.from_dict(novel_dict_pct, orient='index')
+        df_assign = pd.DataFrame.from_dict(novel_dict_assign, orient='index')
+        #novel_df_empty： sample names of novel_uncategorized
+        novelisoform_dict, novel_df, novel_df_empty = find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1,chunk_size=1500)
+        if len(novelisoform_dict) > 0:
+            read_novelisoform_tuples = [(row, col) for (row, col), value in novel_df.stack().items() if value == 1]
+            for rd in novel_df_empty:
+                Read_Isoform_compatibleVector.append((rd,[0]* n_isoforms))
+            novelisoform_dict = dict(sorted(novelisoform_dict.items(), key=lambda item: -len(item[1])))
+        else:
+            for ii in range(len(Read_novelIsoform)):
+                Read_Isoform_compatibleVector.append((Read_novelIsoform[ii][0], [0] * n_isoforms))
+            read_novelisoform_tuples = []
+            novelisoform_dict = {}
+    return read_novelisoform_tuples, novelisoform_dict, Read_Isoform_compatibleVector
+
+
+def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1, chunk_size=1500):
+    df_assign_archive = df_assign.copy()
     row_count = df_assign.shape[0]
     num_chunks = max(1, np.ceil(row_count / chunk_size).astype(int))
     #df_pct_list = np.array_split(df_pct, num_chunks)
@@ -181,8 +257,10 @@ def find_novel_by_chunk(df_assign, chunk_size=1500):
     print(str(len(df_assign_list)) + ' chunks in total')
     while i < len(df_assign_list):
         print('chunk ' + str(i) + ' out of ' + str(len(df_assign_list)))
+        # find novel isoform annotation from the chunk
         novelisoform_dict, assigns = find_novel(df_assign_list[i])
-        novelisoform_dict, novel_df, novel_df_empty = map_read_to_isoform(novelisoform_dict, assigns, df_assign)
+        novelisoform_dict, novel_df, novel_df_empty = map_read_to_novelisoform(novelisoform_dict, assigns, df_assign,
+                                                                               exonInfo, small_exon_threshold, small_exon_threshold1)
         if novel_df is not None:
             if novel_df.shape[0] >= 10:
                 novelisoform_dict_list.append(novelisoform_dict)
@@ -201,7 +279,13 @@ def find_novel_by_chunk(df_assign, chunk_size=1500):
     novelisoform_dict = {}
     for single_dict in novelisoform_dict_list:
         novelisoform_dict.update(single_dict)
-    return novelisoform_dict, novel_df_list, novel_df_empty
+    assigns = isoformInfo_to_onehot(novelisoform_dict, geneInfo=None, nExon=len(exonInfo))
+    novelisoform_dict, novel_df, novel_df_empty = map_read_to_novelisoform(novelisoform_dict, assigns,
+                                                                           df_assign_archive, exonInfo,
+                                                                           small_exon_threshold,small_exon_threshold1)
+    return novelisoform_dict, novel_df, novel_df_empty
+
+
 
 def group_novel_isoform(df, geneStrand):
     df_novel = df.filter(like='novelIsoform')
@@ -258,14 +342,14 @@ def pair_isoform(novel_isoform_group_list, novel_isoform_id, query_id, geneStran
     return novel_isoform_group_list, novel_isoform_id_list,parent_id
 
 
-def find_parent_isoform(novel_isoform_id_list, child_id, geneStrand):
+def find_parent_isoform(novel_isoform_id_list, child_id, geneStrand=None):
     for i in range(len(novel_isoform_id_list)):
         child_exon = novelid_to_exonid(child_id)
         parent_exon = novelid_to_exonid(novel_isoform_id_list[i])
         if(set(child_exon).issubset(set(parent_exon))):
             diff_elements = set(parent_exon)-set(child_exon)
             if (geneStrand=='+' and len([ele for ele in diff_elements if ele<min(child_exon)])==len(diff_elements)) or (geneStrand == '-' and len([ele for ele in diff_elements if ele > max(child_exon)]) == len(
-                    diff_elements)):
+                    diff_elements) or geneStrand is None):
                 return novel_isoform_id_list[i]
 
 
@@ -532,7 +616,8 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1 = 100, truncation_match = 0.5, poly = False):
+def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1 = 100,
+                           truncation_match = 0.5, poly = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     referencePositions = read.get_reference_positions(full_length=False)
@@ -544,13 +629,13 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
     #read_isoform_compatibleVector = [1] * len(geneInfo['isoformNames'])#initialize read isoform compativle vector
     #read-exon mapping percentage
     mapExons = exon_hit(referencePositions, exonInfo)
-    exon_map_pct, exon_map_vector_trunct = [], []
+    exon_map_pct, exon_map_pct0, exon_map_vector_trunct = [], [], []
     if len(mapExons) > 0:
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
         exon_map_pct = [round(base / (exonInfo[i][1] - exonInfo[i][0]), 2) if base else 0 for i, base in enumerate(exon_map_base)]
         exon_map_pct0 = exon_map_pct.copy()
-        #adjusted pct based on truncation
+        #------------------adjusted pct based on truncation----------------#
         if poly:
             if geneInfo['geneStrand']=="+": # check if the first non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
                 for i, pct in enumerate(exon_map_pct):
@@ -588,13 +673,9 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
             else:
                 exon_map_pct = exon_map_pct_right
         #read-exon mapping vector
-        #exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
-        #exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
-        #exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
         exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
         exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
-        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
-                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
         if poly:
             if geneInfo['geneStrand']=="+":
                 index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
@@ -663,7 +744,8 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
 
-def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match = 0.5, pacbio = False):
+def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100,
+                     truncation_match = 0.5, pacbio = False):
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     if pacbio:
@@ -674,12 +756,10 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
     geneInfo['isoformNames'] = list(isoformInfo.keys())
     qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= small_exon_threshold]
     lower_match, upper_match = min(lowest_match, 1 - lowest_match), max(lowest_match, 1 - lowest_match)
-    #exonMatch1 = [max(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold high
-    #exonMatch2 = [min(lowest_match,1-lowest_match) * (b - a) for a, b in exonInfo]  # exon length threshold low
     #read_isoform_compatibleVector = [1] * len(geneInfo['isoformNames'])#initialize read isoform compativle vector
     #read-exon mapping percentage
     mapExons = exon_hit(referencePositions, exonInfo)
-    exon_map_pct, exon_map_vector_trunct = [], []
+    exon_map_pct, exon_map_pct0, exon_map_vector_trunct = [], [], []
     if len(mapExons) > 0:
         exonhitbases = dict(pd.Series(mapExons).value_counts())
         exon_map_base = [exonhitbases.get(i, 0) for i in range(len(exonInfo))]
@@ -704,9 +784,6 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
         exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
         exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
                                     list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-        #exon_map_vector_mapped = [1 if exon_map_p>=exon_map_up else 0 for exon_map_p, exon_map_up in list(zip(exon_map_base,exonMatch1))]
-        #exon_map_vector_skipped= [-1 if exon_map_p<=exon_map_low else 0 for exon_map_p, exon_map_low in list(zip(exon_map_base,exonMatch2))]
-        #exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
         if geneInfo['geneStrand']=="+":
             index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
             exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
@@ -764,33 +841,6 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
 
-
-def map_read_to_isoform(isoformInfo_dict, isoform_assignment_vector_list, read_assignment_df):
-    #isoformInfo_dict: isoform - exon annotation
-    #isoform_assignment_vector_list: isoform - exon
-    #read_assignment_df: read - exon
-    #output: reduced isoformInfo_dict annotation; read - isoform compatible matrix, unmapped reads
-    novel_isoform_assignment = np.array(isoform_assignment_vector_list)
-    data = read_assignment_df.to_numpy()
-    if novel_isoform_assignment.ndim == 1 or data.ndim == 1:
-        return None, None, read_assignment_df.index.tolist()
-    novel_ones = (novel_isoform_assignment == 1).astype(int)
-    novel_minus_ones = (novel_isoform_assignment == -1).astype(int)
-    ones = (data == 1).astype(int)
-    minus_ones = (data == -1).astype(int)
-    conflict_matrix = np.tensordot(novel_ones, minus_ones, axes=([1], [1])) + np.tensordot(novel_minus_ones, ones,axes=([1], [1]))
-    compatible_matrix = (conflict_matrix == 0).astype(int).transpose()
-    novel_df = pd.DataFrame(compatible_matrix)
-    novel_df.index = read_assignment_df.index
-    novel_df.columns = list(isoformInfo_dict.keys())
-    novel_df_empty = novel_df[novel_df.sum(axis=1) == 0]
-    novel_df = novel_df[novel_df.sum(axis=1) > 0]
-    read_novelisoform_tuples = [(row, col) for (row, col), value in novel_df.stack().items() if value == 1]
-    novel_isoform_names = list(set([b for a, b in read_novelisoform_tuples]))
-    novelisoform_dict = {key: value for key, value in isoformInfo_dict.items() if key in novel_isoform_names}
-    novelisoform_dict = dict(sorted(novelisoform_dict.items(), key=lambda item: -len(item[1])))
-    novel_df = novel_df[novelisoform_dict.keys()]
-    return novelisoform_dict, novel_df, novel_df_empty.index.tolist()
 
 def map_read_to_isoform_known(isoform_exon_onehot_list, read_exon_map_list, exon_map_pct, threshold_high, threshold_low,
                               geneStrand, qualifyExon, poly = True):
@@ -906,90 +956,35 @@ def map_read_to_isoform_known(isoform_exon_onehot_list, read_exon_map_list, exon
     return compatible_vector
 
 
-def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms):
-    ####generate novel isoform annotation
-    if len(Read_novelIsoform)==1:
-        Read_Isoform_compatibleVector.append((Read_novelIsoform[0][0], [0] * n_isoforms))
-        read_novelisoform_tuples = []
-        novelisoform_dict ={}
-    else:
-        #novel_dict_pct = {readname: readpct for readname, readpct, readassignment in Read_novelIsoform}
-        novel_dict_assign = {readname: readassignment for readname, readpct, readassignment in Read_novelIsoform}
-        #df_pct = pd.DataFrame.from_dict(novel_dict_pct, orient='index')
-        df_assign = pd.DataFrame.from_dict(novel_dict_assign, orient='index')
-        novelisoform_dict, novel_df_list, novel_df_empty = find_novel_by_chunk(df_assign, chunk_size=1500)
-        if len(novelisoform_dict) > 0:
-            read_novelisoform_tuples = [
-                (row, col)
-                for novel_df in novel_df_list
-                for (row, col), value in novel_df.stack().items()
-                if value == 1]
-            for rd in novel_df_empty:
-                Read_Isoform_compatibleVector.append((rd,[0]* n_isoforms))
-            novelisoform_dict = dict(sorted(novelisoform_dict.items(), key=lambda item: -len(item[1])))
-        else:
-            for ii in range(len(Read_novelIsoform)):
-                Read_Isoform_compatibleVector.append((Read_novelIsoform[ii][0], [0] * n_isoforms))
-            read_novelisoform_tuples = []
-            novelisoform_dict = {}
-    return read_novelisoform_tuples, novelisoform_dict, Read_Isoform_compatibleVector
 
-def compile_compatible_vectors(Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished,
-                               lowest_match, small_exon_threshold, geneInfo, exonInfo, Read_novelIsoform, poly=True):
-    read_novelisoform_df = None
+
+def compile_compatible_vectors(Read_novelIsoform_polished, Read_knownIsoform_polished, geneInfo):
+    novel_read_novelisoform_df_expanded = None
     #make novel isoform df
     if len(Read_novelIsoform_polished) > 0:
-        read_poly_dict = {}
-        for i, (readname, readpct, readmapping) in enumerate(Read_novelIsoform):
-            if isinstance(poly, list):
-                read_poly_dict[readname] = poly[i]
-            else:
-                read_poly_dict[readname] = poly
+        #read_poly_dict = {}
+        #for i, (readname, readpct, readmapping) in enumerate(Read_novelIsoform):
+        #    if isinstance(poly, list):
+        #        read_poly_dict[readname] = poly[i]
+        #    else:
+        #        read_poly_dict[readname] = poly
         read_novelisoform_df = pd.DataFrame(Read_novelIsoform_polished, columns=['read', 'isoform'])
-        #identify multiple/unique mapped reads
-        duplicated_reads_df = read_novelisoform_df[read_novelisoform_df.duplicated(subset=['read'], keep=False)]
-        unique_reads_df = read_novelisoform_df.drop_duplicates(subset=['read'], keep=False)
-        #remap duplicated reads
-        read_novelisoform_df_duplicated, read_novelisoform_df_unique = None, None
-        novel_isoformInfo = dict(sorted(novel_isoformInfo_polished.items(), key=lambda x: len(x[1]), reverse=True))
-        if len(duplicated_reads_df)>0:
-            qualifyExon = [i for i, (a, b) in enumerate(exonInfo) if b - a >= small_exon_threshold]
-            geneStrand = geneInfo['geneStrand']
-            novel_isoform_exon_map_list = isoformInfo_to_onehot(novel_isoformInfo_polished, geneInfo)
-            duplicated_reads_list = list(set(duplicated_reads_df.read.tolist()))
-            read_exon_map_list_all = [readmapping for readname, readpct, readmapping in Read_novelIsoform if
-                              readname in duplicated_reads_list]
-            exon_map_pct_all = [readpct for readname, readpct, readmapping in Read_novelIsoform if
-                        readname in duplicated_reads_list]
-            rows = []
-            for i in range(len(duplicated_reads_list)):
-                read_exon_map_list, exon_map_pct = read_exon_map_list_all[i], exon_map_pct_all[i]
-                row = map_read_to_isoform_known(novel_isoform_exon_map_list, read_exon_map_list, exon_map_pct,
-                                                max(lowest_match,1-lowest_match),min(lowest_match,1-lowest_match),
-                                                geneStrand, qualifyExon, duplicated_reads_list[i])
-                rows.append(row)
-            read_novelisoform_df_duplicated = pd.DataFrame(rows)
-            read_novelisoform_df_duplicated.index = duplicated_reads_list
-            read_novelisoform_df_duplicated.columns = list(novel_isoformInfo_polished.keys())
-            read_novelisoform_df_duplicated = read_novelisoform_df_duplicated[
-                [col for col in novel_isoformInfo.keys() if col in read_novelisoform_df_duplicated.columns]]
-        if len(unique_reads_df)>0:
-            # manipulate unique reads
-            read_novelisoform_df_unique_indicator = pd.get_dummies(unique_reads_df['isoform'])
-            read_novelisoform_df_unique = pd.concat([unique_reads_df['read'], read_novelisoform_df_unique_indicator], axis=1)
-            read_novelisoform_df_unique.set_index('read', inplace=True, drop=True)
-            read_novelisoform_df_unique = read_novelisoform_df_unique[[col for col in novel_isoformInfo.keys() if col in read_novelisoform_df_unique.columns]]
-        if read_novelisoform_df_duplicated is not None and read_novelisoform_df_unique is not None:
-            read_novelisoform_df = pd.concat([read_novelisoform_df_unique,read_novelisoform_df_duplicated])
-        if read_novelisoform_df_duplicated is not None and read_novelisoform_df_unique is None:
-            read_novelisoform_df = read_novelisoform_df_duplicated
-        if read_novelisoform_df_unique is not None and read_novelisoform_df_duplicated is None:
-            read_novelisoform_df = read_novelisoform_df_unique
-        #read_novelisoform_df = read_novelisoform_df.groupby(read_novelisoform_df.index).sum()
+        read_novelisoform_df_expanded = pd.crosstab(read_novelisoform_df['read'], read_novelisoform_df['isoform'])
+        isoform_pct = read_novelisoform_df_expanded.sum(axis=0)/read_novelisoform_df_expanded.shape[0]
+        mapped_mask = read_novelisoform_df_expanded.values == 1
+        prob_matrix = mapped_mask * isoform_pct.values
+        best_isoform_indices = np.argmax(prob_matrix, axis=1)
+        novel_read_novelisoform_df_expanded = np.zeros_like(read_novelisoform_df_expanded.values)
+        novel_read_novelisoform_df_expanded[np.arange(len(read_novelisoform_df_expanded)), best_isoform_indices] = 1
+        novel_read_novelisoform_df_expanded = pd.DataFrame(novel_read_novelisoform_df_expanded,
+                                                               index=read_novelisoform_df_expanded.index,
+                                                               columns=read_novelisoform_df_expanded.columns)
+        columns_to_keep = novel_read_novelisoform_df_expanded.columns[novel_read_novelisoform_df_expanded.sum(axis=0) > 0]
+        novel_read_novelisoform_df_expanded = novel_read_novelisoform_df_expanded[columns_to_keep]
     #combine existing/uncharacterized isoforms with novel
     read_annoisoform_df = pd.DataFrame.from_dict(dict(Read_knownIsoform_polished), orient='index',columns=geneInfo['isoformNames'])
-    if read_novelisoform_df is not None:
-        Read_Isoform_df = read_annoisoform_df.merge(read_novelisoform_df, how='outer', left_index=True,right_index=True).fillna(0).astype(int)
+    if novel_read_novelisoform_df_expanded is not None:
+        Read_Isoform_df = read_annoisoform_df.merge(novel_read_novelisoform_df_expanded, how='outer', left_index=True,right_index=True).fillna(0).astype(int)
     else:
         Read_Isoform_df = read_annoisoform_df
     #label uncategorized reads
