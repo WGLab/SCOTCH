@@ -1021,8 +1021,8 @@ def compile_compatible_vectors(Read_novelIsoform_polished, Read_knownIsoform_pol
     Read_Isoform_compatibleVector = Read_Isoform_df.T.to_dict(orient='list')
     geneName = geneInfo['geneName']
     geneID = geneInfo['geneID']
-    geneStrand = geneInfo['geneStrand']
-    return geneName, geneID,geneStrand, colNames, Read_Isoform_compatibleVector
+    geneChr = geneInfo['geneChr']
+    return geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector
 
 
 
