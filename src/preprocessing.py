@@ -613,7 +613,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, small_e
             df_exon['readType'] = readType
             df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readCoverage', 'geneLength'],
                                           ascending=[True, False, True, False])
-            ind = df_exon['index'][0]
+            ind = df_exon['index'].tolist()[0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = read_novelisoform_tuple_dict[ind], \
             read_isoform_compatibleVector_tuple_dict[ind]
         else:  # map to only one gene exon
