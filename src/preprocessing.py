@@ -1064,7 +1064,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
         rowNames=[]
         output = None
     if (output_folder is not None and len(rowNames)>0):
-        data_df = pd.DataFrame(output['compatibleMatrix'], index=output['rowNames_cbumi'],columns=output['colNames_isoforms'])
+        data_df = pd.DataFrame(output['compatibleMatrix'], index=output['rowNames'],columns=output['colNames_isoforms'])
         #data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
         # Save read-isoform mappings to a TSV file
         if len(readmapping_data)>0:
