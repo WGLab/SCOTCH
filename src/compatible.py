@@ -3,7 +3,6 @@ import pysam
 import re
 import csv
 import math
-import glob
 import copy
 from joblib import Parallel, delayed
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
@@ -107,41 +106,45 @@ def summarise_annotation(target):
 
 def summarise_auxillary(target):
     def process_group(group):
-        if len(group) == 1:
-            group['GeneMapping'] = 'unique'
+        highest_priority = group['priority'].min()
+        highest_priority_rows = group[group['priority'] == highest_priority]
+        if len(highest_priority_rows) == 1:
+            group['GeneMapping'] = 'delete'  # Default to delete
+            group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
         else:
-            highest_priority = group['priority'].min()
-            highest_priority_rows = group[group['priority'] == highest_priority]
-            if len(highest_priority_rows) == 1:
-                group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
-            else:
-                group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
+            group['GeneMapping'] = 'delete'  # Default to delete
+            group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
         return group
+    # Collect all 'auxillary' directories
     auxillary_folders = []
     for root, dirs, files in os.walk(target):
         if 'auxillary' in dirs:
             auxillary_folders.append(os.path.join(root, 'auxillary'))
+    # Read files in parallel to speed up I/O
+    def read_file(file_path):
+        df = pd.read_csv(file_path, sep='\t')
+        df['gene'] = df['geneName'] + '_' + df['geneID']
+        return df
     for auxillary_folder in auxillary_folders:
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)]
-        df_list = []
-        for i in range(len(file_paths)):
-            df = pd.read_csv(file_paths[i],sep='\t')
-            df['Gene'] = df['GeneName']+'_'+df['GeneID']
-            df_list.append(df)
-        DF = pd.concat(df_list, axis = 0, ignore_index = True).reset_index(drop=True)
+        df_list = Parallel(n_jobs=-1)(delayed(read_file)(file_path) for file_path in file_paths)
+        DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
         conditions = [
             DF['Isoform'].str.startswith('ENST'),  # Highest priority
             DF['Isoform'].str.startswith('novel'),  # Medium priority
             DF['Isoform'] == 'uncategorized'  # Lowest priority
         ]
         choices = [1, 2, 3]
-        DF['priority'] = np.select(conditions, choices, default=3)  # Default to lowest if none match
-        DF['GeneMapping'] = 'delete'
-        grouped = DF.groupby(['GeneChr', 'Read'])
-        processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for name, group in grouped)
+        DF['priority'] = np.select(conditions, choices, default=3)
+        DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
+        DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, True])
+        grouped = DF.groupby(['geneChr', 'Read'])
+        # Process groups in parallel and concatenate results
+        processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
         DF = pd.concat(processed_groups)
         DF = DF.drop(columns=['priority'])
-        DF.to_csv(os.path.join(auxillary_folder,'all_read_isoform_exon_mapping.tsv'), sep='\t', index=False)
+        DF.to_csv(os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv'), sep='\t', index=False)
+
 
 
 
@@ -228,15 +231,17 @@ class ReadMapper:
             reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
+            Read_knownIsoform_scores = {}#[readname: read-isoform mapping scores]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
                 result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match,Info_singlegene, self.parse, self.pacbio)
-                result_novel, result_known = result
+                result_novel, result_known, result_known_scores = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
                 if result_known is not None:
                     Read_knownIsoform.append(result_known)
+                    Read_knownIsoform_scores[result_known[0]] = result_known_scores
             #expand uncategorized novel reads into Read_knownIsoform
             if len(Read_novelIsoform) > 0:
                 #novel_isoformInfo_polished: novel isoform annotation: {'novelIsoform_7':[0,1,2]}
@@ -257,7 +262,7 @@ class ReadMapper:
             self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo_polished)
             if save:
                 # save compatible matrix of each gene, save read-isoform mappings
-                save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector,
+                save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector, Read_knownIsoform_scores,
                                               self.qname_cbumi_dict, self.metageneStructureInformationwNovel[meta_gene][0][1],
                                               self.metageneStructureInformationwNovel[meta_gene][0][2], self.target,
                                               self.parse)
@@ -277,13 +282,14 @@ class ReadMapper:
                 if out is not None: #may not within this meta gene region
                     results.append(out)
             #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
-            Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = [], [], []
+            Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, Read_knownIsoform_metagene_scores = [], [], [], []
             for result in results:
                 if result is not None:
-                    ind, novelisoform, knownisoform = result
+                    ind, novelisoform, knownisoform, knownisoformscores = result
                     Ind.append(ind)
                     Read_novelIsoform_metagene.append(novelisoform)
                     Read_knownIsoform_metagene.append(knownisoform)
+                    Read_knownIsoform_metagene_scores.append(knownisoformscores)
             unique_ind = list(set(Ind))
             # logging genes without any reads
             log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
@@ -292,6 +298,7 @@ class ReadMapper:
                                               geneID=Info_multigenes[index][0]['geneID'],
                                               geneChr=Info_multigenes[index][0]['geneChr'],
                                               colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
+                                              Read_knownIsoform_scores = None,
                                               qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
                                               output_folder=self.target, parse=self.parse)
             #save compatible matrix by genes
@@ -299,12 +306,13 @@ class ReadMapper:
             for index in unique_ind:
                 print('processing gene' + str(index))
                 # loop over genes within metagene; for one single gene:
-                Read_novelIsoform, Read_knownIsoform, novel_isoformInfo = [], [], {}
+                Read_novelIsoform, Read_knownIsoform, Read_knownIsoform_scores, novel_isoformInfo = [], [], {}, {}
                 for j, i in enumerate(Ind):#i: gene index; j: index of index---# loop for reads
                     if i == index and Read_novelIsoform_metagene[j] is not None:
                         Read_novelIsoform.append(Read_novelIsoform_metagene[j])
                     if i == index and Read_knownIsoform_metagene[j] is not None:
                         Read_knownIsoform.append(Read_knownIsoform_metagene[j])
+                        Read_knownIsoform_scores[Read_knownIsoform_metagene[j][0]] = Read_knownIsoform_metagene_scores[j]
                 if len(Read_novelIsoform) > 0:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                         Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]),
@@ -324,7 +332,7 @@ class ReadMapper:
                 self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
                 if save:
                     save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector,
-                                                  self.qname_cbumi_dict,
+                                                  Read_knownIsoform_scores,self.qname_cbumi_dict,
                                                   self.metageneStructureInformationwNovel[meta_gene][index][1],
                                                   self.metageneStructureInformationwNovel[meta_gene][index][2],
                                                   self.target, self.parse)
@@ -423,13 +431,14 @@ class ReadMapper:
                 sample_index = [i for i, s in enumerate(samples) if s == sample]
                 result_sample = [results[i] for i in sample_index]
                 poly_sample = [polies[i] for i in sample_index]
-                Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, poly_sample_filtered = [], [], [], []
+                Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, Read_knownIsoform_metagene_scores, poly_sample_filtered = [], [], [], [], []
                 for ri, result in enumerate(result_sample):
                     if result is not None:
-                        ind, novelisoform, knownisoform = result
+                        ind, novelisoform, knownisoform, knownisoformscores = result
                         Ind.append(ind)
                         Read_novelIsoform_metagene.append(novelisoform)
                         Read_knownIsoform_metagene.append(knownisoform)
+                        Read_knownIsoform_metagene_scores.append(knownisoformscores)
                         poly_sample_filtered.append(poly_sample[ri])
                 unique_ind = list(set(Ind))
                 # logging genes without any reads
@@ -439,19 +448,21 @@ class ReadMapper:
                                                   geneID=Info_multigenes[index][0]['geneID'],
                                                   geneChr=Info_multigenes[index][0]['geneChr'],
                                                   colNames=None,Read_Isoform_compatibleVector=None, #set this to None for log
+                                                  Read_knownIsoform_scores = None,
                                                   qname_cbumi_dict=None, exonInfo=None,isoformInfo=None,
                                                   output_folder=sample_target, parse = self.parse)
                 #save compatible matrix by genes
                 for index in unique_ind:
                     print('processing gene' + str(index))
                     # loop over genes within metagene; for one single gene:
-                    Read_novelIsoform, Read_knownIsoform, novel_isoformInfo, Read_novelIsoform_poly = [], [], {}, []
+                    Read_novelIsoform, Read_knownIsoform, Read_knownIsoform_scores, novel_isoformInfo, Read_novelIsoform_poly = [], [],{}, {}, []
                     for j, i in enumerate(Ind):#i: gene index; j: index of index---# loop for reads
                         if i == index and Read_novelIsoform_metagene[j] is not None:
                             Read_novelIsoform.append(Read_novelIsoform_metagene[j])
                             Read_novelIsoform_poly.append(poly_sample_filtered[j])
                         if i == index and Read_knownIsoform_metagene[j] is not None:
                             Read_knownIsoform.append(Read_knownIsoform_metagene[j])
+                            Read_knownIsoform_scores[Read_knownIsoform_metagene[j][0]] = Read_knownIsoform_metagene_scores[j]
                     if len(Read_novelIsoform) > 0:
                         Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                             Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]),
@@ -468,7 +479,7 @@ class ReadMapper:
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'])
                     self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
                     if save:
-                        save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector,
+                        save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector,Read_knownIsoform_scores,
                                                       qname_cbumi_dict = self.qname_cbumi_dict,
                                                       exonInfo = self.metageneStructureInformationwNovel[meta_gene][index][1],
                                                       isoformInfo=self.metageneStructureInformationwNovel[meta_gene][index][2],
