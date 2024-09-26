@@ -181,11 +181,7 @@ class ReadMapper:
         if platform != 'parse':
             self.compatible_matrix_folder_path = os.path.join(target, "compatible_matrix")#not for parse
             self.read_mapping_path = os.path.join(target, "auxillary")#not for parse
-            self.count_matrix_folder_path = os.path.join(target, "count_matrix")#not for parse
-        else:
-            self.compatible_matrix_folder_paths = glob.glob(os.path.join(target, "sample*/compatible_matrix"))
-            self.read_mapping_paths = glob.glob(os.path.join(target, "sample*/auxillary"))
-            self.count_matrix_folder_paths = glob.glob(os.path.join(target, "sample*/count_matrix"))
+            #self.count_matrix_folder_path = os.path.join(target, "count_matrix")#not for parse
         # bam information file
         self.qname_dict = load_pickle(self.bamInfo_pkl_path)
         self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path)
@@ -502,6 +498,8 @@ class ReadMapper:
         else:
             print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
             if self.parse:
+                self.compatible_matrix_folder_paths = find_subfolder(self.target, subfolder='compatible_matrix')
+                self.read_mapping_paths = find_subfolder(self.target, subfolder='auxillary')
                 genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
                                   for file in os.listdir(folder_path) if file.endswith('.csv')]
                 for folder_path in self.compatible_matrix_folder_paths:
@@ -514,7 +512,7 @@ class ReadMapper:
                 if os.path.isfile(os.path.join(self.compatible_matrix_folder_path, 'log.txt')):
                     gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
                     genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
-            print('there exist ' + str(len(genes_existing)) + ' genes')
+            print('there exist ' + str(len(set(genes_existing))) + ' genes')
         MetaGene_Gene_dict = {}
         for metagene_name, genes_info in self.metageneStructureInformation.items():
             if metagene_name in MetaGenes_job:

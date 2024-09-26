@@ -16,6 +16,12 @@ from collections import defaultdict
 #---------------some utility functions----------------------#
 # Function to convert the dictionary to GTF
 
+def find_subfolder(root, subfolder):
+    subfolder_paths = []
+    for root, dirs, files in os.walk(root):
+        if 'compatible_matrix' in dirs:
+            subfolder_paths.append(os.path.join(root, subfolder))
+    return subfolder_paths
 
 def sort_multigeneInfo(Info_multigenes):
     Info_multigenes_sort = []
@@ -437,7 +443,7 @@ def read_exon_match(read, Info_singlegene):
     gene_length = geneInfo['geneEnd'] - geneInfo['geneStart']
     overlap_length = max(0, max(readEnd, geneInfo['geneEnd']) - min(readStart, geneInfo['geneStart']))
     mapExons = exon_hit(referencePositions, exonInfo)
-    n_mapExons=sum(mapExons)
+    n_mapExons=len(mapExons)
     return gene_name, overlap_length, gene_length, n_mapExons
 
 
