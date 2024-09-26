@@ -103,9 +103,8 @@ def main():
     if args.task=='compatible matrix':#task is to generate compatible matrix
         run_compatible()
     if args.task == 'count matrix': # task is to generate count matrix
-        run_count()
-    if args.task == 'summary':
         run_summary()
+        run_count()
 
     if args.task =='all':
         run_annotation()

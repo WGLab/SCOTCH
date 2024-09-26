@@ -1027,9 +1027,10 @@ def compile_compatible_vectors(Read_novelIsoform_polished, Read_knownIsoform_pol
 
 
 ##TODO: change functions used this function: exonInfo,isoformInfo
-def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_Isoform_compatibleVector,
+def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector,
                                   qname_cbumi_dict,exonInfo,isoformInfo,output_folder=None, parse = False):
     #save compatible vector
+    geneSymbol = geneName
     geneName = geneName.replace('/', '.')
     geneName = geneName + "_" + geneID
     print('gene ' + str(geneName) + ' processing')
@@ -1052,9 +1053,9 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
                         exon_indices = isoformInfo[isoform_name]
                         exon_coords = merge_exons([(exonInfo[ind][0], exonInfo[ind][1]) for ind in exon_indices])
                         exon_coords = ",".join(f"{exon}" for exon in exon_coords)
-                        readmapping_data.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords, cb, umi, cbumi])
+                        readmapping_data.append([readname, isoform_name, ','.join(map(str, exon_indices)), exon_coords, cb, umi, cbumi,geneSymbol, geneID, geneChr])
                     else:
-                        readmapping_data.append([readname, isoform_name, "-", "-",cb, umi, cbumi])
+                        readmapping_data.append([readname, isoform_name, "-", "-",cb, umi, cbumi, geneSymbol, geneID, geneChr])
         mat = np.array(list(dict(Read_Isoform_compatibleVector).values()))
         rowNames = list(dict(Read_Isoform_compatibleVector).keys())
         if qname_cbumi_dict is not None:
@@ -1072,7 +1073,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneStrand, colNames, Read_I
             if not os.path.exists(output_folder0):
                 os.makedirs(output_folder0)
             readmapping = pd.DataFrame(readmapping_data,
-                                       columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates', 'Cell', 'Umi', 'CBUMI'])
+                                       columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates', 'Cell', 'Umi', 'CBUMI', 'geneName', 'geneID', 'geneChr'])
             readmapping_filename = os.path.join(output_folder0, geneName + '_read_isoform_exon_mapping.tsv')
             #readmapping['Isoform_Name_Final'] = readmapping['Isoform'].apply(lambda isoform: novel_isoform_name_mapping.get(isoform, isoform))
             readmapping.to_csv(readmapping_filename, sep='\t', index=False)

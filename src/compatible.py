@@ -5,6 +5,7 @@ import csv
 import math
 import glob
 import copy
+from joblib import Parallel, delayed
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
         gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
@@ -56,48 +57,94 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
 
 
-##TODO: just merge
+##TODO: adapt to parse
 def summarise_annotation(target):
+    reference_folders = []
+    for root, dirs, files in os.walk(target):
+        if 'reference' in dirs:
+            reference_folders.append(os.path.join(root, 'reference'))
     def get_numeric_key(key):
         return int(key.split('_')[-1])
-    output_pkl = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
-    output_gtf = os.path.join(target, "reference/metageneStructureInformationwNovel.gtf")
-    pattern_pkl = re.compile(r".*_\d+\.pkl$")
-    pattern_gtf = re.compile(r".*_\d+\.gtf$")
-    file_names_pkl = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern_pkl.match(f)]
-    file_names_gtf = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if
-                      pattern_gtf.match(f)]
-    if len(file_names_pkl)>0 and len(file_names_gtf)>0:
-        # merge pkl annotation file
-        print('merging new isoform annotations')
-        metageneStructureInformationwNovel = {}
-        for file_name_pkl in file_names_pkl:
-            metageneStructureInformation = load_pickle(file_name_pkl)
-            metageneStructureInformationwNovel.update(metageneStructureInformation)
-        metageneStructureInformationwNovel = dict(
-            sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0]))
-        )
-        with open(output_pkl, 'wb') as file:
-            pickle.dump(metageneStructureInformationwNovel, file)
-        for file_name_pkl in file_names_pkl:
-            os.remove(file_name_pkl)
-        print('mergered new isoform annotation saved at: '+str(file_names_pkl))
-        # merge gtf annotation file
-        print('Merging new GTF annotations...')
-        gtf_lines = []
-        for file_name_gtf in file_names_gtf:
-            with open(file_name_gtf, 'r') as gtf_file:
-                for line in gtf_file:
-                    if not line.startswith('#'):  # Skip any header lines
-                        gtf_lines.append(line.strip())
-        with open(output_gtf, 'w') as output_gtf_file:
-            for line in gtf_lines:
-                output_gtf_file.write(line + '\n')
-        for file_name_gtf in file_names_gtf:
-            os.remove(file_name_gtf)
-        print('Merged GTF annotations saved at: ' + output_gtf)
-    else:
-        print('novel isoform annotations does not exist!')
+    for reference_folder in reference_folders:
+        output_pkl = os.path.join(reference_folder, "metageneStructureInformationwNovel.pkl")
+        output_gtf = os.path.join(reference_folder, "metageneStructureInformationwNovel.gtf")
+        pattern_pkl = re.compile(r".*_\d+\.pkl$")
+        pattern_gtf = re.compile(r".*_\d+\.gtf$")
+        file_names_pkl = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern_pkl.match(f)]
+        file_names_gtf = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if
+                          pattern_gtf.match(f)]
+        if len(file_names_pkl)>0 and len(file_names_gtf)>0:
+            # merge pkl annotation file
+            print('merging new isoform annotations')
+            metageneStructureInformationwNovel = {}
+            for file_name_pkl in file_names_pkl:
+                metageneStructureInformation = load_pickle(file_name_pkl)
+                metageneStructureInformationwNovel.update(metageneStructureInformation)
+            metageneStructureInformationwNovel = dict(
+                sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0]))
+            )
+            with open(output_pkl, 'wb') as file:
+                pickle.dump(metageneStructureInformationwNovel, file)
+            for file_name_pkl in file_names_pkl:
+                os.remove(file_name_pkl)
+            print('mergered new isoform annotation saved at: '+str(file_names_pkl))
+            # merge gtf annotation file
+            print('Merging new GTF annotations...')
+            gtf_lines = []
+            for file_name_gtf in file_names_gtf:
+                with open(file_name_gtf, 'r') as gtf_file:
+                    for line in gtf_file:
+                        if not line.startswith('#'):  # Skip any header lines
+                            gtf_lines.append(line.strip())
+            with open(output_gtf, 'w') as output_gtf_file:
+                for line in gtf_lines:
+                    output_gtf_file.write(line + '\n')
+            for file_name_gtf in file_names_gtf:
+                os.remove(file_name_gtf)
+            print('Merged GTF annotations saved at: ' + output_gtf)
+        else:
+            print('novel isoform annotations does not exist!')
+
+def summarise_auxillary(target):
+    def process_group(group):
+        if len(group) == 1:
+            group['GeneMapping'] = 'unique'
+        else:
+            highest_priority = group['priority'].min()
+            highest_priority_rows = group[group['priority'] == highest_priority]
+            if len(highest_priority_rows) == 1:
+                group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
+            else:
+                group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
+        return group
+    auxillary_folders = []
+    for root, dirs, files in os.walk(target):
+        if 'auxillary' in dirs:
+            auxillary_folders.append(os.path.join(root, 'auxillary'))
+    for auxillary_folder in auxillary_folders:
+        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)]
+        df_list = []
+        for i in range(len(file_paths)):
+            df = pd.read_csv(file_paths[i],sep='\t')
+            df['Gene'] = df['GeneName']+'_'+df['GeneID']
+            df_list.append(df)
+        DF = pd.concat(df_list, axis = 0, ignore_index = True).reset_index(drop=True)
+        conditions = [
+            DF['Isoform'].str.startswith('ENST'),  # Highest priority
+            DF['Isoform'].str.startswith('novel'),  # Medium priority
+            DF['Isoform'] == 'uncategorized'  # Lowest priority
+        ]
+        choices = [1, 2, 3]
+        DF['priority'] = np.select(conditions, choices, default=3)  # Default to lowest if none match
+        DF['GeneMapping'] = 'delete'
+        grouped = DF.groupby(['GeneChr', 'Read'])
+        processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for name, group in grouped)
+        DF = pd.concat(processed_groups)
+        DF = DF.drop(columns=['priority'])
+        DF.to_csv('all_read_isoform_exon_mapping.tsv', sep='\t', index=False)
+
+
+
 
 
 class ReadMapper:
