@@ -589,7 +589,8 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, small_e
         ind = df_intron['index'][0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read,
                                                                                         Info_multigenes[ind],
-                                                                                        lowest_match, small_exon_threshold,small_exon_threshold1,
+                                                                                        lowest_match, small_exon_threshold,
+                                                                                              small_exon_threshold1,
                                                                                               truncation_match, poly=poly)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
         df_exon = df_exon.sort_values(by=['nMapExons', 'readCoverage', 'geneLength'], ascending=[False, False, False])
@@ -599,8 +600,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, small_e
             inds = df_exon['index'].tolist()
             read_novelisoform_tuple_dict, read_isoform_compatibleVector_tuple_dict, readType = {}, {}, []
             for ind in inds:
-                read_novelisoform_tuple_, read_isoform_compatibleVector_tuple_ = map_read_to_gene_parse(read,
-                                                                                                  Info_multigenes[ind],
+                read_novelisoform_tuple_, read_isoform_compatibleVector_tuple_ = map_read_to_gene_parse(read,Info_multigenes[ind],
                                                                                                   lowest_match, small_exon_threshold, small_exon_threshold1,truncation_match, poly=poly)
                 read_novelisoform_tuple_dict[ind] = read_novelisoform_tuple_
                 read_isoform_compatibleVector_tuple_dict[ind] = read_isoform_compatibleVector_tuple_
