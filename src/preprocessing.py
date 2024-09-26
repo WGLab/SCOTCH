@@ -621,6 +621,33 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, small_e
 
 def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1 = 100,
                            truncation_match = 0.5, poly = False):
+    def generate_read_exon_map_vector(exon_map_pct):
+        # read-exon mapping vector
+        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
+        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
+        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        if poly:
+            if geneInfo['geneStrand'] == "+":
+                index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
+                    exon_map_vector_notrunct)
+                exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in
+                                          range(len(exon_map_vector_notrunct))]
+            else:  # "-"
+                last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
+                    1) if 1 in exon_map_vector_notrunct else -1
+                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in
+                                          range(len(exon_map_vector_notrunct))]
+        else:
+            if 1 in exon_map_vector_notrunct:
+                index_of_one = exon_map_vector_notrunct.index(1)
+                last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1)
+                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if index_of_one <= i <= last_index_of_one else 0
+                                          for i in range(len(exon_map_vector_notrunct))]
+            else:
+                # If there are no '1's in the vector, set the whole vector to 0
+                exon_map_vector_trunct = [0] * len(exon_map_vector_notrunct)
+        return exon_map_vector_trunct
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     referencePositions = read.get_reference_positions(full_length=False)
@@ -676,25 +703,11 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
             else:
                 exon_map_pct = exon_map_pct_right
         #read-exon mapping vector
-        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
-        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
-        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-        if poly:
-            if geneInfo['geneStrand']=="+":
-                index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
-                exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
-            else: #"-"
-                last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1) if 1 in exon_map_vector_notrunct else -1
-                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in range(len(exon_map_vector_notrunct))]
-        else:
-            if 1 in exon_map_vector_notrunct:
-                index_of_one = exon_map_vector_notrunct.index(1)
-                last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1)
-                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if index_of_one <= i <= last_index_of_one else 0
-                    for i in range(len(exon_map_vector_notrunct))]
-            else:
-                # If there are no '1's in the vector, set the whole vector to 0
-                exon_map_vector_trunct = [0] * len(exon_map_vector_notrunct)
+        exon_map_vector_trunct = generate_read_exon_map_vector(exon_map_pct)
+        #special case: the read can be mapped to exons but cannot surpass any threshold--usually mono-exonic
+        if sum(exon_map_vector_trunct)==0:
+            exon_map_pct[exon_map_pct.index(max(exon_map_pct))]=1
+            exon_map_vector_trunct = generate_read_exon_map_vector(exon_map_pct)
         #do not consider non-qualified exons
         isoform_exon_map_list = isoformInfo_to_onehot(isoformInfo, geneInfo)
         exon_map_vector_trunct_conservative = [vec if i in qualifyExon else 0 for i,vec in enumerate(exon_map_vector_trunct)]
@@ -749,6 +762,23 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
 
 def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100,
                      truncation_match = 0.5, pacbio = False):
+    def generate_read_exon_map_vector(exon_map_pct):
+        # read-exon mapping vector
+        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
+        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
+        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        if geneInfo['geneStrand'] == "+":
+            index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
+                exon_map_vector_notrunct)
+            exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in
+                                      range(len(exon_map_vector_notrunct))]
+        else:  # "-"
+            last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
+                1) if 1 in exon_map_vector_notrunct else -1
+            exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in
+                                      range(len(exon_map_vector_notrunct))]
+        return exon_map_vector_trunct
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
     if pacbio:
@@ -782,17 +812,11 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
                     exon_map_pct[i] = 1
                 elif pct > 0 and pct < truncation_match:
                     break
-        #read-exon mapping vector
-        exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
-        exon_map_vector_skipped = [-1 if pct <= lower_match else 0 for pct in exon_map_pct]
-        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
-                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-        if geneInfo['geneStrand']=="+":
-            index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
-            exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
-        else: #"-"
-            last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(1) if 1 in exon_map_vector_notrunct else -1
-            exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in range(len(exon_map_vector_notrunct))]
+        exon_map_vector_trunct = generate_read_exon_map_vector(exon_map_pct)
+        # special case: the read can be mapped to exons but cannot surpass any threshold--usually mono-exonic
+        if sum(exon_map_vector_trunct) == 0:
+            exon_map_pct[exon_map_pct.index(max(exon_map_pct))] = 1
+            exon_map_vector_trunct = generate_read_exon_map_vector(exon_map_pct)
         #do not consider non-qualified exons
         isoform_exon_map_list = isoformInfo_to_onehot(isoformInfo, geneInfo)
         exon_map_vector_trunct_conserve = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
