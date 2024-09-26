@@ -364,7 +364,7 @@ class ReadMapper:
             # process reads metagene
             results, samples, polies = [], [], []
             for read in reads:
-                poly, _ = detect_poly_parse(read, window=20, n=10)
+                poly, _ = detect_poly_parse(read, window=20, n=15)
                 out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold,self.small_exon_threshold1,
                                             self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region

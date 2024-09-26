@@ -435,16 +435,10 @@ def read_exon_match(read, Info_singlegene):
     geneInfo, exonInfo, isoformInfo = Info_singlegene
     gene_name =geneInfo['geneName']
     gene_length = geneInfo['geneEnd'] - geneInfo['geneStart']
-    if geneInfo['geneStrand']=="+":
-        readDist = readStart - geneInfo["geneStart"]
-    else:
-        readDist = readEnd - geneInfo["geneEnd"]
-    if readStart >= geneInfo['geneStart'] and readEnd <= geneInfo['geneEnd']:
-        mapExons = exon_hit(referencePositions, exonInfo)
-        n_mapExons=sum(mapExons)
-    else:
-        n_mapExons = -1
-    return gene_name, readDist, gene_length, n_mapExons
+    overlap_length = max(0, max(readEnd, geneInfo['geneEnd']) - min(readStart, geneInfo['geneStart']))
+    mapExons = exon_hit(referencePositions, exonInfo)
+    n_mapExons=sum(mapExons)
+    return gene_name, overlap_length, gene_length, n_mapExons
 
 
 def exon_hit(mapPositions, exonInfo):
@@ -515,25 +509,27 @@ def detect_poly_parse(read, window = 20, n = 15):
     return poly_bool, poly
 
 def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match=0.5, pacbio = False):
-    geneName, readDist, geneLength, nMapExons,index = [], [], [], [],[]
+    results = []
     for i, info_singlegene in enumerate(Info_multigenes):
-        gene_name, read_dist, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
-        geneName.append(gene_name)
-        geneLength.append(gene_length)
-        nMapExons.append(n_mapExons)
-        readDist.append(read_dist)
-        index.append(i)
-    df = pd.DataFrame({'geneName': geneName, 'readDist': readDist, 'geneLength': geneLength, 'nMapExons': nMapExons, 'index': index})
+        gene_name, read_coverage, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
+        results.append({
+            'geneName': gene_name,
+            'readCoverage': read_coverage,
+            'geneLength': gene_length,
+            'nMapExons': n_mapExons,
+            'index': i
+        })
+    df = pd.DataFrame(results)
     df_exon = df[df['nMapExons'] > 0].reset_index(drop=True)
     df_intron = df[df['nMapExons'] == 0].reset_index(drop=True)
     if df_exon.shape[0] == 0 and df_intron.shape[0] > 0:
-        df_intron = df_intron.sort_values(by=['geneLength'], ascending=[False])
+        df_intron = df_intron.sort_values(by=['readCoverage'], ascending=[False])
         ind = df_intron['index'][0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene(read,
                                                                                         Info_multigenes[ind],
                                                                                         lowest_match,  small_exon_threshold, small_exon_threshold1, truncation_match, pacbio = pacbio)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
-        df_exon = df_exon.sort_values(by=['nMapExons', 'readDist', 'geneLength'], ascending=[False, True, False])
+        df_exon = df_exon.sort_values(by=['nMapExons', 'readCoverage', 'geneLength'], ascending=[False, False, False])
         if sum(df_exon.nMapExons) >= 2:
             df_exon = df_exon[df_exon['nMapExons'] > 0].reset_index(drop=True)
             # sort by existing/novel
@@ -553,8 +549,8 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_t
                 else:
                     readType.append('2')  # uncharacterized
             df_exon['readType'] = readType
-            df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readDist', 'geneLength'],
-                                          ascending=[True, False, True, False])
+            df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readCoverage', 'geneLength'],
+                                          ascending=[True, False, False, False])
             ind = df_exon['index'][0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = read_novelisoform_tuple_dict[ind], \
             read_isoform_compatibleVector_tuple_dict[ind]
@@ -568,26 +564,29 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.05, small_exon_t
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, ind = None, None, -1
     return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
 
-def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match =0.5, poly=False):
-    geneName, readDist, geneLength, nMapExons,index = [], [], [], [],[]
+def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match =0.5, poly=False):
+    results = []
     for i, info_singlegene in enumerate(Info_multigenes):
-        gene_name, read_dist, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
-        geneName.append(gene_name)
-        geneLength.append(gene_length)
-        nMapExons.append(n_mapExons)
-        readDist.append(read_dist)
-        index.append(i)
-    df = pd.DataFrame({'geneName': geneName, 'readDist': readDist, 'geneLength': geneLength, 'nMapExons': nMapExons, 'index': index})
+        gene_name, read_coverage, gene_length, n_mapExons = read_exon_match(read, info_singlegene)
+        results.append({
+            'geneName': gene_name,
+            'readCoverage': read_coverage,
+            'geneLength': gene_length,
+            'nMapExons': n_mapExons,
+            'index': i
+        })
+    df = pd.DataFrame(results)
     df_exon = df[df['nMapExons'] > 0].reset_index(drop=True)
     df_intron = df[df['nMapExons'] == 0].reset_index(drop=True)
     if df_exon.shape[0] == 0 and df_intron.shape[0] > 0:
-        df_intron = df_intron.sort_values(by=['geneLength'], ascending=[False])
+        df_intron = df_intron.sort_values(by=['readCoverage'], ascending=[False])
         ind = df_intron['index'][0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple = map_read_to_gene_parse(read,
                                                                                         Info_multigenes[ind],
-                                                                                        lowest_match, small_exon_threshold,small_exon_threshold1,truncation_match, poly=poly)
+                                                                                        lowest_match, small_exon_threshold,small_exon_threshold1,
+                                                                                              truncation_match, poly=poly)
     elif (df_exon.shape[0] > 0):  # the read locates within at least one gene region
-        df_exon = df_exon.sort_values(by=['nMapExons', 'readDist', 'geneLength'], ascending=[False, True, False])
+        df_exon = df_exon.sort_values(by=['nMapExons', 'readCoverage', 'geneLength'], ascending=[False, False, False])
         if sum(df_exon.nMapExons) >= 2:
             df_exon = df_exon[df_exon['nMapExons'] > 0].reset_index(drop=True)
             # sort by existing/novel
@@ -606,7 +605,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.05, small_
                 else:
                     readType.append('2')  # uncharacterized
             df_exon['readType'] = readType
-            df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readDist', 'geneLength'],
+            df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readCoverage', 'geneLength'],
                                           ascending=[True, False, True, False])
             ind = df_exon['index'][0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple = read_novelisoform_tuple_dict[ind], \
@@ -1121,10 +1120,8 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,small_
         poly_bool, poly = detect_poly_parse(read, window=20, n=15)
         if readName == qname_dict[readName]:
         #if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
-            ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta_parse(read,
-                                                                                                      Info_multigenes,
-                                                                                                      lowest_match,small_exon_threshold,small_exon_threshold1,
-                                                                                                            truncation_match,poly_bool)
+            ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple = choose_gene_from_meta_parse(read,Info_multigenes,lowest_match,small_exon_threshold,
+                                                                                                            small_exon_threshold1,truncation_match,poly_bool)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
     elif pacbio:
