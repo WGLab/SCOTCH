@@ -253,6 +253,8 @@ class ReadMapper:
             #compile output into compatible matrix
             geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
                     Read_novelIsoform_polished, Read_knownIsoform_polished, geneInfo)
+            for key in Read_knownIsoform_scores:
+                Read_knownIsoform_scores[key].extend([-1] * len(list(novel_isoformInfo_polished.keys())))
             #update annotation information in self
             self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames'] = \
                 self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']+list(novel_isoformInfo_polished.keys())
@@ -321,6 +323,8 @@ class ReadMapper:
                     Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                 geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
                     Read_novelIsoform_polished, Read_knownIsoform_polished, Info_multigenes[index][0])
+                for key in Read_knownIsoform_scores:
+                    Read_knownIsoform_scores[key].extend([-1] * len(list(novel_isoformInfo_polished.keys())))
                 # update annotation information in self
                 self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] = \
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'] + list(
@@ -392,6 +396,8 @@ class ReadMapper:
                     Read_novelIsoform_sample, novel_isoformInfo, Read_knownIsoform_sample)
                 geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector_sample = compile_compatible_vectors(
                     Read_novelIsoform_sample_polished, Read_knownIsoform_sample_polished, geneInfo)
+                for key in Read_knownIsoform_scores_sample:
+                    Read_knownIsoform_scores_sample[key].extend([-1] * len(list(novel_isoformInfo_polished.keys())))
                 # update annotation information in self
                 for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                     if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][0][0]['isoformNames']:
@@ -475,6 +481,8 @@ class ReadMapper:
                             Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
                     geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
                         Read_novelIsoform_polished,Read_knownIsoform_polished, Info_multigenes[index][0])
+                    for key in Read_knownIsoform_scores:
+                        Read_knownIsoform_scores[key].extend([-1] * len(list(novel_isoformInfo_polished.keys())))
                     # update annotation information in self
                     for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                         if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames']:
