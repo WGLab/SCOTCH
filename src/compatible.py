@@ -86,7 +86,7 @@ def summarise_annotation(target):
                 pickle.dump(metageneStructureInformationwNovel, file)
             #for file_name_pkl in file_names_pkl:
             #    os.remove(file_name_pkl)
-            print('mergered new isoform annotation saved at: '+str(file_names_pkl))
+            print('mergered new isoform annotation saved at: '+str(output_pkl))
             # merge gtf annotation file
             print('Merging new GTF annotations...')
             gtf_lines = []
@@ -128,6 +128,7 @@ def summarise_auxillary(target):
         if 'auxillary' in dirs:
             auxillary_folders.append(os.path.join(root, 'auxillary'))
     for auxillary_folder in auxillary_folders:
+        print('summarising read-isoform mapping files at: ' + str(auxillary_folder))
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)]
         df_list = Parallel(n_jobs=-1)(delayed(read_file)(file_path) for file_path in file_paths)
         DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
@@ -144,9 +145,12 @@ def summarise_auxillary(target):
         DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
         grouped = DF.groupby(['Read'], group_keys=False)
         # Process groups in parallel and concatenate results
+        print('processing groups...')
         processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
         DF = pd.concat(processed_groups).reset_index(drop=True)
-        DF.to_csv(os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv'), sep='\t', index=False)
+        output_file = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+        print('saving read-isoform mapping file: '+str(output_file))
+        DF.to_csv(output_file, sep='\t', index=False)
 
 
 
