@@ -154,6 +154,8 @@ def main():
             cp.summarise_annotation(args.target[i])
             logger.info(f'Start summarizing read mapping information for target: {args.target[i]}')
             cp.summarise_auxillary(args.target[i])
+        logger.info('Completed summarizing annotations and auxiliary information for all targets.')
+        copy_log_to_targets(log_file, args.target)
 
     if args.task=='annotation':
         run_annotation()
