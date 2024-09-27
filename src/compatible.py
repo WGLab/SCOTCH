@@ -487,7 +487,7 @@ class ReadMapper:
                     n = 0
                     for novel_isoform_name in list(novel_isoformInfo_polished.keys()):
                         if novel_isoform_name not in self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames']:
-                             n+=1
+                            n+=1
                             self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'].append(novel_isoform_name)
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] = len(self.metageneStructureInformationwNovel[meta_gene][index][0]['isoformNames'])
                     self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
