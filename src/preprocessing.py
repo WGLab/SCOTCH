@@ -214,7 +214,7 @@ def map_read_to_novelisoform(isoformInfo_dict, isoform_assignment_vector_list, r
     read_assignment_df_empty = read_assignment_df.loc[novel_df_empty.index]
     exonLength = [b-a for a,b in exonInfo]
     threshold = max(small_exon_threshold, min(small_exon_threshold1, np.percentile(exonLength, 25)))
-    small_exon_thresholds = list(range(small_exon_threshold, threshold+1, 10))
+    small_exon_thresholds = list(range(small_exon_threshold, int(threshold)+1, 10))
     for small_exon_threshold in small_exon_thresholds: # can cause multiple mapping
         qualify_exon_indicator = [1 if b - a > small_exon_threshold else 0 for a, b in exonInfo]
         read_assignment_df_empty_filtered = read_assignment_df_empty * qualify_exon_indicator
@@ -729,7 +729,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
         # when accounting for small exons lead to no mappings -- try out lifting threshold of small exons
         if sum(read_isoform_compatibleVector) == 0:
             threshold = max(small_exon_threshold, min(small_exon_threshold1, np.percentile(exonLength, 25)))
-            for new_threshold in range(small_exon_threshold+10, threshold+1, 10):
+            for new_threshold in range(small_exon_threshold+10, int(threshold)+1, 10):
             #read_exon_map_list = exon_map_vector_trunct
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
                 read_exon_map_list = [vec if i in qualifyExon_new else 0 for i, vec in enumerate(exon_map_vector_trunct)]
@@ -746,7 +746,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
         # when accounting for small exons lead to multiple mappings -- try out lifting threshold of small exons
         if sum(read_isoform_compatibleVector) > 1:
             threshold = max(small_exon_threshold, min(small_exon_threshold1, np.percentile(exonLength, 25)))
-            for new_threshold in range(small_exon_threshold+10, threshold+10, 10):
+            for new_threshold in range(small_exon_threshold+10, int(threshold)+1, 10):
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
                 read_exon_map_list = [vec if i in qualifyExon_new else 0 for i, vec in
                                       enumerate(exon_map_vector_trunct)]
@@ -851,7 +851,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
         # when accounting for small exons lead to no mappings -- try out lifting thresholds for small exons
         if sum(read_isoform_compatibleVector) == 0:
             threshold = max(small_exon_threshold, min(small_exon_threshold1, np.percentile(exonLength, 25)))
-            for new_threshold in range(small_exon_threshold+10, threshold+10, 10):
+            for new_threshold in range(small_exon_threshold+10, int(threshold)+1, 10):
                 # read_exon_map_list = exon_map_vector_trunct
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
                 read_exon_map_list = [vec if i in qualifyExon_new else 0 for i, vec in enumerate(exon_map_vector_trunct)]
@@ -868,7 +868,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
         # when accounting for small exons lead to multiple mappings -- try out lifting thresholds for small exons
         if sum(read_isoform_compatibleVector) > 1:
             threshold = max(small_exon_threshold, min(small_exon_threshold1, np.percentile(exonLength, 25)))
-            for new_threshold in range(small_exon_threshold+10, threshold+10, 10):
+            for new_threshold in range(small_exon_threshold+10, int(threshold)+1, 10):
                 qualifyExon_new = [i for i, (a, b) in enumerate(exonInfo) if b - a >= new_threshold]
                 read_exon_map_list = [vec if i in qualifyExon_new else 0 for i, vec in
                                       enumerate(exon_map_vector_trunct)]
