@@ -1189,7 +1189,7 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,small_
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta_parse(read,Info_multigenes,lowest_match,small_exon_threshold,
                                                                                                             small_exon_threshold1,truncation_match,poly_bool)
             if ind >= 0:
-                return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
+                return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     elif pacbio:
         if readName == qname_dict[readName]:
         #if (readStart >= start and readEnd < end and readName == qname_dict[readName]):
@@ -1198,7 +1198,7 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,small_
                                                                                                       lowest_match, small_exon_threshold,small_exon_threshold1,
                                                                                                       truncation_match,pacbio=True)
             if ind >= 0:
-                return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple
+                return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     else:
         poly_bool, poly = detect_poly(read, window=20, n=15)
         if poly_bool and readName == qname_dict[readName]:
