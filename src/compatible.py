@@ -140,17 +140,26 @@ def summarise_auxillary(target):
         ]
         choices = [1, 2, 3]
         DF['priority'] = np.select(conditions, choices, default=3)
-        DF['priority'] = DF['MappingScore']*DF['priority']
+        DF['priority'] *= DF['MappingScore']
         DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
         DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
         grouped = DF.groupby(['Read'], group_keys=False)
+        #Split DF into DF_unique and DF_multiple
+        unique_mask = ~DF['Read'].duplicated(keep=False)  # Reads that appear only once
+        multiple_mask = DF['Read'].duplicated(keep=False)  # Reads that appear more than once
+        DF_unique = DF[unique_mask].copy()
+        DF_unique['GeneMapping'] = 'unique'
+        DF_unique['Keep'] = 1
+        DF_multiple = DF[multiple_mask].copy()
+        grouped = DF_multiple.groupby(['Read'], group_keys=False)
         # Process groups in parallel and concatenate results
-        print('processing groups...')
+        print('Processing groups for multiple reads...')
         processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
-        DF = pd.concat(processed_groups).reset_index(drop=True)
+        DF_multiple_processed = pd.concat(processed_groups).reset_index(drop=True)
+        DF_final = pd.concat([DF_unique, DF_multiple_processed], ignore_index=True)
         output_file = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
         print('saving read-isoform mapping file: '+str(output_file))
-        DF.to_csv(output_file, sep='\t', index=False)
+        DF_final.to_csv(output_file, sep='\t', index=False)
 
 
 
