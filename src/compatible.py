@@ -281,7 +281,6 @@ class ReadMapper:
                                             self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     results.append(out)
-            #Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene = map(list, zip(*results))
             Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, Read_knownIsoform_metagene_scores = [], [], [], []
             for result in results:
                 if result is not None:
@@ -353,6 +352,7 @@ class ReadMapper:
             reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
+            Read_knownIsoform_scores = {}
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             samples_novel, samples_known = [], []
             Read_novelIsoform_poly = []
@@ -360,7 +360,7 @@ class ReadMapper:
                 poly, _ = detect_poly_parse(read, window=20, n=15)
                 result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match, Info_singlegene, self.parse, self.pacbio)
-                result_novel, result_known = result
+                result_novel, result_known, result_known_scores = result
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
                     samples_novel.append(self.qname_sample_dict[read.qname])
@@ -368,10 +368,11 @@ class ReadMapper:
                 if result_known is not None:
                     Read_knownIsoform.append(result_known)
                     samples_known.append(self.qname_sample_dict[read.qname])
+                    Read_knownIsoform_scores[result_known[0]] = result_known_scores
             unique_samples = list(set(samples_novel+samples_known))
             return_samples = []
             for sample in unique_samples:
-                Read_novelIsoform_sample, Read_knownIsoform_sample, Read_novelIsoform_poly_sample = [], [], []
+                Read_novelIsoform_sample, Read_knownIsoform_sample, Read_knownIsoform_scores_sample, Read_novelIsoform_poly_sample = [],[], {}, []
                 sample_target = os.path.join(self.target, 'samples/'+sample)
                 if not os.path.exists(sample_target):
                     os.makedirs(sample_target)
@@ -379,9 +380,10 @@ class ReadMapper:
                 sample_index_known = [i for i, s in enumerate(samples_known) if s == sample]
                 if len(sample_index_novel) > 0:
                     Read_novelIsoform_sample = [Read_novelIsoform[i] for i in sample_index_novel]
-                    Read_novelIsoform_poly_sample = [Read_novelIsoform_poly[i] for i in sample_index_novel]
+                    #Read_novelIsoform_poly_sample = [Read_novelIsoform_poly[i] for i in sample_index_novel]
                 if len(sample_index_known) > 0:
                     Read_knownIsoform_sample = [Read_knownIsoform[i] for i in sample_index_known]
+                    Read_knownIsoform_scores_sample = {Read_knownIsoform[i][0]:Read_knownIsoform_scores[Read_knownIsoform[i][0]] for i in sample_index_known}
                 if len(Read_novelIsoform_sample) > 0:
                     Read_novelIsoform_sample_polished, novel_isoformInfo_polished, Read_knownIsoform_sample_polished = polish_compatible_vectors(
                         Read_novelIsoform_sample,Read_knownIsoform_sample, n_isoforms, exonInfo, self.small_exon_threshold, self.small_exon_threshold1)
@@ -398,7 +400,8 @@ class ReadMapper:
                 self.metageneStructureInformationwNovel[meta_gene][0][2].update(novel_isoformInfo_polished)
                 if save:
                     save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames,
-                                                  Read_Isoform_compatibleVector_sample, self.qname_cbumi_dict,
+                                                  Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample,
+                                                  self.qname_cbumi_dict,
                                                   self.metageneStructureInformationwNovel[meta_gene][0][1],
                                                   self.metageneStructureInformationwNovel[meta_gene][0][2],
                                                   sample_target, self.parse)
