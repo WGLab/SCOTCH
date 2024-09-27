@@ -106,43 +106,46 @@ def summarise_annotation(target):
 
 def summarise_auxillary(target):
     def process_group(group):
-        highest_priority = group['priority'].min()
+        highest_priority = group['priority'].max()
         highest_priority_rows = group[group['priority'] == highest_priority]
+        group['GeneMapping'] = 'delete'
+        group['Keep'] = 0
         if len(highest_priority_rows) == 1:
-            group['GeneMapping'] = 'delete'  # Default to delete
             group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
+            group.loc[highest_priority_rows.index, 'Keep'] = 1
         else:
-            group['GeneMapping'] = 'delete'  # Default to delete
             group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
+            random_index = highest_priority_rows.sample(n=1).index
+            group.loc[random_index, 'Keep'] = 1
         return group
+    def read_file(file_path):
+        df = pd.read_csv(file_path, sep='\t')
+        df['gene'] = df['geneName'] + '_' + df['geneID']
+        return df
     # Collect all 'auxillary' directories
     auxillary_folders = []
     for root, dirs, files in os.walk(target):
         if 'auxillary' in dirs:
             auxillary_folders.append(os.path.join(root, 'auxillary'))
-    # Read files in parallel to speed up I/O
-    def read_file(file_path):
-        df = pd.read_csv(file_path, sep='\t')
-        df['gene'] = df['geneName'] + '_' + df['geneID']
-        return df
     for auxillary_folder in auxillary_folders:
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)]
         df_list = Parallel(n_jobs=-1)(delayed(read_file)(file_path) for file_path in file_paths)
         DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
+        DF['MappingScore'] = DF['MappingScore'].fillna(-1)
         conditions = [
-            DF['Isoform'].str.startswith('ENST'),  # Highest priority
-            DF['Isoform'].str.startswith('novel'),  # Medium priority
-            DF['Isoform'] == 'uncategorized'  # Lowest priority
+            DF['Isoform'].str.startswith('ENST'),  # 1 Highest priority
+            DF['Isoform'].str.startswith('novel'),  # 2 Medium priority
+            DF['Isoform'] == 'uncategorized'  # 3 Lowest priority
         ]
         choices = [1, 2, 3]
         DF['priority'] = np.select(conditions, choices, default=3)
+        DF['priority'] = DF['MappingScore']*DF['priority']
         DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
-        DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, True])
+        DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
         grouped = DF.groupby(['geneChr', 'Read'])
         # Process groups in parallel and concatenate results
         processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
-        DF = pd.concat(processed_groups)
-        DF = DF.drop(columns=['priority'])
+        DF = pd.concat(processed_groups).reset_index(drop=True)
         DF.to_csv(os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv'), sep='\t', index=False)
 
 
