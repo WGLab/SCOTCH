@@ -84,8 +84,8 @@ def summarise_annotation(target):
             )
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
-            #for file_name_pkl in file_names_pkl:
-            #    os.remove(file_name_pkl)
+            for file_name_pkl in file_names_pkl:
+                os.remove(file_name_pkl)
             print('mergered new isoform annotation saved at: '+str(output_pkl))
             # merge gtf annotation file
             print('Merging new GTF annotations...')
@@ -98,8 +98,8 @@ def summarise_annotation(target):
             with open(output_gtf, 'w') as output_gtf_file:
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
-            #for file_name_gtf in file_names_gtf:
-            #    os.remove(file_name_gtf)
+            for file_name_gtf in file_names_gtf:
+                os.remove(file_name_gtf)
             print('Merged GTF annotations saved at: ' + output_gtf)
         else:
             print('novel isoform annotations does not exist!')
