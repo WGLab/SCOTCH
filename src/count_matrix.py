@@ -11,11 +11,6 @@ import re
 from scipy.io import mmwrite
 from preprocessing import load_pickle
 
-#bam_info='/Volumes/G-DRIVE USB-C/singlecell_file/M4/M4.filtered.bam.Info.csv'
-#CompatibleMatrixPath='/Volumes/G-DRIVE USB-C/singlecell_file/LH/compatible_matrix'
-
-#CompatibleMatrixPath = '/scr1/users/xu3/singlecell/project_singlecell/sample8_R9/compatible_matrix'
-#gene_pkl='/scr1/users/xu3/singlecell/project_singlecell/LH/reference/geneStructureInformation.pkl'
 
 def generate_read_df(f, geneStructureInformation):
     df = pd.read_csv(f)

@@ -1,3 +1,5 @@
+import pickle
+
 from preprocessing import *
 import pysam
 import re
@@ -143,7 +145,6 @@ def summarise_auxillary(target):
         DF['priority'] *= DF['MappingScore']
         DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
         DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
-        grouped = DF.groupby(['Read'], group_keys=False)
         #Split DF into DF_unique and DF_multiple
         unique_mask = ~DF['Read'].duplicated(keep=False)  # Reads that appear only once
         multiple_mask = DF['Read'].duplicated(keep=False)  # Reads that appear more than once
@@ -157,9 +158,17 @@ def summarise_auxillary(target):
         processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
         DF_multiple_processed = pd.concat(processed_groups).reset_index(drop=True)
         DF_final = pd.concat([DF_unique, DF_multiple_processed], ignore_index=True)
-        output_file = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
-        print('saving read-isoform mapping file: '+str(output_file))
-        DF_final.to_csv(output_file, sep='\t', index=False)
+        output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+        print('saving read-isoform mapping file: '+str(output_file_tsv))
+        DF_final.to_csv(output_file_tsv, sep='\t', index=False)
+        print('removing temporary files in: '+ str(auxillary_folder))
+        for file in file_paths:
+            os.remove(file)
+        output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
+        cbumi_keep_dict = DF.set_index('CBUMI')['Keep'].to_dict()
+        print('saving read filtering file: ' + str(output_file_pkl))
+        with open(output_file_pkl, 'wb') as pickle_file:
+            pickle.dump(cbumi_keep_dict, pickle_file)
 
 
 
