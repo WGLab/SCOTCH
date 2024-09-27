@@ -100,7 +100,7 @@ def main():
         copy_log_to_targets(log_file, args.target)
     def run_compatible():
         logger, log_file = setup_logger(args.target[0], 'compatible')
-        logger.info('Start generating compatible matrix step for all targets.')
+        logger.info(f'Start generating compatible matrix step for all targets. Job: {args.job_index}')
         logger.info(f'Target directories: {args.target}')
         logger.info(f'BAM files: {args.bam}')
         logger.info(f'Lowest match: {args.match}')
@@ -122,7 +122,7 @@ def main():
             #if (args.update_gtf and reference is not None) or (reference is None):
             logger.info('saving annotations with identified novel isoforms')
             readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
-        logger.info('Completed generating compatible matrix for all targets.')
+        logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
         copy_log_to_targets(log_file, args.target)
     def run_count():
         logger, log_file = setup_logger(args.target[0], 'count')
