@@ -97,13 +97,15 @@ def main():
     def run_summary():
         for i in range(len(args.target)):
             cp.summarise_annotation(args.target[i])
+            cp.summarise_auxillary(args.target[i])
 
     if args.task=='annotation':
         run_annotation()
     if args.task=='compatible matrix':#task is to generate compatible matrix
         run_compatible()
-    if args.task == 'count matrix': # task is to generate count matrix
+    if args.task == 'summary':
         run_summary()
+    if args.task == 'count matrix': # task is to generate count matrix
         run_count()
 
     if args.task =='all':

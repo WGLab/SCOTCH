@@ -84,8 +84,8 @@ def summarise_annotation(target):
             )
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
-            for file_name_pkl in file_names_pkl:
-                os.remove(file_name_pkl)
+            #for file_name_pkl in file_names_pkl:
+            #    os.remove(file_name_pkl)
             print('mergered new isoform annotation saved at: '+str(file_names_pkl))
             # merge gtf annotation file
             print('Merging new GTF annotations...')
@@ -98,8 +98,8 @@ def summarise_annotation(target):
             with open(output_gtf, 'w') as output_gtf_file:
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
-            for file_name_gtf in file_names_gtf:
-                os.remove(file_name_gtf)
+            #for file_name_gtf in file_names_gtf:
+            #    os.remove(file_name_gtf)
             print('Merged GTF annotations saved at: ' + output_gtf)
         else:
             print('novel isoform annotations does not exist!')
@@ -142,7 +142,7 @@ def summarise_auxillary(target):
         DF['priority'] = DF['MappingScore']*DF['priority']
         DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
         DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
-        grouped = DF.groupby(['geneChr', 'Read'])
+        grouped = DF.groupby(['Read'], group_keys=False)
         # Process groups in parallel and concatenate results
         processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
         DF = pd.concat(processed_groups).reset_index(drop=True)
