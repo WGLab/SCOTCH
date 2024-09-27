@@ -106,10 +106,11 @@ def deduplicate_col(df):
             df = df.drop(df.columns[duplicated_cols], axis=1)
         return df
 
-def generate_count_matrix_by_gene(CompatibleMatrixPath, gene, novel_read_n = 10, output_folder=None):
+def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n = 10, output_folder=None, parse = False):
     #CompatibleMatrixPath: path to compatible matrix directory
     #CompatibleMatrixPath = '/scr1/users/xu3/singlecell/project_singlecell/LH/compatible_matrix'
     #cells
+    read_selection_pkl = pp.load_pickle(read_selection_pkl_path)
     if output_folder is not None:
         os.makedirs(output_folder,exist_ok=True)
     pattern = re.compile(r'_ENS.+\.csv')
@@ -118,13 +119,18 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, gene, novel_read_n = 10,
     for f in files:
         df = pd.read_csv(os.path.join(CompatibleMatrixPath, f))
         df.columns = ['Cell'] + df.columns.tolist()[1:]
-        df.Cell = df['Cell'].str.split('_', expand=True).iloc[:, 0].tolist()  # change cell names
+        if parse:
+            df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
+        else:
+            df.Cell = df['Cell'].str.split('_', expand=True).iloc[:, 0].tolist()  # change cell names
+        df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]#filtering df
         df = df.set_index('Cell')
         df_list.append(df)
     if len(df_list)==0:
         return
     result_df = pd.concat(df_list, axis=0)
     df = result_df.fillna(0).astype(int)
+    #data_df, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=None, parse=True)
     #--------delete isoforms without reads
     df_isoform = df.sum(axis=0) > 0 #cols have read
     isoformNames = df_isoform[df_isoform].index.tolist()
@@ -213,6 +219,9 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, gene, novel_read_n = 10,
                     file.write(str(gene) + '\n')
         return None
 
+
+
+##TODO: delete
 def generate_count_matrix_by_gene_parse(library_path_list, sample_name, gene, novel_read_n = 10, output_folder=None):
     #CompatibleMatrixPath: path to compatible matrix directory
     #CompatibleMatrixPath = '/scr1/users/xu3/singlecell/project_singlecell/LH/compatible_matrix'
@@ -346,7 +355,7 @@ def generate_adata(triple_list):
     adata.var_names = features
     return adata
 
-
+##TODO: delete
 def read_adata(npz_path):
     mat = load_npz(npz_path)
     pickle_path = npz_path[:-4]+'.pickle'
@@ -356,7 +365,7 @@ def read_adata(npz_path):
     adata.var_names = meta['var']
     return adata
 
-
+##TODO: delete
 def csv_to_adata(csv_path):
     count = pd.read_csv(csv_path)
     cells = count.iloc[:, 0].tolist()
@@ -368,15 +377,16 @@ def csv_to_adata(csv_path):
     adata.var_names = features
     return adata
 
-#main function
+#TODO: delete
 def generate_count_matrix(path='/scr1/users/xu3/singlecell/project_singlecell/',novel_read_n=1, num_cores = 1):
     CompatibleMatrixPath = os.path.join(path, 'compatible_matrix')
+    read_selection_pkl_path = os.path.join(path, 'auxillary/read_selection.pkl')
     pattern = re.compile(r'_ENS.+\.csv')
     Genes = [g for g in os.listdir(CompatibleMatrixPath) if 'csv' in g]
     Genes = [pattern.sub('', g) for g in Genes]
     count_path = os.path.join(path, 'count_matrix')
     print('generating count matrix pickles')
-    Parallel(n_jobs=num_cores)(delayed(generate_count_matrix_by_gene)(CompatibleMatrixPath, gene, novel_read_n, count_path)
+    Parallel(n_jobs=num_cores)(delayed(generate_count_matrix_by_gene)(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n, count_path, False)
                                for gene in tqdm(Genes))
     out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                           f.endswith('_unfiltered_count.pickle')]
@@ -407,10 +417,13 @@ def generate_count_matrix(path='/scr1/users/xu3/singlecell/project_singlecell/',
         os.remove(op)
     return adata_gene_unfiltered, adata_transcript_unfiltered, adata_gene_filtered, adata_transcript_filtered
 
+#TODO: delete
 def generate_count_matrix_parse(path='/scr1/users/xu3/singlecell/project_singlecell/',novel_read_n=1, num_cores = 1):
     pattern = re.compile(r'_ENS.+\.csv')
     sample_name_list = os.listdir(os.path.join(path, 'samples'))
     CompatibleMatrixPath_list = [os.path.join(path, 'samples', sample_name, 'compatible_matrix') for sample_name in sample_name_list]
+    read_selection_pkl_path_list = [os.path.join(path, 'samples', sample_name, 'auxillary/read_selection.pkl') for sample_name in
+                                 sample_name_list]
     Genes=[]
     for p in CompatibleMatrixPath_list:
         Genes_ = [g for g in os.listdir(p) if 'csv' in g]
@@ -425,7 +438,7 @@ def generate_count_matrix_parse(path='/scr1/users/xu3/singlecell/project_singlec
     print('generating count matrix pickles')
     adata_gene_unfiltered_list, adata_transcript_unfiltered_list, adata_gene_filtered_list, adata_transcript_filtered_list = [],[],[],[]
     for i, count_path in enumerate(count_path_list):
-        Parallel(n_jobs=num_cores)(delayed(generate_count_matrix_by_gene)(CompatibleMatrixPath_list[i],gene, novel_read_n, count_path)
+        Parallel(n_jobs=num_cores)(delayed(generate_count_matrix_by_gene)(CompatibleMatrixPath_list[i],read_selection_pkl_path_list[i], gene, novel_read_n, count_path, True)
                                for gene in Genes)
         out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                               f.endswith('_unfiltered_count.pickle')]
@@ -478,16 +491,18 @@ class CountMatrix:
                                          sample_name in self.sample_names]
             self.count_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'count_matrix') for
                 sample_name in self.sample_names]
+            self.read_selection_pkl_path_list = [os.path.join(self.samples_folder_path, sample_name, 'auxillary/read_selection.pkl') for sample_name in self.sample_names]
         else:
             self.compatible_matrix_folder_path = os.path.join(target, 'compatible_matrix')
             self.count_matrix_folder_path = os.path.join(target, 'count_matrix')
+            self.read_selection_pkl_path = os.path.join(target, 'auxillary/read_selection.pkl')
     def generate_single_sample(self): #single sample
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = [g for g in os.listdir(self.compatible_matrix_folder_path) if 'csv' in g]
         Genes = [pattern.sub('', g) for g in Genes]
         print('generating count matrix pickles')
-        Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, gene, self.novel_read_n,
-                                                   self.count_matrix_folder_path)for gene in Genes)
+        Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene, self.novel_read_n,
+                                                   self.count_matrix_folder_path, self.parse)for gene in Genes)
         out_paths_unfiltered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
                                 f.endswith('_unfiltered_count.pickle')]
         out_paths_filtered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
@@ -536,8 +551,8 @@ class CountMatrix:
         adata_gene_unfiltered_list, adata_transcript_unfiltered_list, adata_gene_filtered_list, adata_transcript_filtered_list = [], [], [], []
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
             Parallel(n_jobs=self.workers)(
-                delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], gene, self.novel_read_n, count_path)
-                for gene in Genes)
+                delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], self.read_selection_pkl_path_list[i], gene, self.novel_read_n,
+                                                       count_path, self.parse) for gene in Genes)
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                                     f.endswith('_unfiltered_count.pickle')]
             out_paths_filtered = [os.path.join(count_path, f) for f in os.listdir(count_path) if

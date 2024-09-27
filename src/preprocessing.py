@@ -1111,7 +1111,6 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
             scores_long_df.rename(columns={'index': 'Read'}, inplace=True)
             readmapping = pd.merge(readmapping, scores_long_df, on=['Read', 'Isoform'], how='left')
             readmapping_filename = os.path.join(output_folder0, geneName + '_read_isoform_exon_mapping.tsv')
-            #readmapping['Isoform_Name_Final'] = readmapping['Isoform'].apply(lambda isoform: novel_isoform_name_mapping.get(isoform, isoform))
             readmapping.to_csv(readmapping_filename, sep='\t', index=False)
         #save compatible matrix
         output_folder = os.path.join(output_folder,'compatible_matrix')
