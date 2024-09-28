@@ -105,7 +105,7 @@ def main():
         logger.info(f'BAM files: {args.bam}')
         logger.info(f'Lowest match: {args.match}')
         logger.info(f'Small exon threshold (low): {args.small_exon_threshold}')
-        logger.info(f'Small exon threshold (high): min (exon length percentile 25, {args.small_exon_threshold_high})')
+        logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high})')
         logger.info(f'Truncation match: {args.truncation_match}')
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Reference GTF Path: {args.reference}')
