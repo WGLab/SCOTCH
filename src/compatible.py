@@ -165,7 +165,7 @@ def summarise_auxillary(target):
         for file in file_paths:
             os.remove(file)
         output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
-        cbumi_keep_dict = DF.set_index('CBUMI')['Keep'].to_dict()
+        cbumi_keep_dict = DF_final.set_index('CBUMI')['Keep'].to_dict()
         print('saving read filtering file: ' + str(output_file_pkl))
         with open(output_file_pkl, 'wb') as pickle_file:
             pickle.dump(cbumi_keep_dict, pickle_file)
