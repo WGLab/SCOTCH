@@ -682,14 +682,16 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
                 for i, pct in enumerate(exon_map_pct):
                     if pct > 0 and pct >= truncation_match:
                         exon_map_pct[i] = 1
-                    elif pct > 0 and pct < truncation_match:
+                        break
+                    elif pct > 0:
                         break
             else:# check if the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
                 for i in range(len(exon_map_pct) - 1, -1, -1):
                     pct = exon_map_pct[i]
                     if pct > 0 and pct >= truncation_match:
                         exon_map_pct[i] = 1
-                    elif pct > 0 and pct < truncation_match:
+                        break
+                    elif pct > 0:
                         break
         else:
             #check if the first and the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
@@ -699,6 +701,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
                 if pct > 0 and pct >= truncation_match:
                     map_base_left = pct*(exonInfo[i][1]-exonInfo[i][0])
                     exon_map_pct_left[i] = 1
+                    break
                 elif pct > 0:
                     break
             # Check last non-zero element
@@ -707,6 +710,7 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, small_exon_t
                 if exon_map_pct_right[i] > 0 and exon_map_pct_right[i] >= truncation_match:
                     exon_map_pct_right[i] = 1
                     map_base_right = exon_map_pct_right[i] * (exonInfo[i][1] - exonInfo[i][0])
+                    break
                 elif exon_map_pct_right[i] > 0:
                     break
             if map_base_left >= map_base_right:
@@ -828,14 +832,16 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, small_exon_thresho
             for i, pct in enumerate(exon_map_pct):
                 if pct > 0 and pct >= truncation_match:
                     exon_map_pct[i] = 1
-                elif pct > 0 and pct < truncation_match:
+                    break
+                elif pct > 0:
                     break
         else:  # check if the last non-zero elements are > truncation_match, if yes, change to 1, otherwise keep unchanged
             for i in range(len(exon_map_pct) - 1, -1, -1):
                 pct = exon_map_pct[i]
                 if pct > 0 and pct >= truncation_match:
                     exon_map_pct[i] = 1
-                elif pct > 0 and pct < truncation_match:
+                    break
+                elif pct > 0:
                     break
         exon_map_vector_trunct = generate_read_exon_map_vector(exon_map_pct)
         # special case: the read can be mapped to exons but cannot surpass any threshold--usually mono-exonic
