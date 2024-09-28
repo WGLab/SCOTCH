@@ -106,7 +106,7 @@ def deduplicate_col(df):
         return df
 
 
-
+##TODO: update novel isoform name del
 def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n = 10, output_folder=None, parse = False,
                                   group_novel = True, annotation_pkl = None):
     #CompatibleMatrixPath: path to compatible matrix directory
@@ -185,6 +185,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
             novel_isoform_drop = novel_isoform_drop[novel_isoform_drop].index.tolist()
             df_drop=df.loc[:, novel_isoform_drop].sum(axis=1).tolist()
             df = df.drop(columns = novel_isoform_drop)
+            novel_isoform_del = novel_isoform_del+novel_isoform_drop
             df['uncategorized_novel']=df_drop #novel  isoforms but less than supporting reads
     if df.shape[1] ==0:
         return
