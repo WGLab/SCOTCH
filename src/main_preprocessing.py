@@ -51,9 +51,13 @@ def setup_logger(target, task_name):
     log_file = os.path.join(target, f'{task_name}.log')
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.ERROR)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
     return logger, log_file
 
 def copy_log_to_targets(log_file, targets):
