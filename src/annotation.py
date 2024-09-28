@@ -6,10 +6,12 @@ import os
 import pandas as pd
 import re
 import pickle
-from preprocessing import load_pickle
+from preprocessing import load_pickle, merge_exons
 from scipy.ndimage import gaussian_filter1d
 import numpy as np
 import shutil
+
+
 ######################################################################
 ##############################annotation##############################
 ######################################################################
@@ -166,6 +168,24 @@ def merge_boundaries_by_evidence(boundaries, merge_distance=10):
         # Add the merged boundary to the result
         merged_boundaries[base_position] = merged_value
     return merged_boundaries
+
+
+
+def get_splicejuction_from_annotation(exonInfo, isoformInfo):
+    isoform_names = list(isoformInfo.keys())
+    sjInfo = {}
+    for i in range(len(isoform_names)):
+        exon_indexs = isoformInfo[isoform_names[i]]
+        exons = [exonInfo[ind] for ind in exon_indexs]
+        exons = merge_exons(exons)
+        splice_junctions = []
+        if len(exons)>1:
+            a, b = exons[0]
+            for s, e in exons[1:]:
+                splice_junctions.append((b, s))
+                a, b = s, e
+        sjInfo[isoform_names[i]] = splice_junctions
+    return sjInfo
 
 
 def get_splicejuction_from_read(read):

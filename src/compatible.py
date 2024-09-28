@@ -176,13 +176,10 @@ def summarise_auxillary(target):
 
 
 class ReadMapper:
-    def __init__(self, target, bam_path, lowest_match=0.2, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match=0.5, platform = '10x',
+    def __init__(self, target, bam_path, lowest_match=0.2, lowest_match1 = 0.8, small_exon_threshold = 20, small_exon_threshold1=100, truncation_match=0.5, platform = '10x',
                  reference_gtf_path = None):
         self.target = target
         self.bam_path = bam_path
-        self.small_exon_threshold = small_exon_threshold
-        self.small_exon_threshold1 = small_exon_threshold1
-        self.truncation_match = truncation_match
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         if reference_gtf_path is not None or reference_gtf_path=='None':
             self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
@@ -201,7 +198,11 @@ class ReadMapper:
         self.bamInfo3_pkl_path = os.path.join(target, 'bam/bam.Info3.pkl') # bamInfo2_pkl_file
         self.bamInfo_csv_path = os.path.join(target, 'bam/bam.Info.csv')
         # parameters
+        self.small_exon_threshold = small_exon_threshold
+        self.small_exon_threshold1 = small_exon_threshold1
+        self.truncation_match = truncation_match
         self.lowest_match = lowest_match
+        self.lowest_match1 = lowest_match1
         self.platform = platform
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
@@ -259,7 +260,7 @@ class ReadMapper:
             Read_knownIsoform_scores = {}#[readname: read-isoform mapping scores]
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             for read in reads:
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.lowest_match1, self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match,Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known, result_known_scores = result
                 if result_novel is not None:
@@ -303,7 +304,7 @@ class ReadMapper:
             # process reads metagene
             results = []
             for read in reads:
-                out = process_read_metagene(read,self.qname_dict, Info_multigenes, self.lowest_match,
+                out = process_read_metagene(read,self.qname_dict, Info_multigenes, self.lowest_match,self.lowest_match1,
                                             self.small_exon_threshold,self.small_exon_threshold1,
                                             self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
@@ -387,7 +388,7 @@ class ReadMapper:
             Read_novelIsoform_poly = []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=15)
-                result = process_read(read, self.qname_dict, self.lowest_match,self.small_exon_threshold,self.small_exon_threshold1,
+                result = process_read(read, self.qname_dict, self.lowest_match,self.lowest_match1, self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match, Info_singlegene, self.parse, self.pacbio)
                 result_novel, result_known, result_known_scores = result
                 if result_novel is not None:
@@ -451,7 +452,7 @@ class ReadMapper:
             results, samples, polies = [], [], []
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=15)
-                out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.small_exon_threshold,self.small_exon_threshold1,
+                out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.lowest_match1,self.small_exon_threshold,self.small_exon_threshold1,
                                             self.truncation_match, self.parse, self.pacbio)
                 if out is not None: #may not within this meta gene region
                     polies.append(poly)

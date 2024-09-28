@@ -30,8 +30,10 @@ parser.add_argument('--cover_existing',action='store_true')
 parser.add_argument('--cover_existing_false', action='store_false',dest='cover_existing')
 parser.add_argument('--small_exon_threshold',type=int,default=20, help="dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--small_exon_threshold_high',type=int,default=80, help="the upper bound of dynamic exon length threshold to ignore for includsion and exclusion")
-parser.add_argument('--truncation_match',type =float, default=0.5, help="higher than this threshold at the truncation end will be adjusted to 1")
-parser.add_argument('--match',type=float,default=0.2, help="the lowest base percentage for matching an exon")
+parser.add_argument('--truncation_match',type =float, default=0.4, help="higher than this threshold at the truncation end will be adjusted to 1")
+parser.add_argument('--match_low',type=float,default=0.2, help="the base percentage to call a read-exon unmatched")
+parser.add_argument('--match_high',type=float,default=0.6, help="the base percentage to call a read-exon matched")
+
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
 #general
@@ -103,7 +105,8 @@ def main():
         logger.info(f'Start generating compatible matrix step for all targets. Job: {args.job_index}')
         logger.info(f'Target directories: {args.target}')
         logger.info(f'BAM files: {args.bam}')
-        logger.info(f'Lowest match: {args.match}')
+        logger.info(f'Lowest match: {args.match_low}')
+        logger.info(f'Highest match: {args.match_high}')
         logger.info(f'Small exon threshold (low): {args.small_exon_threshold}')
         logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high})')
         logger.info(f'Truncation match: {args.truncation_match}')
@@ -113,7 +116,7 @@ def main():
         for i in range(len(args.target)):
             logger.info('processing the sample of: '+str(args.bam[i]))
             readmapper = cp.ReadMapper(target=args.target[i], bam_path = args.bam[i],
-                                       lowest_match=args.match, small_exon_threshold = args.small_exon_threshold,
+                                       lowest_match=args.match_low, lowest_match1=args.match_high,small_exon_threshold = args.small_exon_threshold,
                                        small_exon_threshold1=args.small_exon_threshold_high,
                                        truncation_match = args.truncation_match,
                                        platform = args.platform, reference_gtf_path=args.reference)
