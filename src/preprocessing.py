@@ -318,7 +318,7 @@ def group_novel_isoform(df, geneStrand, parse = False):
             query_id = None if parent_id is None else novel_isoform_group_list[-1][-1]
             novel_isoform_group_list, novel_isoform_id, parent_id = pair_isoform(novel_isoform_group_list, novel_isoform_id,
                                                                                  query_id, geneStrand)
-        novel_isoform_group_name = ['novelIsoformGroup_'+str(i[-1]) for i in novel_isoform_group_list]
+        novel_isoform_group_name = ['novelIsoform_'+str(i[-1]) for i in novel_isoform_group_list]
         df_novel_group = []
         for i in range(len(novel_isoform_group_list)):
             isoform_group_name = ['novelIsoform_' + str(ii) for ii in novel_isoform_group_list[i]]

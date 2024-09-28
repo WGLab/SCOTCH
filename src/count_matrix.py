@@ -105,7 +105,10 @@ def deduplicate_col(df):
             df = df.drop(df.columns[duplicated_cols], axis=1)
         return df
 
-def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n = 10, output_folder=None, parse = False):
+
+
+def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n = 10, output_folder=None, parse = False,
+                                  group_novel = True, annotation_pkl = None):
     #CompatibleMatrixPath: path to compatible matrix directory
     #CompatibleMatrixPath = '/scr1/users/xu3/singlecell/project_singlecell/LH/compatible_matrix'
     #cells
@@ -129,7 +132,11 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         return
     result_df = pd.concat(df_list, axis=0)
     df = result_df.fillna(0).astype(int)
-    #data_df, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=None, parse=True)
+    if group_novel:
+        df_, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=annotation_pkl[gene][0]['geneStrand'], parse=parse)
+    else:
+        novel_isoform_name_mapping = None
+    novel_isoform_del = [key for key, value in novel_isoform_name_mapping.items() if key != value]
     #--------delete isoforms without reads
     df_isoform = df.sum(axis=0) > 0 #cols have read
     isoformNames = df_isoform[df_isoform].index.tolist()
@@ -193,20 +200,22 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         triple_transcript = df_to_triple(df_all)
         triple_gene = df_to_triple(df_gene)
         if output_folder is None:
-            return (triple_gene, triple_transcript)
+            return (triple_gene, triple_transcript), novel_isoform_del
         else:
             with open(os.path.join(output_folder,str(gene)+'_unfiltered_count.pickle'),'wb') as f:
                 pickle.dump((triple_gene, triple_transcript), f)
+            return novel_isoform_del
     if df_filtered.shape[1]>0:
         df_filtered = df_filtered.groupby(df_filtered.index).sum()
         df_gene = pd.DataFrame({'Cell': df_filtered.index.tolist(), gene: df_filtered.sum(axis=1).tolist()}).set_index('Cell')
         triple_transcript = df_to_triple(df_filtered)
         triple_gene = df_to_triple(df_gene)
         if output_folder is None:
-            return (triple_gene, triple_transcript)
+            return (triple_gene, triple_transcript), novel_isoform_del
         else:
             with open(os.path.join(output_folder,str(gene)+'_filtered_count.pickle'),'wb') as f:
                 pickle.dump((triple_gene, triple_transcript), f)
+            return novel_isoform_del
     else:
         if output_folder is not None:
             log_file = os.path.join(output_folder, 'log.txt')
@@ -216,6 +225,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
             else:
                 with open(log_file, 'w') as file:
                     file.write(str(gene) + '\n')
+            return novel_isoform_del
         return None
 
 
@@ -263,15 +273,17 @@ def csv_to_adata(csv_path):
     return adata
 
 
-
+#data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
 class CountMatrix:
-    def __init__(self, target, novel_read_n, platform = '10x', workers = 1):
+    def __init__(self, target, novel_read_n, group_novel = True, platform = '10x', workers = 1):
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
         self.platform = platform
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
+        self.group_novel = group_novel
+        self.annotation_path_meta_gene_novel = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
         if platform=='parse':
             self.sample_names = os.listdir(os.path.join(self.target, 'samples'))
             self.n_samples = len(self.sample_names)
@@ -290,8 +302,20 @@ class CountMatrix:
         Genes = [g for g in os.listdir(self.compatible_matrix_folder_path) if 'csv' in g]
         Genes = [pattern.sub('', g) for g in Genes]
         print('generating count matrix pickles')
-        Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene, self.novel_read_n,
-                                                   self.count_matrix_folder_path, self.parse)for gene in Genes)
+        annotation_pkl = None
+        if self.group_novel:
+            annotation_pkl = {}
+            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
+            metagenes = list(annotation_pkl_meta.keys())
+            for metagene in metagenes:
+                multi_gene_info = annotation_pkl_meta[metagene]
+                for gene_info in multi_gene_info:
+                    genename = gene_info[0]['geneName']
+                    annotation_pkl[genename] = gene_info
+        novel_isoform_del_list = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene,
+                                                                                                      self.novel_read_n,self.count_matrix_folder_path, self.parse,
+                                                                                                      self.group_novel,annotation_pkl)for gene in Genes)
+        self.novel_isoform_del_list = flatten_list(novel_isoform_del_list)
         out_paths_unfiltered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
                                 f.endswith('_unfiltered_count.pickle')]
         out_paths_filtered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
@@ -323,7 +347,6 @@ class CountMatrix:
         self.adata_transcript_unfiltered = adata_transcript_unfiltered
         self.adata_gene_filtered = adata_gene_filtered
         self.adata_transcript_filtered = adata_transcript_filtered
-
     def generate_multiple_samples(self):
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
@@ -338,10 +361,22 @@ class CountMatrix:
             print('output folder is: ' + str(count_path))
         print('generating count matrix pickles')
         adata_gene_unfiltered_list, adata_transcript_unfiltered_list, adata_gene_filtered_list, adata_transcript_filtered_list = [], [], [], []
+        annotation_pkl = None
+        if self.group_novel:
+            annotation_pkl = {}
+            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
+            metagenes = list(annotation_pkl_meta.keys())
+            for metagene in metagenes:
+                multi_gene_info = annotation_pkl_meta[metagene]
+                for gene_info in multi_gene_info:
+                    genename = gene_info[0]['geneName']
+                    annotation_pkl[genename] = gene_info
+        self.novel_isoform_del_list_list = []
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
-            Parallel(n_jobs=self.workers)(
-                delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], self.read_selection_pkl_path_list[i], gene, self.novel_read_n,
-                                                       count_path, self.parse) for gene in Genes)
+            novel_isoform_del_list = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], self.read_selection_pkl_path_list[i], gene, self.novel_read_n,
+                                                       count_path, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
+            novel_isoform_del_list = flatten_list(novel_isoform_del_list)
+            self.novel_isoform_del_list_list.append(novel_isoform_del_list)
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                                     f.endswith('_unfiltered_count.pickle')]
             out_paths_filtered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
@@ -425,6 +460,10 @@ class CountMatrix:
                                    'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
             with open(os.path.join(self.count_matrix_folder_path,
                                    'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
+        outfile = os.path.join(self.count_matrix_folder_path, 'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
+        with open(outfile, 'w') as f:
+            for item in self.novel_isoform_del_list:
+                f.write(f"{item}\n")
     def save_multiple_samples(self, csv = True, mtx = True):
         if csv:
             print('saving count matrix in csv format')
@@ -474,3 +513,9 @@ class CountMatrix:
                                        'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
                 with open(os.path.join(self.count_matrix_folder_path_list[i],
                                        'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
+        for i in range(self.n_samples):
+            outfile = os.path.join(self.count_matrix_folder_path_list[i],'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
+            with open(outfile, 'w') as f:
+                for item in self.novel_isoform_del_list_list[i]:
+                    f.write(f"{item}\n")
+
