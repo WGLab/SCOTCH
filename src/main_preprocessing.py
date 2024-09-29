@@ -36,6 +36,9 @@ parser.add_argument('--match_high',type=float,default=0.6, help="the base percen
 
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
+parser.add_argument('--group_novel_off', action='store_false', help="whether to further group novel isoforms generated in compatible matrix, default is false")
+parser.add_argument('--group_novel', action='store_true',dest='group_novel_off')
+
 #general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")
 parser.add_argument('--single_cell',action='store_true',help="default setting for preprocessing single cell data")
@@ -127,7 +130,7 @@ def main():
             readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                           total_jobs=args.total_jobs,current_job_index=args.job_index)
             #if (args.update_gtf and reference is not None) or (reference is None):
-            logger.info('saving annotations with identified novel isoforms')
+            logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
             readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
         copy_log_to_targets(log_file, args.target)
@@ -141,7 +144,7 @@ def main():
         for i in range(len(args.target)):
             logger.info(f'Start generating count matrix for target: {args.target[i]}')
             countmatrix = cm.CountMatrix(target = args.target[i], novel_read_n = args.novel_read_n,
-                           platform = args.platform, workers = args.workers)
+                           platform = args.platform, workers = args.workers, group_novel = args.group_novel_off)
             if args.platform=='parse':
                 logger.info(f'Generating multiple sample count matrices for Parse platform')
                 countmatrix.generate_multiple_samples()

@@ -86,8 +86,8 @@ def summarise_annotation(target):
             )
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
-            for file_name_pkl in file_names_pkl:
-                os.remove(file_name_pkl)
+            #for file_name_pkl in file_names_pkl:
+            #    os.remove(file_name_pkl)
             print('mergered new isoform annotation saved at: '+str(output_pkl))
             # merge gtf annotation file
             print('Merging new GTF annotations...')
@@ -100,8 +100,8 @@ def summarise_annotation(target):
             with open(output_gtf, 'w') as output_gtf_file:
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
-            for file_name_gtf in file_names_gtf:
-                os.remove(file_name_gtf)
+            #for file_name_gtf in file_names_gtf:
+            #    os.remove(file_name_gtf)
             print('Merged GTF annotations saved at: ' + output_gtf)
         else:
             print('novel isoform annotations does not exist!')
@@ -162,8 +162,8 @@ def summarise_auxillary(target):
         print('saving read-isoform mapping file: '+str(output_file_tsv))
         DF_final.to_csv(output_file_tsv, sep='\t', index=False)
         print('removing temporary files in: '+ str(auxillary_folder))
-        for file in file_paths:
-            os.remove(file)
+        #for file in file_paths:
+        #    os.remove(file)
         output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
         cbumi_keep_dict = DF_final.set_index('CBUMI')['Keep'].to_dict()
         print('saving read filtering file: ' + str(output_file_pkl))
