@@ -930,85 +930,86 @@ def map_read_to_isoform_known(isoform_exon_onehot_list, read_exon_map_list, exon
     compatible_matrix, isoform_ones = map_read_to_isoform_known_(isoform_exon_onehot_list, read_exon_map_list)
     #multiple mapping
     ####method1: treat the 5` truncation exon as mapped
-    if compatible_matrix.sum()>1:
-        exon_map_pct_update = exon_map_pct
-        if poly: ######nanopore and parse poly true
-            if geneStrand=="+":
-                #change the first non-zero element pct = 1
-                for i, pct in enumerate(exon_map_pct_update):
-                    if pct>0:
-                        exon_map_pct_update[i] = 1
-                        break
-                exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update]
-                exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update]
-                exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-                index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
-                exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
-                exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
-            else: # geneStrand=="-":
-                # change the last non-zero element pct = 1
-                for i in range(len(exon_map_pct_update) - 1, -1, -1):
-                    if exon_map_pct_update[i] > 0:
-                        exon_map_pct_update[i] = 1
-                        break
-                exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update]
-                exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update]
-                exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
-                                            list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-                last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
-                    1) if 1 in exon_map_vector_notrunct else -1
-                exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in
-                                          range(len(exon_map_vector_notrunct))]
-                exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
-            #use exon_map_vector_trunct to map again
-            compatible_matrix_new, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
-            if compatible_matrix_new.sum() > 0 and compatible_matrix_new.sum()<compatible_matrix.sum():
-                compatible_matrix = compatible_matrix_new
-                exon_map_pct = exon_map_pct_update
-        else: #####parse poly false, any end can truncate
-            #5` truncation
-            exon_map_pct_update1 = exon_map_pct_update.copy()#read_exon_map_list
-            for i, pct in enumerate(exon_map_pct_update1):
-                if pct > 0:
-                    exon_map_pct_update1[i] = 1
-                    break
-            exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update1]
-            exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update1]
-            exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
-                                        list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-            index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
-                exon_map_vector_notrunct)
-            last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
-                1) if 1 in exon_map_vector_notrunct else -1
-            exon_map_vector_trunct = [0 if i < index_of_one or i > last_index_of_one else exon_map_vector_notrunct[i] for i in
-                                      range(len(exon_map_vector_notrunct))]
-            exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
-            compatible_matrix_new1, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
-            # 3` truncation
-            exon_map_pct_update2 = exon_map_pct_update.copy()  # read_exon_map_list
-            for i in range(len(exon_map_pct_update2) - 1, -1, -1):
-                if exon_map_pct_update2[i] > 0:
-                    exon_map_pct_update2[i] = 1
-                    break
-            exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update2]
-            exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update2]
-            exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
-                                        list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
-            index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
-                exon_map_vector_notrunct)
-            last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
-                1) if 1 in exon_map_vector_notrunct else -1
-            exon_map_vector_trunct = [0 if i < index_of_one or i > last_index_of_one else exon_map_vector_notrunct[i]
-                                      for i in
-                                      range(len(exon_map_vector_notrunct))]
-            exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
-            compatible_matrix_new2, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
-            compatible_matrix_new = np.minimum(compatible_matrix_new1, compatible_matrix_new2)
-            if compatible_matrix_new.sum() > 0 and compatible_matrix_new.sum() < compatible_matrix.sum():
-                compatible_matrix = compatible_matrix_new
-                exon_map_pct = exon_map_pct_update
+    #if compatible_matrix.sum()>1:
+        #exon_map_pct_update = exon_map_pct
+        #if poly: ######nanopore and parse poly true
+        #    if geneStrand=="+":
+        #        #change the first non-zero element pct = 1
+        #        for i, pct in enumerate(exon_map_pct_update):
+        #            if pct>0:
+        #                exon_map_pct_update[i] = 1
+        #                break
+        #        exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update]
+        #        exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update]
+        #        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #        index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(exon_map_vector_notrunct)
+        #        exon_map_vector_trunct = [0 if i < index_of_one else exon_map_vector_notrunct[i] for i in range(len(exon_map_vector_notrunct))]
+        #        exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
+        #    else: # geneStrand=="-":
+        #        # change the last non-zero element pct = 1
+        #        for i in range(len(exon_map_pct_update) - 1, -1, -1):
+        #            if exon_map_pct_update[i] > 0:
+        #                exon_map_pct_update[i] = 1
+        #                break
+        #        exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update]
+        #        exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update]
+        #        exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+        #                                    list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #        last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
+        #            1) if 1 in exon_map_vector_notrunct else -1
+        #        exon_map_vector_trunct = [exon_map_vector_notrunct[i] if i <= last_index_of_one else 0 for i in
+        #                                  range(len(exon_map_vector_notrunct))]
+        #        exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
+        #    #use exon_map_vector_trunct to map again
+        #    compatible_matrix_new, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
+        #    if compatible_matrix_new.sum() > 0 and compatible_matrix_new.sum()<compatible_matrix.sum():
+        #        compatible_matrix = compatible_matrix_new
+        #        exon_map_pct = exon_map_pct_update
+        #else: #####parse poly false, any end can truncate
+        #    #5` truncation
+        #    exon_map_pct_update1 = exon_map_pct_update.copy()#read_exon_map_list
+        #    for i, pct in enumerate(exon_map_pct_update1):
+        #        if pct > 0:
+        #            exon_map_pct_update1[i] = 1
+        #            break
+        #    exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update1]
+        #    exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update1]
+        #    exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+        #                                list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #    index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
+        #        exon_map_vector_notrunct)
+        #    last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
+        #        1) if 1 in exon_map_vector_notrunct else -1
+        #    exon_map_vector_trunct = [0 if i < index_of_one or i > last_index_of_one else exon_map_vector_notrunct[i] for i in
+        #                              range(len(exon_map_vector_notrunct))]
+        #    exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
+        #    compatible_matrix_new1, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
+        #    # 3` truncation
+        #    exon_map_pct_update2 = exon_map_pct_update.copy()  # read_exon_map_list
+        #    for i in range(len(exon_map_pct_update2) - 1, -1, -1):
+        #        if exon_map_pct_update2[i] > 0:
+        #            exon_map_pct_update2[i] = 1
+        #            break
+        #    exon_map_vector_mapped = [1 if exon_map_p >= threshold_high else 0 for exon_map_p in exon_map_pct_update2]
+        #    exon_map_vector_skipped = [-1 if exon_map_p <= threshold_low else 0 for exon_map_p in exon_map_pct_update2]
+        #    exon_map_vector_notrunct = [mapped + skipped for mapped, skipped in
+        #                                list(zip(exon_map_vector_mapped, exon_map_vector_skipped))]
+        #    index_of_one = exon_map_vector_notrunct.index(1) if 1 in exon_map_vector_notrunct else len(
+        #        exon_map_vector_notrunct)
+        #    last_index_of_one = len(exon_map_vector_notrunct) - 1 - exon_map_vector_notrunct[::-1].index(
+        #        1) if 1 in exon_map_vector_notrunct else -1
+        #    exon_map_vector_trunct = [0 if i < index_of_one or i > last_index_of_one else exon_map_vector_notrunct[i]
+        #                              for i in
+        #                              range(len(exon_map_vector_notrunct))]
+        #    exon_map_vector_trunct = [vec if i in qualifyExon else 0 for i, vec in enumerate(exon_map_vector_trunct)]
+        #    compatible_matrix_new2, _ = map_read_to_isoform_known_(isoform_exon_onehot_list, exon_map_vector_trunct)
+        #    compatible_matrix_new = np.minimum(compatible_matrix_new1, compatible_matrix_new2)
+        #    if compatible_matrix_new.sum() > 0 and compatible_matrix_new.sum() < compatible_matrix.sum():
+        #        compatible_matrix = compatible_matrix_new
+        #        exon_map_pct = exon_map_pct_update
     ####method2: assign the cloest isoform to read
     if compatible_matrix.sum() > 1:
+        np.array(isoform_exon_onehot_list)+np.array(read_exon_map_list)
         read_pct = np.array(exon_map_pct)
         transformed_read_pct = np.where(read_pct > threshold_high, 1, np.where(read_pct < threshold_low, 0,
                                               (read_pct - threshold_low) / (threshold_high-threshold_low)))
