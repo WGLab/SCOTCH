@@ -136,7 +136,10 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         df_, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=annotation_pkl[gene][0]['geneStrand'], parse=parse)
     else:
         novel_isoform_name_mapping = None
-    novel_isoform_del = [key for key, value in novel_isoform_name_mapping.items() if key != value]
+    if novel_isoform_name_mapping is not None:
+        novel_isoform_del = [key for key, value in novel_isoform_name_mapping.items() if key != value]
+    else:
+        novel_isoform_del=[]
     #--------delete isoforms without reads
     df_isoform = df.sum(axis=0) > 0 #cols have read
     isoformNames = df_isoform[df_isoform].index.tolist()
@@ -251,27 +254,7 @@ def generate_adata(triple_list):
     adata.var_names = features
     return adata
 
-##TODO: delete
-def read_adata(npz_path):
-    mat = load_npz(npz_path)
-    pickle_path = npz_path[:-4]+'.pickle'
-    meta = pp.load_pickle(pickle_path)
-    adata = ad.AnnData(mat)
-    adata.obs_names = meta['obs']
-    adata.var_names = meta['var']
-    return adata
 
-##TODO: delete
-def csv_to_adata(csv_path):
-    count = pd.read_csv(csv_path)
-    cells = count.iloc[:, 0].tolist()
-    features = count.columns.tolist()[1:]
-    mat = np.array(count.iloc[:, 1:])
-    mat = csr_matrix(mat)
-    adata = ad.AnnData(mat)
-    adata.obs_names = cells
-    adata.var_names = features
-    return adata
 
 
 #data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
