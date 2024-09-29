@@ -113,7 +113,7 @@ def main():
         logger.info(f'Highest match: {args.match_high}')
         logger.info(f'Small exon threshold (low): {args.small_exon_threshold}')
         logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high})')
-        logger.info(f'Truncation match: {args.truncation_match}')
+        logger.info(f'Truncation match: {args.truncation_match} or 100bps')
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Reference GTF Path: {args.reference}')
         logger.info(f'Update GTF option: {args.update_gtf}')
