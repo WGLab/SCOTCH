@@ -149,9 +149,11 @@ def main():
                 logger.info(f'Generating multiple sample count matrices for Parse platform')
                 countmatrix.generate_multiple_samples()
                 countmatrix.save_multiple_samples(csv=True, mtx=True)
+
             else:
                 countmatrix.generate_single_sample()
                 countmatrix.save_single_sample(csv=True, mtx=True)
+                countmatrix.filter_gtf()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
     def run_summary():

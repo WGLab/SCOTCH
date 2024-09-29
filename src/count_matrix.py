@@ -396,7 +396,6 @@ class CountMatrix:
         self.adata_transcript_unfiltered_list = adata_transcript_unfiltered_list
         self.adata_gene_filtered_list = adata_gene_filtered_list
         self.adata_transcript_filtered_list = adata_transcript_filtered_list
-
     def save_single_sample(self, csv = True, mtx = True):
         if csv:
             print('saving count matrix in csv format')
@@ -444,6 +443,7 @@ class CountMatrix:
                                    'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
             with open(os.path.join(self.count_matrix_folder_path,
                                    'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
+        # save novel isoform delete list
         outfile = os.path.join(self.count_matrix_folder_path, 'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
         with open(outfile, 'w') as f:
             for item in self.novel_isoform_del_list:
@@ -497,9 +497,27 @@ class CountMatrix:
                                        'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
                 with open(os.path.join(self.count_matrix_folder_path_list[i],
                                        'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
+        #save novel isoform deletion list
         for i in range(self.n_samples):
             outfile = os.path.join(self.count_matrix_folder_path_list[i],'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
             with open(outfile, 'w') as f:
                 for item in self.novel_isoform_del_list_list[i]:
                     f.write(f"{item}\n")
-
+        if len(self.novel_isoform_del_list_list)>1:
+            intersection_set = set(self.novel_isoform_del_list_list[0]).intersection(*self.novel_isoform_del_list_list[1:])
+            self.novel_isoform_del_list = list(intersection_set)
+        else:
+            self.novel_isoform_del_list = self.novel_isoform_del_list_list[0]
+    def filter_gtf(self):
+        input_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation.gtf')
+        output_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
+        with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
+            for line in infile:
+                if line.startswith("#"):
+                    outfile.write(line)
+                    continue
+                columns = line.split("\t")
+                attributes = columns[8]
+                if any(f'transcript_id "{transcript_id}"' in attributes for transcript_id in self.novel_isoform_del_list):
+                    continue
+                outfile.write(line)
