@@ -1177,7 +1177,7 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     return None
 
-def map_read_to_novelisoform_loss(novelisoform_dict, assigns,df_assign_archive, exonInfo, small_exon_threshold, small_exon_threshold1):
+def map_read_to_novelisoform_loss(novelisoform_dict, assigns, df_assign_archive, exonInfo, small_exon_threshold, small_exon_threshold1):
     def map_read_to_isoform_(df_assign_archive):
         novel_isoform_assignment = np.array(novel_isoform_assigns)
         data = df_assign_archive.to_numpy()  # change according to exon size
@@ -1199,8 +1199,13 @@ def map_read_to_novelisoform_loss(novelisoform_dict, assigns,df_assign_archive, 
     exonLength = [b-a for a,b in exonInfo]
     threshold = min(np.mean(exonLength),small_exon_threshold1)
     exon_indicator = [1 if el > threshold else 0 for el in exonLength ]
-    novel_isoform_assigns = np.array(assigns)*exon_indicator
-    novel_df, novel_df_empty = map_read_to_isoform_(df_assign_archive)
+    if len(assigns)==0:
+        return None, None, None
+    else:
+        novel_isoform_assigns = np.array(assigns)*exon_indicator
+        novel_df, novel_df_empty = map_read_to_isoform_(df_assign_archive)
+        if novel_df is None:
+            return None, None, None
     return novelisoform_dict, novel_df, novel_df_empty.index.tolist()
 
 
