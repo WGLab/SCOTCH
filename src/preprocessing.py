@@ -185,8 +185,8 @@ def find_novel(df_assign):
 #                novelisoform_dict[isoform_id] = (isoform_index)
 #    return novelisoform_dict, assigns
 
-def map_read_to_novelisoform(isoformInfo_dict, isoform_assignment_vector_list, read_assignment_df, exonInfo, small_exon_threshold = 20,
-                             small_exon_threshold1 = 100):
+def map_read_to_novelisoform(isoformInfo_dict, isoform_assignment_vector_list, read_assignment_df, exonInfo, small_exon_threshold = 0,
+                             small_exon_threshold1 = 80):
     #isoformInfo_dict: annotation of novel isoform {'novelIsoform_7':[0,1,2]}
     #isoform_assignment_vector_list: novel isoform one hot encoding [1,1,1,0,0]
     #read_assignment_df: row: read name; col: exon; -1/0/1; already account for poly and gene strand
@@ -288,7 +288,8 @@ def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_thr
     for single_dict in novelisoform_dict_list:
         novelisoform_dict.update(single_dict)
     assigns = isoformInfo_to_onehot(novelisoform_dict, geneInfo=None, nExon=len(exonInfo))
-    novelisoform_dict, novel_df, novel_df_empty = map_read_to_novelisoform(novelisoform_dict, assigns,
+    # can allow many multiple mapping to reduce novel isoform number
+    novelisoform_dict, novel_df, novel_df_empty = map_read_to_novelisoform_loss(novelisoform_dict, assigns,
                                                                            df_assign_archive, exonInfo,
                                                                            small_exon_threshold,small_exon_threshold1)
     if novelisoform_dict is None:
@@ -1218,7 +1219,31 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     return None
 
-
+def map_read_to_novelisoform_loss(novelisoform_dict, assigns,df_assign_archive, exonInfo, small_exon_threshold, small_exon_threshold1):
+    def map_read_to_isoform_(df_assign_archive):
+        novel_isoform_assignment = np.array(novel_isoform_assigns)
+        data = df_assign_archive.to_numpy()  # change according to exon size
+        if novel_isoform_assignment.ndim < 2 or data.ndim == 1:
+            return None, df_assign_archive
+        novel_ones = (novel_isoform_assignment == 1).astype(int)
+        novel_minus_ones = (novel_isoform_assignment == -1).astype(int)
+        ones = (data == 1).astype(int)
+        minus_ones = (data == -1).astype(int)
+        conflict_matrix = np.tensordot(novel_ones, minus_ones, axes=([1], [1])) + np.tensordot(novel_minus_ones, ones,
+                                                                                               axes=([1], [1]))
+        compatible_matrix = (conflict_matrix == 0).astype(int).transpose()
+        novel_df = pd.DataFrame(compatible_matrix)
+        novel_df.index = df_assign_archive.index
+        novel_df.columns = list(novelisoform_dict.keys())
+        novel_df_empty = novel_df[novel_df.sum(axis=1) == 0]
+        novel_df = novel_df[novel_df.sum(axis=1) > 0]
+        return novel_df, novel_df_empty
+    exonLength = [b-a for a,b in exonInfo]
+    threshold = min(np.mean(exonLength),small_exon_threshold1)
+    exon_indicator = [1 if el > threshold else 0 for el in exonLength ]
+    novel_isoform_assigns = np.array(assigns)*exon_indicator
+    novel_df, novel_df_empty = map_read_to_isoform_(df_assign_archive)
+    return novelisoform_dict, novel_df, novel_df_empty
 
 #-------------------------------end----------------------------#
 
