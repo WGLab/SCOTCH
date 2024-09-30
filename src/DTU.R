@@ -29,11 +29,11 @@ gene_mat2=as.matrix(read.csv(args.gene_count2,row.names = 'X'))
 
 #----read transcript-level count matrix-----#
 transcript_mat1=as.matrix(read.csv(args.transcript_count1,row.names = 'X'))
-gene_transcript_df1 = data.frame(genes=str_remove(colnames(transcript_mat1),"\\.(ENST|novel|uncategorized).+"),
+gene_transcript_df1 = data.frame(genes=str_remove(colnames(transcript_mat1),"_(ENST|novel|uncategorized).+"),
                                     transcripts=colnames(transcript_mat1))
 
 transcript_mat2=as.matrix(read.csv(args.transcript_count2,row.names = 'X'))
-gene_transcript_df2 = data.frame(genes=str_remove(colnames(transcript_mat2),"\\.(ENST|novel|uncategorized).+"),
+gene_transcript_df2 = data.frame(genes=str_remove(colnames(transcript_mat2),"_(ENST|novel|uncategorized).+"),
                                  transcripts=colnames(transcript_mat2))
 
 
