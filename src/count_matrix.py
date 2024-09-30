@@ -122,7 +122,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         df = pd.read_csv(os.path.join(CompatibleMatrixPath, f))
         df.columns = ['Cell'] + df.columns.tolist()[1:]
         if parse:
-            df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
+            df.Cell = df['Cell'].str.rsplit('_', n=2).str[0].tolist()
         else:
             df.Cell = df['Cell'].str.split('_', expand=True).iloc[:, 0].tolist()  # change cell names
         df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]#filtering df
@@ -208,7 +208,6 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         else:
             with open(os.path.join(output_folder,str(gene)+'_unfiltered_count.pickle'),'wb') as f:
                 pickle.dump((triple_gene, triple_transcript), f)
-            return novel_isoform_del
     if df_filtered.shape[1]>0:
         df_filtered = df_filtered.groupby(df_filtered.index).sum()
         df_gene = pd.DataFrame({'Cell': df_filtered.index.tolist(), gene: df_filtered.sum(axis=1).tolist()}).set_index('Cell')
@@ -219,7 +218,6 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         else:
             with open(os.path.join(output_folder,str(gene)+'_filtered_count.pickle'),'wb') as f:
                 pickle.dump((triple_gene, triple_transcript), f)
-            return novel_isoform_del
     else:
         if output_folder is not None:
             log_file = os.path.join(output_folder, 'log.txt')
@@ -229,8 +227,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
             else:
                 with open(log_file, 'w') as file:
                     file.write(str(gene) + '\n')
-            return novel_isoform_del
-        return None
+    return novel_isoform_del
 
 
 def generate_adata(triple_list):
