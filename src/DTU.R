@@ -39,7 +39,7 @@ gene_transcript_df2 = data.frame(genes=str_remove(colnames(transcript_mat2),"\\.
 
 #----gene-level analysis-----#
 print('Performing differential gene expression analysis......')
-df_gene = scotch_gene(gene_mat1, gene_mat2), epsilon=0.01,ncores=10)%>%
+df_gene = scotch_gene(gene_mat1, gene_mat2, epsilon=0.01,ncores=10)%>%
   filter(pct1>=0.01|pct2>=0.01)
 
 #----transcript-level analysis-----#
