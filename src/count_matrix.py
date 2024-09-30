@@ -122,10 +122,12 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
         df = pd.read_csv(os.path.join(CompatibleMatrixPath, f))
         df.columns = ['Cell'] + df.columns.tolist()[1:]
         if parse:
-            df.Cell = df['Cell'].str.rsplit('_', n=2).str[0].tolist()
+            df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
         else:
             df.Cell = df['Cell'].str.split('_', expand=True).iloc[:, 0].tolist()  # change cell names
         df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]#filtering df
+        if parse:
+            df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
         df = df.set_index('Cell')
         df_list.append(df)
     if len(df_list)==0:
