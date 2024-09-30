@@ -106,7 +106,6 @@ def deduplicate_col(df):
         return df
 
 
-##TODO: update novel isoform name del
 def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path, gene, novel_read_n = 10, output_folder=None, parse = False,
                                   group_novel = True, annotation_pkl = None):
     #CompatibleMatrixPath: path to compatible matrix directory
@@ -229,7 +228,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPath, read_selection_pkl_path,
             else:
                 with open(log_file, 'w') as file:
                     file.write(str(gene) + '\n')
-    return novel_isoform_del
+    return {'gene':gene,'transcript': novel_isoform_del}
 
 
 def generate_adata(triple_list):
@@ -256,7 +255,6 @@ def generate_adata(triple_list):
 
 
 
-#data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
 class CountMatrix:
     def __init__(self, target, novel_read_n, group_novel = True, platform = '10x', workers = 1):
         self.target = target
@@ -295,10 +293,13 @@ class CountMatrix:
                 for gene_info in multi_gene_info:
                     genename = gene_info[0]['geneName']
                     annotation_pkl[genename] = gene_info
-        novel_isoform_del_list = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene,
+        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene,
                                                                                                       self.novel_read_n,self.count_matrix_folder_path, self.parse,
                                                                                                       self.group_novel,annotation_pkl)for gene in Genes)
-        self.novel_isoform_del_list = flatten_list(novel_isoform_del_list)
+        novel_isoform_del = {}
+        for d in novel_isoform_del_dict:
+            novel_isoform_del.update(d)
+        self.novel_isoform_del_dict = novel_isoform_del
         out_paths_unfiltered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
                                 f.endswith('_unfiltered_count.pickle')]
         out_paths_filtered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
@@ -354,12 +355,14 @@ class CountMatrix:
                 for gene_info in multi_gene_info:
                     genename = gene_info[0]['geneName']
                     annotation_pkl[genename] = gene_info
-        self.novel_isoform_del_list_list = []
+        self.novel_isoform_del_dict_list = []
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
-            novel_isoform_del_list = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], self.read_selection_pkl_path_list[i], gene, self.novel_read_n,
+            novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list[i], self.read_selection_pkl_path_list[i], gene, self.novel_read_n,
                                                        count_path, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
-            novel_isoform_del_list = flatten_list(novel_isoform_del_list)
-            self.novel_isoform_del_list_list.append(novel_isoform_del_list)
+            novel_isoform_del = {}
+            for d in novel_isoform_del_dict:
+                novel_isoform_del.update(d)
+            self.novel_isoform_del_dict_list.append(novel_isoform_del)
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                                     f.endswith('_unfiltered_count.pickle')]
             out_paths_filtered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
@@ -443,10 +446,9 @@ class CountMatrix:
             with open(os.path.join(self.count_matrix_folder_path,
                                    'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
         # save novel isoform delete list
-        outfile = os.path.join(self.count_matrix_folder_path, 'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
-        with open(outfile, 'w') as f:
-            for item in self.novel_isoform_del_list:
-                f.write(f"{item}\n")
+        outfile = os.path.join(self.count_matrix_folder_path, 'novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
+        with open(outfile, 'wb') as f:
+            pickle.dump(self.novel_isoform_del_dict,f)
     def save_multiple_samples(self, csv = True, mtx = True):
         if csv:
             print('saving count matrix in csv format')
@@ -498,15 +500,29 @@ class CountMatrix:
                                        'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
         #save novel isoform deletion list
         for i in range(self.n_samples):
-            outfile = os.path.join(self.count_matrix_folder_path_list[i],'novel_isoform_del_list_' + str(self.novel_read_n) + '.txt')
-            with open(outfile, 'w') as f:
-                for item in self.novel_isoform_del_list_list[i]:
-                    f.write(f"{item}\n")
-        if len(self.novel_isoform_del_list_list)>1:
-            intersection_set = set(self.novel_isoform_del_list_list[0]).intersection(*self.novel_isoform_del_list_list[1:])
-            self.novel_isoform_del_list = list(intersection_set)
+            outfile = os.path.join(self.count_matrix_folder_path_list[i],'novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
+            with open(outfile, 'wb') as f:
+                pickle.dump(self.novel_isoform_del_dict_list[i],f)
+        #update self.novel_isoform_del_dict
+        if len(self.novel_isoform_del_dict_list)>1:
+            common_genes = set(self.novel_isoform_del_dict_list[0].keys())
+            for d in self.novel_isoform_del_dict_list[1:]:
+                common_genes.intersection_update(d.keys())
+            intersected_dict = {}
+            for gene_id in common_genes:
+                common_transcripts = set(self.novel_isoform_del_dict_list[0][gene_id])
+                for d in self.novel_isoform_del_dict_list[1:]:
+                    common_transcripts.intersection_update(d[gene_id])
+                if common_transcripts:
+                    intersected_dict[gene_id] = list(common_transcripts)
+            self.novel_isoform_del_dict = intersected_dict
         else:
-            self.novel_isoform_del_list = self.novel_isoform_del_list_list[0]
+            self.novel_isoform_del_dict = self.novel_isoform_del_dict_list[0]
+    def _extract_attribute(self, attributes, attribute_name):
+        try:
+            return attributes.split(f'{attribute_name} "')[1].split('"')[0]
+        except IndexError:
+            return None
     def filter_gtf(self):
         input_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation.gtf')
         output_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
@@ -517,6 +533,8 @@ class CountMatrix:
                     continue
                 columns = line.split("\t")
                 attributes = columns[8]
-                if any(f'transcript_id "{transcript_id}"' in attributes for transcript_id in self.novel_isoform_del_list):
+                gene_name = self._extract_attribute(attributes, 'gene_name')
+                transcript_id = self._extract_attribute(attributes, 'transcript_id')
+                if gene_name in self.novel_isoform_del_dict and transcript_id in self.novel_isoform_del_dict[gene_name]:
                     continue
                 outfile.write(line)
