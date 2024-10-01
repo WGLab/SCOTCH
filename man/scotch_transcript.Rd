@@ -9,7 +9,8 @@ scotch_transcript(
   gene_transcript_df2,
   X1_transcript,
   X2_transcript,
-  ncores = 10
+  ncores = 10,
+  group_novel = TRUE
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ scotch_transcript(
 \item{X2_transcript}{cell(row) x transcript(column) count matrix for cell population 2.}
 
 \item{ncores}{number of cores to use for parallel computing}
+
+\item{group_novel}{whether to group all novel isoforms for DTU test}
 }
 \value{
 result dataframe.
