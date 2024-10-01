@@ -142,10 +142,11 @@ def main():
         logger.info(f'Novel read threshold: {args.novel_read_n}')
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Workers: {args.workers}')
+        ##TODO, revise 10x multiple samples
         for i in range(len(args.target)):
             logger.info(f'Start generating count matrix for target: {args.target[i]}')
             countmatrix = cm.CountMatrix(target = args.target[i], novel_read_n = args.novel_read_n,
-                           platform = args.platform, workers = args.workers, group_novel = args.group_novel_off)
+                           platform = args.platform, workers = args.workers, group_novel = args.group_novel)
             if args.platform=='parse':
                 logger.info(f'Generating multiple sample count matrices for Parse platform')
                 countmatrix.generate_multiple_samples()
