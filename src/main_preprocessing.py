@@ -36,8 +36,9 @@ parser.add_argument('--match_high',type=float,default=0.6, help="the base percen
 
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
-parser.add_argument('--group_novel_off', action='store_false', help="whether to further group novel isoforms generated in compatible matrix, default is false")
-parser.add_argument('--group_novel', action='store_true',dest='group_novel_off')
+parser.add_argument('--group_novel', action='store_true', help="whether to further group novel isoforms generated in compatible matrix, default is true")
+parser.add_argument('--group_novel_off', action='store_false', dest='group_novel')
+
 
 #general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")
