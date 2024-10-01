@@ -10,7 +10,7 @@ import pickle
 import re
 from scipy.io import mmwrite
 from preprocessing import load_pickle
-
+import shutil
 
 def generate_read_df(f, geneStructureInformation):
     df = pd.read_csv(f)
@@ -285,7 +285,8 @@ class CountMatrix:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         self.group_novel = group_novel
-        self.annotation_path_meta_gene_novel = os.path.join(target[0], "reference/metageneStructureInformationwNovel.pkl")
+        self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
+        self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + '.pkl')
         if platform=='parse':
             self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
             self.n_samples = len(self.sample_names)
@@ -378,14 +379,20 @@ class CountMatrix:
                 for gene_info in multi_gene_info:
                     genename = gene_info[0]['geneName']
                     annotation_pkl[genename] = gene_info
-        self.novel_isoform_del_dict_list = []
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list,
                                                                                                       self.read_selection_pkl_path_list, gene, self.novel_read_n,
                                                    self.count_matrix_folder_path_list, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
             novel_isoform_del.update(d)
+        #save novel_isoform_del
         self.novel_isoform_del_dict = novel_isoform_del
+        with open(self.novel_isoform_del_path, 'wb') as f:
+            pickle.dump(self.novel_isoform_del_dict, f)
+        if len(self.target)>1:
+            for additional_target in self.target[1:]:
+                dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
+                shutil.copyfile(self.novel_isoform_del_path, dest_path)
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
                                     f.endswith('_unfiltered_count.pickle')]
@@ -523,26 +530,6 @@ class CountMatrix:
                                        'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
                 with open(os.path.join(self.count_matrix_folder_path_list[i],
                                        'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
-        #save novel isoform deletion list
-        for i in range(self.n_samples):
-            outfile = os.path.join(self.count_matrix_folder_path_list[i],'novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
-            with open(outfile, 'wb') as f:
-                pickle.dump(self.novel_isoform_del_dict_list[i],f)
-        #update self.novel_isoform_del_dict
-        if len(self.novel_isoform_del_dict_list)>1:
-            common_genes = set(self.novel_isoform_del_dict_list[0].keys())
-            for d in self.novel_isoform_del_dict_list[1:]:
-                common_genes.intersection_update(d.keys())
-            intersected_dict = {}
-            for gene_id in common_genes:
-                common_transcripts = set(self.novel_isoform_del_dict_list[0][gene_id])
-                for d in self.novel_isoform_del_dict_list[1:]:
-                    common_transcripts.intersection_update(d[gene_id])
-                if common_transcripts:
-                    intersected_dict[gene_id] = list(common_transcripts)
-            self.novel_isoform_del_dict = intersected_dict
-        else:
-            self.novel_isoform_del_dict = self.novel_isoform_del_dict_list[0]
     def _extract_attribute(self, attributes, attribute_name):
         try:
             return attributes.split(f'{attribute_name} "')[1].split('"')[0]
