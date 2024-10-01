@@ -277,7 +277,7 @@ def generate_adata(triple_list):
 
 
 class CountMatrix:
-    def __init__(self, target, novel_read_n, group_novel = True, platform = '10x', workers = 1):
+    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1):
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
@@ -285,20 +285,22 @@ class CountMatrix:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         self.group_novel = group_novel
-        self.annotation_path_meta_gene_novel = os.path.join(target, "reference/metageneStructureInformationwNovel.pkl")
+        self.annotation_path_meta_gene_novel = os.path.join(target[0], "reference/metageneStructureInformationwNovel.pkl")
         if platform=='parse':
-            self.sample_names = os.listdir(os.path.join(self.target, 'samples'))
+            self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
             self.n_samples = len(self.sample_names)
-            self.samples_folder_path = os.path.join(self.target, 'samples')
+            self.samples_folder_path = os.path.join(self.target[0], 'samples')
             self.compatible_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'compatible_matrix') for
                                          sample_name in self.sample_names]
             self.count_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'count_matrix') for
                 sample_name in self.sample_names]
             self.read_selection_pkl_path_list = [os.path.join(self.samples_folder_path, sample_name, 'auxillary/read_selection.pkl') for sample_name in self.sample_names]
         else:
-            self.compatible_matrix_folder_path = os.path.join(target, 'compatible_matrix')
-            self.count_matrix_folder_path = os.path.join(target, 'count_matrix')
-            self.read_selection_pkl_path = os.path.join(target, 'auxillary/read_selection.pkl')
+            self.n_samples = len(target)
+            self.compatible_matrix_folder_path_list = [os.path.join(target_, 'compatible_matrix') for target_ in target]
+            self.count_matrix_folder_path_list = [os.path.join(target_, 'count_matrix') for target_ in target]
+            self.read_selection_pkl_path_list = [os.path.join(target_, 'auxillary/read_selection.pkl') for target_ in target]
+    ##TODO: DEL
     def generate_single_sample(self): #single sample
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = [g for g in os.listdir(self.compatible_matrix_folder_path) if 'csv' in g]
@@ -420,6 +422,7 @@ class CountMatrix:
         self.adata_transcript_unfiltered_list = adata_transcript_unfiltered_list
         self.adata_gene_filtered_list = adata_gene_filtered_list
         self.adata_transcript_filtered_list = adata_transcript_filtered_list
+    ##TODO: DEL
     def save_single_sample(self, csv = True, mtx = True):
         if csv:
             print('saving count matrix in csv format')
@@ -546,17 +549,18 @@ class CountMatrix:
         except IndexError:
             return None
     def filter_gtf(self):
-        input_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation.gtf')
-        output_gtf = os.path.join(self.target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
-        with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
-            for line in infile:
-                if line.startswith("#"):
+        for target in self.target:
+            input_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation.gtf')
+            output_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
+            with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
+                for line in infile:
+                    if line.startswith("#"):
+                        outfile.write(line)
+                        continue
+                    columns = line.split("\t")
+                    attributes = columns[8]
+                    gene_name = self._extract_attribute(attributes, 'gene_name')
+                    transcript_id = self._extract_attribute(attributes, 'transcript_id')
+                    if gene_name in self.novel_isoform_del_dict and transcript_id in self.novel_isoform_del_dict[gene_name]:
+                        continue
                     outfile.write(line)
-                    continue
-                columns = line.split("\t")
-                attributes = columns[8]
-                gene_name = self._extract_attribute(attributes, 'gene_name')
-                transcript_id = self._extract_attribute(attributes, 'transcript_id')
-                if gene_name in self.novel_isoform_del_dict and transcript_id in self.novel_isoform_del_dict[gene_name]:
-                    continue
-                outfile.write(line)

@@ -136,26 +136,21 @@ def main():
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
         copy_log_to_targets(log_file, args.target)
     def run_count():
+        # target has to be len 1 for parse platform
         logger, log_file = setup_logger(args.target[0], 'count')
         logger.info('Start generating count matrix for all targets.')
         logger.info(f'Target directories: {args.target}')
         logger.info(f'Novel read threshold: {args.novel_read_n}')
         logger.info(f'Platform: {args.platform}')
+        logger.info(f'Group novel isoforms: {args.group_novel}')
         logger.info(f'Workers: {args.workers}')
-        ##TODO, revise 10x multiple samples
-        for i in range(len(args.target)):
-            logger.info(f'Start generating count matrix for target: {args.target[i]}')
-            countmatrix = cm.CountMatrix(target = args.target[i], novel_read_n = args.novel_read_n,
-                           platform = args.platform, workers = args.workers, group_novel = args.group_novel)
-            if args.platform=='parse':
-                logger.info(f'Generating multiple sample count matrices for Parse platform')
-                countmatrix.generate_multiple_samples()
-                countmatrix.save_multiple_samples(csv=True, mtx=True)
-                countmatrix.filter_gtf()
-            else:
-                countmatrix.generate_single_sample()
-                countmatrix.save_single_sample(csv=True, mtx=True)
-                countmatrix.filter_gtf()
+        countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n,
+                       platform = args.platform, workers = args.workers, group_novel = args.group_novel)
+        if args.platform=='parse':
+            assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
+        countmatrix.generate_multiple_samples()
+        countmatrix.save_multiple_samples(csv=True, mtx=True)
+        countmatrix.filter_gtf()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
     def run_summary():
