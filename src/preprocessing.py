@@ -155,35 +155,7 @@ def find_novel(df_assign):
     return novelisoform_dict, assigns
 
 
-#def find_novel(df_assign, df_pct):
-#    similarity_matrix_assign = read_similarity(df_assign)
-#    G = nx.Graph()
-#    for i in range(len(df_pct)):
-#        G.add_node(i)
-#    for i in range(len(similarity_matrix_assign)):
-#        for j in range(i + 1, len(similarity_matrix_assign)):
-#            if similarity_matrix_assign[i][j] > 0:
-#                G.add_edge(i, j, weight=similarity_matrix_assign[i][j])
-#    partition = community_louvain.best_partition(G)
-#    read_groups = defaultdict(list)
-#    for read, group in partition.items():
-#        read_groups[group].append(read)
-#    novelisoform_dict, assigns = {}, []  ##this is what i want
-#    for k in range(len(read_groups)):
-#        if len(read_groups[k]) > 1:
-#            assign = df_assign.iloc[read_groups[k]].mean(axis=0).round().tolist()
-#            pct = df_pct.iloc[read_groups[k]].mean(axis=0).round().tolist()
-#            for i, j in enumerate(pct):
-#                if assign[i] > -1 and j > 0:
-#                    assign[i] = 1
-#                else:
-#                    assign[i] = -1
-#            isoform_index = [i for i, p in enumerate(pct) if assign[i] > -1 and p > 0]
-#            isoform_id = 'novelIsoform_' + str(sum([2 ** e for e in isoform_index]))
-#            if len(assign) > -sum(assign) and isoform_id not in novelisoform_dict.keys():
-#                assigns.append(assign)
-#                novelisoform_dict[isoform_id] = (isoform_index)
-#    return novelisoform_dict, assigns
+
 
 
 def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms, exonInfo, small_exon_threshold,small_exon_threshold1):
@@ -1042,7 +1014,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
                         if parse:
                             cb, umi = '_'.join(qname_cbumi_dict[readname].split('_')[:3]), qname_cbumi_dict[readname].split('_')[3]
                         else:
-                            cb, umi = qname_cbumi_dict[readname].split('_')[0], qname_cbumi_dict[readname].split('_')[0]
+                            cb, umi = qname_cbumi_dict[readname].split('_')[0], qname_cbumi_dict[readname].split('_')[1]
                     else:
                         cb, umi = '.', '.'
                     cbumi = cb +'_'+umi
