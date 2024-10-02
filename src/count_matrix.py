@@ -143,10 +143,11 @@ def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl_path
             df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
         df['Cell'] = df['Cell'] + f':sample{idx}'
         df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
-        df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
-        df['Cell'] = df['Cell'] + f':sample{idx}'
-        df = df.set_index('Cell')
-        df_list.append(df)
+        if df.shape[0]>0:
+            df['Cell'] = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
+            df['Cell'] = df['Cell'] + f':sample{idx}'
+            df = df.set_index('Cell')
+            df_list.append(df)
     if len(df_list)==0:
         return
     result_df = pd.concat(df_list, axis=0)
