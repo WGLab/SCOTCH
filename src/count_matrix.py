@@ -141,15 +141,10 @@ def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl_path
         df.columns = ['Cell'] + df.columns.tolist()[1:]
         if parse:
             df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
-            df['Cell'] = df['Cell'] + f':sample{idx}'
-            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
-            df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
-            df['Cell'] = df['Cell'] + f':sample{idx}'
-        else:
-            df['Cell'] = df['Cell'] + f':sample{idx}'
-            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
-            df.Cell = df['Cell'].str.split('_', expand=True).iloc[:, 0].tolist()  # change cell names
-            df['Cell'] = df['Cell'] + f':sample{idx}'
+        df['Cell'] = df['Cell'] + f':sample{idx}'
+        df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
+        df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
+        df['Cell'] = df['Cell'] + f':sample{idx}'
         df = df.set_index('Cell')
         df_list.append(df)
     if len(df_list)==0:
