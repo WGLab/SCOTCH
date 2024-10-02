@@ -228,13 +228,13 @@ LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_tra
 #' @param X1_transcript cell(row) x transcript(column) count matrix for cell population 1. 
 #' @param X2_transcript cell(row) x transcript(column) count matrix for cell population 2. 
 #' @param ncores number of cores to use for parallel computing
-#' @param group_novel whether to group all novel isoforms together when testing DTU genes, default is TRUE
+#' @param group_novel whether to group all novel isoforms together when testing DTU genes, default is FALSE
 #' @return result dataframe.
 #' @examples
 #' df_transcript = scotch_transcript(gene_transcript_CD4_df,gene_transcript_CD8_df, sample8_CD4_transcript, sample8_CD8_transcript, 
 #' ncores=10)
 #' @export
-scotch_transcript = function(gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript,ncores=10, group_novel=TRUE){
+scotch_transcript = function(gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript,ncores=10, group_novel=FALSE){
   require(doParallel)
   require(foreach)
   registerDoParallel(cores=ncores)
