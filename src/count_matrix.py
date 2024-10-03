@@ -275,7 +275,7 @@ def generate_adata(triple_list):
 
 
 class CountMatrix:
-    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1):
+    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1, cover_existing=True):
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
@@ -283,6 +283,7 @@ class CountMatrix:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         self.group_novel = group_novel
+        self.cover_existing = cover_existing
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
         self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + '.pkl')
         if platform=='parse':
@@ -362,6 +363,17 @@ class CountMatrix:
             Genes.append(Genes_)
         Genes = flatten_list(Genes)
         Genes = list(set(Genes))
+        #exclude existing genes
+        if self.cover_existing==False:
+            Genes_existing = []
+            for p in self.count_matrix_folder_path_list:
+                Genes_existing_ = [g for g in os.listdir(p) if 'csv' in g]
+                Genes_existing_ = [pattern.sub('', g) for g in Genes_existing_]
+                Genes_existing.append(Genes_existing_)
+            Genes_existing = flatten_list(Genes_existing)
+            Genes_existing = list(set(Genes_existing))
+            Genes_not_existing = list(set(Genes) - set(Genes_existing))
+            Genes = Genes_not_existing
         for count_path in self.count_matrix_folder_path_list:
             os.makedirs(count_path, exist_ok=True)
             print('output folder is: ' + str(count_path))
