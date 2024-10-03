@@ -108,8 +108,8 @@ def deduplicate_col(df):
 
 def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl_paths, gene, novel_read_n = 10, output_folder=None, parse = False,
                                   group_novel = True, annotation_pkl = None):
-    #CompatibleMatrixPath = '/mnt/isilon/wang_lab/karen/scotch/benchmark/simulation/scotch/output/samples/CT1/compatible_matrix'
-    #cells
+    #CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
+    #read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxillary/read_selection.pkl'
     if isinstance(read_selection_pkl_paths, str):
         read_selection_pkl = pp.load_pickle(read_selection_pkl_paths)
         read_selection_pkl = {key + ':sample0': value for key, value in read_selection_pkl.items()}
@@ -375,7 +375,7 @@ class CountMatrix:
             for metagene in metagenes:
                 multi_gene_info = annotation_pkl_meta[metagene]
                 for gene_info in multi_gene_info:
-                    genename = gene_info[0]['geneName']
+                    genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
                     annotation_pkl[genename] = gene_info
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list,
                                                                                                       self.read_selection_pkl_path_list, gene, self.novel_read_n,
