@@ -178,7 +178,7 @@ class CountMatrix:
             if self.parse:
                 df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
             df['Cell'] = df['Cell'] + f':sample{idx}'
-            df = df[df['Cell'].isin([cell for cell in df['Cell'] if self.read_selection_pkl.get(cell) == 1])]  # filtering df
+            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
             if df.shape[0] > 0:
                 df['Cell'] = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
                 df['Cell'] = df['Cell'] + f':sample{idx}'
@@ -297,12 +297,13 @@ class CountMatrix:
                     annotation_pkl[genename] = gene_info
         self.annotation_pkl = annotation_pkl
         self.logger.info(f'generating read filter')
+        global read_selection_pkl
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
-        self.read_selection_pkl = read_selection_pkl
+        #self.read_selection_pkl = read_selection_pkl
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene)(gene) for gene in Genes)
         novel_isoform_del = {}
