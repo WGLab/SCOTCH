@@ -140,6 +140,7 @@ def main():
         logger, log_file = setup_logger(args.target[0], 'count')
         logger.info('Start generating count matrix for all targets.')
         logger.info(f'Target directories: {args.target}')
+        logger.info(f'Cover existing files: {args.cover_existing}')
         logger.info(f'Novel read threshold: {args.novel_read_n}')
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Group novel isoforms: {args.group_novel}')
@@ -150,6 +151,7 @@ def main():
         if args.platform=='parse':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.generate_multiple_samples()
+        logger.info('Saving count matrix')
         countmatrix.save_multiple_samples(csv=True, mtx=True)
         countmatrix.filter_gtf()
         logger.info('Completed generating count matrix for all targets.')
