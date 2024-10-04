@@ -153,7 +153,7 @@ def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl_path
     result_df = pd.concat(df_list, axis=0)
     df = result_df.fillna(0).astype(int)
     if group_novel:
-        df_, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=annotation_pkl[gene][0]['geneStrand'], parse=parse)
+        df, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=annotation_pkl[gene][0]['geneStrand'], parse=parse)
     else:
         novel_isoform_name_mapping = None
     if novel_isoform_name_mapping is not None:
