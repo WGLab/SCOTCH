@@ -268,7 +268,8 @@ def generate_adata(triple_list):
 
 
 class CountMatrix:
-    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1):
+    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1, logger = None):
+        self.logger = logger
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
@@ -303,8 +304,6 @@ class CountMatrix:
         Genes = list(set(Genes))
         for count_path in self.count_matrix_folder_path_list:
             os.makedirs(count_path, exist_ok=True)
-            print('output folder is: ' + str(count_path))
-        print('generating count matrix pickles')
         adata_gene_unfiltered_list, adata_transcript_unfiltered_list = [], []
         annotation_pkl = None
         if self.group_novel:
@@ -316,17 +315,20 @@ class CountMatrix:
                 for gene_info in multi_gene_info:
                     genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
                     annotation_pkl[genename] = gene_info
+        self.logger.info(f'generating read filter')
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
         global read_selection_pkl
+        self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list, gene, self.novel_read_n,
                                                    self.count_matrix_folder_path_list, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
             novel_isoform_del.update(d)
+        self.logger.info('count matrix generated')
         #save novel_isoform_del
         self.novel_isoform_del_dict = novel_isoform_del
         with open(self.novel_isoform_del_path, 'wb') as f:
@@ -340,15 +342,17 @@ class CountMatrix:
                                     f.endswith('_unfiltered_count.pickle')]
             #out_paths_filtered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
             #                      f.endswith('_filtered_count.pickle')]
-            print('reading pickles for unfiltered counts')
+            self.logger.info('reading count pickles')
+            #print('reading pickles for unfiltered counts')
             Out_unfiltered = []
             for op in out_paths_unfiltered:
                 Out_unfiltered.append(pp.load_pickle(op))
-            print('reading pickles for filtered counts')
+            #print('reading pickles for filtered counts')
             #Out_filtered = []
             #for op in out_paths_filtered:
             #    Out_filtered.append(pp.load_pickle(op))
-            print('generating count matrix')
+            self.logger.info('generating count matrix')
+            #print('generating count matrix')
             triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
             triple_gene_list = pp.unpack_list(list(triple_gene_list))
             triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
@@ -359,6 +363,7 @@ class CountMatrix:
             #triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
             #adata_gene_filtered = generate_adata(triple_gene_list)
             #adata_transcript_filtered = generate_adata(triple_transcript_list)
+            self.logger.info('removing pickles')
             for op in out_paths_unfiltered:
                 os.remove(op)
             #for op in out_paths_filtered:
@@ -373,7 +378,7 @@ class CountMatrix:
         #self.adata_transcript_filtered_list = adata_transcript_filtered_list
     def save_multiple_samples(self, csv = True, mtx = True):
         if csv:
-            print('saving count matrix in csv format')
+            self.logger.info('saving count matrix in csv format')
             for i in range(self.n_samples):
                 output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n) + '.csv')
                 output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.csv')
@@ -394,7 +399,7 @@ class CountMatrix:
         if mtx:
             for i in range(self.n_samples):
                 # save gene
-                print('saving count matrix in mtx format')
+                self.logger.info('saving count matrix in mtx format')
                 print('saving count matrix on gene level ')
                 gene_meta_unfiltered = {'obs': self.adata_gene_unfiltered_list[i].obs.index.tolist(),
                                         "var": self.adata_gene_unfiltered_list[i].var.index.tolist()}
@@ -426,6 +431,7 @@ class CountMatrix:
         except IndexError:
             return None
     def filter_gtf(self):
+        self.logger.info('updating gtf annotation file')
         for target in self.target:
             input_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation.gtf')
             output_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
