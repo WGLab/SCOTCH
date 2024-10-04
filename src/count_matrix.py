@@ -130,6 +130,16 @@ def generate_adata(triple_list):
 
 
 memory = Memory(cachedir='.cache')
+@memory.cache
+def read_filter(read_selection_pkl_path_list):
+    read_selection_pkl = {}
+    for i, path in enumerate(read_selection_pkl_path_list):
+        read_selection_pkl_ = pp.load_pickle(path)
+        read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
+        read_selection_pkl.update(read_selection_pkl_updated)
+        return read_selection_pkl
+
+
 
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1, logger = None):
@@ -157,7 +167,6 @@ class CountMatrix:
             self.compatible_matrix_folder_path_list = [os.path.join(target_, 'compatible_matrix') for target_ in target]
             self.count_matrix_folder_path_list = [os.path.join(target_, 'count_matrix') for target_ in target]
             self.read_selection_pkl_path_list = [os.path.join(target_, 'auxillary/read_selection.pkl') for target_ in target]
-
     def generate_count_matrix_by_gene(self, gene, read_selection_pkl):
         # CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
         # read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxillary/read_selection.pkl'
@@ -273,15 +282,8 @@ class CountMatrix:
                 with open(os.path.join(self.count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
                     pickle.dump((triple_gene, triple_transcript), f)
         return {gene: novel_isoform_del}
-
-    @memory.cache
-    def read_filter(self):
-        read_selection_pkl = {}
-        for i, path in enumerate(self.read_selection_pkl_path_list):
-            read_selection_pkl_ = pp.load_pickle(path)
-            read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
-            read_selection_pkl.update(read_selection_pkl_updated)
-        return read_selection_pkl
+    def read_filter_(self):
+        return read_filter(self.read_selection_pkl_path_list)
     def generate_multiple_samples(self):
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
@@ -306,7 +308,7 @@ class CountMatrix:
                     annotation_pkl[genename] = gene_info
         self.annotation_pkl = annotation_pkl
         self.logger.info(f'generating read filter')
-        read_selection_pkl = self.read_filter()
+        read_selection_pkl = self.read_filter_()
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene)(gene, read_selection_pkl) for gene in Genes)
         novel_isoform_del = {}
