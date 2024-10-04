@@ -147,7 +147,7 @@ def main():
         logger.info(f'Workers: {args.workers}')
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n,
                                         platform = args.platform, workers = args.workers,
-                                     group_novel = args.group_novel, cover_existing = args.cover_existing)
+                                     group_novel = args.group_novel, logger = logger)
         if args.platform=='parse':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.generate_multiple_samples()
