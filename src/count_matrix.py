@@ -106,19 +106,10 @@ def deduplicate_col(df):
         return df
 
 
-def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl_paths, gene, novel_read_n = 10, output_folder=None, parse = False,
+def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl, gene, novel_read_n = 10, output_folder=None, parse = False,
                                   group_novel = True, annotation_pkl = None):
     #CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
     #read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxillary/read_selection.pkl'
-    if isinstance(read_selection_pkl_paths, str):
-        read_selection_pkl = pp.load_pickle(read_selection_pkl_paths)
-        read_selection_pkl = {key + ':sample0': value for key, value in read_selection_pkl.items()}
-    else:
-        read_selection_pkl = {}
-        for i, path in enumerate(read_selection_pkl_paths):
-            read_selection_pkl_ = pp.load_pickle(path)
-            read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
-            read_selection_pkl.update(read_selection_pkl_updated)
     if output_folder is not None:
         if isinstance(output_folder, str):
             os.makedirs(output_folder,exist_ok=True)
@@ -389,8 +380,13 @@ class CountMatrix:
                 for gene_info in multi_gene_info:
                     genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
                     annotation_pkl[genename] = gene_info
+        read_selection_pkl = {}
+        for i, path in enumerate(self.read_selection_pkl_path_list):
+            read_selection_pkl_ = pp.load_pickle(path)
+            read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
+            read_selection_pkl.update(read_selection_pkl_updated)
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list,
-                                                                                                      self.read_selection_pkl_path_list, gene, self.novel_read_n,
+                                                                                                      read_selection_pkl, gene, self.novel_read_n,
                                                    self.count_matrix_folder_path_list, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
