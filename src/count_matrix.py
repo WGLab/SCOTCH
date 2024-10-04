@@ -106,10 +106,12 @@ def deduplicate_col(df):
         return df
 
 
-def generate_count_matrix_by_gene(CompatibleMatrixPaths, read_selection_pkl, gene, novel_read_n = 10, output_folder=None, parse = False,
+def generate_count_matrix_by_gene(CompatibleMatrixPaths, gene, novel_read_n = 10, output_folder=None, parse = False,
                                   group_novel = True, annotation_pkl = None):
     #CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
     #read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxillary/read_selection.pkl'
+    #read_selection_pkl: keys must add sample index, global variable
+    global read_selection_pkl
     if output_folder is not None:
         if isinstance(output_folder, str):
             os.makedirs(output_folder,exist_ok=True)
@@ -291,60 +293,6 @@ class CountMatrix:
             self.compatible_matrix_folder_path_list = [os.path.join(target_, 'compatible_matrix') for target_ in target]
             self.count_matrix_folder_path_list = [os.path.join(target_, 'count_matrix') for target_ in target]
             self.read_selection_pkl_path_list = [os.path.join(target_, 'auxillary/read_selection.pkl') for target_ in target]
-    ##TODO: DEL
-    def generate_single_sample(self): #single sample
-        pattern = re.compile(r'_ENS.+\.csv')
-        Genes = [g for g in os.listdir(self.compatible_matrix_folder_path) if 'csv' in g]
-        Genes = [pattern.sub('', g) for g in Genes]
-        print('generating count matrix pickles')
-        annotation_pkl = None
-        if self.group_novel:
-            annotation_pkl = {}
-            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
-            metagenes = list(annotation_pkl_meta.keys())
-            for metagene in metagenes:
-                multi_gene_info = annotation_pkl_meta[metagene]
-                for gene_info in multi_gene_info:
-                    genename = gene_info[0]['geneName']
-                    annotation_pkl[genename] = gene_info
-        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path, self.read_selection_pkl_path, gene,
-                                                                                                      self.novel_read_n,self.count_matrix_folder_path, self.parse,
-                                                                                                      self.group_novel,annotation_pkl)for gene in Genes)
-        novel_isoform_del = {}
-        for d in novel_isoform_del_dict:
-            novel_isoform_del.update(d)
-        self.novel_isoform_del_dict = novel_isoform_del
-        out_paths_unfiltered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
-                                f.endswith('_unfiltered_count.pickle')]
-        #out_paths_filtered = [os.path.join(self.count_matrix_folder_path, f) for f in os.listdir(self.count_matrix_folder_path) if
-        #                      f.endswith('_filtered_count.pickle')]
-        print('reading pickles for unfiltered counts')
-        Out_unfiltered = []
-        for op in out_paths_unfiltered:
-            Out_unfiltered.append(pp.load_pickle(op))
-        print('reading pickles for filtered counts')
-        #Out_filtered = []
-        #for op in out_paths_filtered:
-        #    Out_filtered.append(pp.load_pickle(op))
-        print('generating count matrix')
-        triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
-        triple_gene_list = pp.unpack_list(list(triple_gene_list))
-        triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
-        adata_gene_unfiltered = generate_adata(triple_gene_list)
-        adata_transcript_unfiltered = generate_adata(triple_transcript_list)
-        #triple_gene_list, triple_transcript_list = list(zip(*Out_filtered))
-        #triple_gene_list = pp.unpack_list(list(triple_gene_list))
-        #triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
-        #adata_gene_filtered = generate_adata(triple_gene_list)
-        #adata_transcript_filtered = generate_adata(triple_transcript_list)
-        for op in out_paths_unfiltered:
-            os.remove(op)
-        #for op in out_paths_filtered:
-        #    os.remove(op)
-        self.adata_gene_unfiltered = adata_gene_unfiltered
-        self.adata_transcript_unfiltered = adata_transcript_unfiltered
-        #self.adata_gene_filtered = adata_gene_filtered
-        #self.adata_transcript_filtered = adata_transcript_filtered
     def generate_multiple_samples(self):
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
@@ -385,8 +333,7 @@ class CountMatrix:
             read_selection_pkl_ = pp.load_pickle(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
-        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list,
-                                                                                                      read_selection_pkl, gene, self.novel_read_n,
+        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list, gene, self.novel_read_n,
                                                    self.count_matrix_folder_path_list, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
@@ -435,58 +382,6 @@ class CountMatrix:
         self.adata_transcript_unfiltered_list = adata_transcript_unfiltered_list
         #self.adata_gene_filtered_list = adata_gene_filtered_list
         #self.adata_transcript_filtered_list = adata_transcript_filtered_list
-    ##TODO: DEL
-    def save_single_sample(self, csv = True, mtx = True):
-        if csv:
-            print('saving count matrix in csv format')
-            output_gene_unfiltered = os.path.join(self.count_matrix_folder_path,'adata_gene_unfiltered' + str(self.novel_read_n) + '.csv')
-            output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path, 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.csv')
-            #output_gene_filtered = os.path.join(self.count_matrix_folder_path,'adata_gene_filtered' + str(self.novel_read_n) + '.csv')
-            #output_transcript_filtered = os.path.join(self.count_matrix_folder_path, 'adata_transcript_filtered' + str(self.novel_read_n) + '.csv')
-            # save gene
-            print('saving count matrix on gene level ')
-            adata_gene_unfiltered_df = self.adata_gene_unfiltered.to_df()
-            #adata_gene_filtered_df = self.adata_gene_filtered.to_df()
-            adata_gene_unfiltered_df.to_csv(output_gene_unfiltered)
-            #adata_gene_filtered_df.to_csv(output_gene_filtered)
-            # save transcript
-            print('saving count matrix on transcript level ')
-            adata_transcript_unfiltered_df = self.adata_transcript_unfiltered.to_df()
-            #adata_transcript_filtered_df = self.adata_transcript_filtered.to_df()
-            adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
-            #adata_transcript_filtered_df.to_csv(output_transcript_filtered)
-        if mtx:
-            # save gene
-            print('saving count matrix in mtx format')
-            print('saving count matrix on gene level ')
-            gene_meta_unfiltered = {'obs': self.adata_gene_unfiltered.obs.index.tolist(),
-                                    "var": self.adata_gene_unfiltered.var.index.tolist()}
-            #gene_meta_filtered = {'obs': self.adata_gene_filtered.obs.index.tolist(),
-            #                      "var": self.adata_gene_filtered.var.index.tolist()}
-            with open(os.path.join(self.count_matrix_folder_path,'adata_gene_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
-                pickle.dump(gene_meta_unfiltered, f)
-            mmwrite(os.path.join(self.count_matrix_folder_path,'adata_gene_unfiltered' + str(self.novel_read_n)+ '.mtx'),self.adata_gene_unfiltered.X)
-            #with open(os.path.join(self.count_matrix_folder_path, 'adata_gene_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
-            #    pickle.dump(gene_meta_filtered, f)
-            #mmwrite(os.path.join(self.count_matrix_folder_path, 'adata_gene_filtered' + str(self.novel_read_n) + '.mtx'),self.adata_gene_filtered.X)
-            # save transcript
-            print('saving count matrix on transcript level ')
-            transcript_meta_unfiltered = {'obs': self.adata_transcript_unfiltered.obs.index.tolist(),
-                                          "var": self.adata_transcript_unfiltered.var.index.tolist()}
-            mmwrite(os.path.join(self.count_matrix_folder_path, 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.mtx'),
-                    self.adata_transcript_unfiltered.X)
-            #transcript_meta_filtered = {'obs': self.adata_transcript_filtered.obs.index.tolist(),
-            #                            "var": self.adata_transcript_filtered.var.index.tolist()}
-            #mmwrite(os.path.join(self.count_matrix_folder_path, 'adata_transcript_filtered' + str(self.novel_read_n) + '.mtx'),
-            #        self.adata_transcript_filtered.X)
-            with open(os.path.join(self.count_matrix_folder_path,
-                                   'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
-            #with open(os.path.join(self.count_matrix_folder_path,
-            #                       'adata_transcript_filtered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_filtered, f)
-        # save novel isoform delete list
-        outfile = os.path.join(self.count_matrix_folder_path, 'novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
-        with open(outfile, 'wb') as f:
-            pickle.dump(self.novel_isoform_del_dict,f)
     def save_multiple_samples(self, csv = True, mtx = True):
         if csv:
             print('saving count matrix in csv format')
