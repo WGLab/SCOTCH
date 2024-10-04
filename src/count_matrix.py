@@ -272,15 +272,13 @@ class CountMatrix:
                 with open(os.path.join(self.count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
                     pickle.dump((triple_gene, triple_transcript), f)
         return {gene: novel_isoform_del}
-
     def read_filter(self):
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
-            return read_selection_pkl
-
+        return read_selection_pkl
     def generate_multiple_samples(self):
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
@@ -321,9 +319,8 @@ class CountMatrix:
                 dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
-            out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
-                                    f.endswith('_unfiltered_count.pickle')]
-            self.logger.info('reading count pickles')
+            out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if f.endswith('_unfiltered_count.pickle')]
+            self.logger.info(f'reading {len(out_paths_unfiltered)} count pickles')
             Out_unfiltered = []
             for op in out_paths_unfiltered:
                 Out_unfiltered.append(pp.load_pickle(op))
@@ -334,9 +331,7 @@ class CountMatrix:
             adata_gene_unfiltered = generate_adata(triple_gene_list)
             adata_transcript_unfiltered = generate_adata(triple_transcript_list)
             self.logger.info('removing pickles')
-            for op in out_paths_unfiltered:
-                os.remove(op)
-            #for op in out_paths_filtered:
+            #for op in out_paths_unfiltered:
             #    os.remove(op)
             adata_gene_unfiltered_list.append(adata_gene_unfiltered)
             adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
