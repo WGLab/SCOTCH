@@ -316,12 +316,12 @@ class CountMatrix:
                     genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
                     annotation_pkl[genename] = gene_info
         self.logger.info(f'generating read filter')
+        global read_selection_pkl
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
-        global read_selection_pkl
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(generate_count_matrix_by_gene)(self.compatible_matrix_folder_path_list, gene, self.novel_read_n,
                                                    self.count_matrix_folder_path_list, self.parse, self.group_novel, annotation_pkl) for gene in Genes)
