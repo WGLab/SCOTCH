@@ -129,7 +129,17 @@ def generate_adata(triple_list):
     return adata
 
 
-
+def split_list(lst, n):
+    chunk_size = len(lst) // n
+    remainder = len(lst) % n
+    result = []
+    start = 0
+    for i in range(n):
+        end = start + chunk_size + (1 if remainder > 0 else 0)
+        result.append(lst[start:end])
+        start = end
+        remainder -= 1
+    return result
 
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1, logger = None):
@@ -272,6 +282,13 @@ class CountMatrix:
                 with open(os.path.join(self.count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
                     pickle.dump((triple_gene, triple_transcript), f)
         return {gene: novel_isoform_del}
+
+    def generate_count_matrix_by_gene_list(self, gene_list, read_selection_pkl):
+        novel_isoform_del_dict = {}
+        for gene in gene_list:
+            novel_isoform_del_dict_gene = self.generate_count_matrix_by_gene(gene, read_selection_pkl)
+            novel_isoform_del_dict.update(novel_isoform_del_dict_gene)
+        return novel_isoform_del_dict
     def read_filter(self):
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
@@ -305,7 +322,8 @@ class CountMatrix:
         self.logger.info(f'generating read filter')
         read_selection_pkl = self.read_filter()
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
-        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene)(gene, read_selection_pkl) for gene in Genes)
+        Genes_list = split_list(Genes, self.workers)
+        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in Genes_list)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
             novel_isoform_del.update(d)
@@ -331,8 +349,8 @@ class CountMatrix:
             adata_gene_unfiltered = generate_adata(triple_gene_list)
             adata_transcript_unfiltered = generate_adata(triple_transcript_list)
             self.logger.info('removing pickles')
-            #for op in out_paths_unfiltered:
-            #    os.remove(op)
+            for op in out_paths_unfiltered:
+                os.remove(op)
             adata_gene_unfiltered_list.append(adata_gene_unfiltered)
             adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
         self.adata_gene_unfiltered_list = adata_gene_unfiltered_list
@@ -368,7 +386,8 @@ class CountMatrix:
                 mmwrite(os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.mtx'),
                         self.adata_transcript_unfiltered_list[i].X)
                 with open(os.path.join(self.count_matrix_folder_path_list[i],
-                                       'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f: pickle.dump(transcript_meta_unfiltered, f)
+                                       'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
+                    pickle.dump(transcript_meta_unfiltered, f)
     def _extract_attribute(self, attributes, attribute_name):
         try:
             return attributes.split(f'{attribute_name} "')[1].split('"')[0]
