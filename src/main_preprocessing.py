@@ -192,7 +192,7 @@ def main():
         run_count()
 
     if args.task =='visualization': #currently only support 10X file structure
-        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.target_vis, args.sample_names)
+        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.target_vis, args.sample_names, args.width, args.height)
 
 if __name__ == '__main__':
     main()
