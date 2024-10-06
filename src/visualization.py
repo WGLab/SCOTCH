@@ -27,7 +27,7 @@ def sub_gtf(gene_name, gtf_path, out_path = None):
     gene_start = filtered_gtf['start'].min()
     gene_end = filtered_gtf['end'].max()
     if out_path is not None:
-        filtered_gtf.to_csv(out_path, sep='\t', index=False, header=False)
+        filtered_gtf.to_csv(out_path, sep='\t', index=False, header=False, quoting=3)
     return filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end
 
 
@@ -35,7 +35,7 @@ def merge_gtf_files(gtf_paths: list, out_path=None):
     merged_gtf = pd.concat([pd.read_csv(gtf_path, sep='\t', comment='#', header=None) for gtf_path in gtf_paths], ignore_index=True)
     merged_gtf = merged_gtf.drop_duplicates()
     if out_path is not None:
-        merged_gtf.to_csv(out_path, sep='\t', index=False, header=False)
+        merged_gtf.to_csv(out_path, sep='\t', index=False, header=False,quoting=3)
     return merged_gtf
 
 
@@ -104,7 +104,7 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     subprocess.run(["samtools", "index", bam_existing_sorted_path])
     subprocess.run(["samtools", "sort", "-o", bam_novel_sorted_path, bam_novel_path])
     subprocess.run(["samtools", "index", bam_novel_sorted_path])
-    filtered_gtf.to_csv(os.path.join(out_path, gene+'_SCOTCH_filtered.gtf'), sep='\t', index=False, header=False)
+    filtered_gtf.to_csv(os.path.join(out_path, gene+'_SCOTCH_filtered.gtf'), sep='\t', index=False, header=False,quoting=3)
     return gene_chr, gene_start, gene_end
 
 def generate_subbam_subgtf_multiple_samples(gene:str, bamFiles:list, targets:list, novel_pct=0.1,
