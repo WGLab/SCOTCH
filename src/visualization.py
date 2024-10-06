@@ -133,7 +133,7 @@ def generate_subbam_subgtf_multiple_samples(gene:str, bamFiles:list, targets:lis
 
 #path, bam, label, color
 def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
-                  dpi=300, width=12, height=1, junction_num=20, intron_scale=1):
+                  dpi=300, width=12, height=1, junction_num=100, intron_scale=1):
     #target_vis, files are at target_vis/visualization/gene/sample1/
     gtf_file = os.path.join(target_vis, 'visualization', gene_name, gene_name+'_merged.gtf')
     folder_path = os.path.join(target_vis, 'visualization', gene_name)
@@ -177,7 +177,7 @@ def visualization(gene, bamFiles, targets, novel_pct, final_target, sample_names
                                                          sample_names=sample_names)
     gene_chr, gene_start, gene_end = output
     run_trackplot(target_vis=final_target, gene_name=gene, gene_chr=gene_chr, gene_start=gene_start, gene_end=gene_end,
-                      dpi=300, width=width, height=height, junction_num=20, intron_scale=1)
+                      dpi=300, width=width, height=height, junction_num=100, intron_scale=1)
 
 #gene='CD74'
 #bamFile='/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams'
