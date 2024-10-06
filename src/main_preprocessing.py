@@ -46,6 +46,7 @@ parser.add_argument('--workers',type=int,default=8, help="number of workers per 
 parser.add_argument('--single_cell',action='store_true',help="default setting for preprocessing single cell data")
 parser.add_argument('--bulk', action='store_false',dest='single_cell',help="bulk data")
 
+
 #task is visualization
 parser.add_argument('--gene',type=str, help="gene name to visualize")
 parser.add_argument('--target_vis',type=str, help="target path for visualization")
