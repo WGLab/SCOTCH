@@ -46,7 +46,6 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
         os.makedirs(out_path, exist_ok=True)
     filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end = sub_gtf(gene, gtf_path, out_path=None)
     #-------get major novel isoform names and known isoform names
-    known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
     count_matrix_path = os.path.join(target, 'count_matrix')
     count_matrix_path_mtx = [os.path.join(count_matrix_path, i) for i in os.listdir(count_matrix_path) if
                              'adata_transcript' in i and '.mtx' in i][0]
@@ -59,6 +58,8 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     sub_mtx = dense_mtx[:, gene_cols_index]
     col_pct = np.sum(sub_mtx, axis=0) / np.sum(sub_mtx)
     over_1_percent_cols = np.where(col_pct > novel_pct)[1]
+    #known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
+    known_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'ENST' in pkl['var'][gene_cols_index[ind]]]
     novel_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'novel' in pkl['var'][gene_cols_index[ind]]]
     #further filter gtf, only keeping major novel isoform
     selected_isoform = known_isoform_names + novel_isoform_names
@@ -74,11 +75,10 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     new_columns = df.columns.tolist()
     new_columns[0] = 'CBUMI'
     df.columns = new_columns
+    mask_novel = df[novel_isoform_names].gt(0).any(axis=1)
     mask_enst = df[known_isoform_names].gt(0).any(axis=1)
-    cbumi_enst = df.loc[mask_enst, 'CBUMI'].tolist()
-    novel_cols = df.filter(like='novel')
-    mask_novel = novel_cols.gt(0).any(axis=1)
     cbumi_novel = df.loc[mask_novel, 'CBUMI'].tolist()
+    cbumi_enst = df.loc[mask_enst, 'CBUMI'].tolist()
     # write bam file
     if os.path.isfile(bamFile)==False: #bamFile is a folder
         bamFile_name = [f for f in os.listdir(bamFile) if f.endswith('.bam') and '.'+gene_chr+'.' in f]
