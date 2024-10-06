@@ -52,8 +52,8 @@ parser.add_argument('--gene',type=str, help="gene name to visualize")
 parser.add_argument('--target_vis',type=str, help="target path for visualization")
 parser.add_argument('--sample_names',type=str,nargs='+', help="sample names for visualization")#a list
 parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel isoform annotation if expression in count matrix surpass the threshold")
-parser.add_argument('--width',type=float,default=12, )
-parser.add_argument('--height',type=float,default=1)
+parser.add_argument('--width',type=int,default=12)
+parser.add_argument('--height',type=int,default=1)
 
 def setup_logger(target, task_name):
     logger = logging.getLogger()
