@@ -5,10 +5,12 @@ import annotation as annot
 import compatible as cp
 import logging
 import shutil
+import visualization as vis
+import subprocess
 
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
-parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all")
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")
 parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
 parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")#a list
@@ -45,7 +47,13 @@ parser.add_argument('--workers',type=int,default=8, help="number of workers per 
 parser.add_argument('--single_cell',action='store_true',help="default setting for preprocessing single cell data")
 parser.add_argument('--bulk', action='store_false',dest='single_cell',help="bulk data")
 
-
+#task is visualization
+parser.add_argument('--gene',type=str, help="gene name to visualize")
+parser.add_argument('--target_vis',type=str, help="target path for visualization")
+parser.add_argument('--sample_names',type=str,nargs='+', help="sample names for visualization")#a list
+parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel isoform annotation if expression in count matrix surpass the threshold")
+parser.add_argument('--width',type=float,default=12, )
+parser.add_argument('--height',type=float,default=1)
 
 def setup_logger(target, task_name):
     logger = logging.getLogger()
@@ -183,8 +191,8 @@ def main():
         run_summary()
         run_count()
 
-
-
+    if args.task =='visualization': #currently only support 10X file structure
+        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.target_vis, args.sample_names)
 
 if __name__ == '__main__':
     main()
