@@ -41,7 +41,6 @@ parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel
 parser.add_argument('--group_novel', action='store_true', help="whether to further group novel isoforms generated in compatible matrix, default is true")
 parser.add_argument('--group_novel_off', action='store_false', dest='group_novel')
 
-
 #general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")
 parser.add_argument('--single_cell',action='store_true',help="default setting for preprocessing single cell data")
