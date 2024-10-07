@@ -566,7 +566,10 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
     """
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
-    genes = None
+    if refGeneFile_gtf_path is not None:
+        genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
+    else:
+        genes = None
     #####################################################
     #option1: ---------rely on bam file alone---------###
     #####################################################
@@ -588,7 +591,6 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
     #####################################################
     if refGeneFile_pkl_path is None and refGeneFile_gtf_path is not None: ###use gtf
         print('use the existing gtf file for gene annotations')
-        genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
         if os.path.isfile(output) == False:
@@ -629,6 +631,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                     pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
+        print('meta gene information does not exist, will generate.')
         if genes is None: #bam generated reference
             geneIDs = list(geneStructureInformation.keys())
             rows = []
