@@ -173,7 +173,7 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
         for path in field1
     ]
     field3 = [f'{a}_{b}' for a, b in zip(field3_0, field3_1)]
-    field4 = ['#b2182b' if ii=='novel' else '#2166ac' for ii in field3_1 ]
+    field4 = ['#2166ac' if ii=='known' else '#b2182b' for ii in field3_1 ]
     bamfile_tsv = pd.DataFrame({'path':field1, 'type':field2, 'label':field3, 'color':field4})
     bamfile_tsv = bamfile_tsv.sort_values(by='label').reset_index(drop=True)
     bamfile_tsv.to_csv(bamfile_tsv_path, sep='\t', index=False, header=False)
