@@ -675,7 +675,7 @@ def add_build(geneStructureInformation, build):
 class Annotator:
     def __init__(self, target:list, reference_gtf_path:str, reference_pkl_path:str, bam_path:list, update_gtf, workers,
                  coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,z_score_threshold,
-                 min_gene_size, build = None, platform = '10x'):
+                 min_gene_size, build = None, platform = '10x', logger = None):
         """
         target: root path to save annotation files. SCOTCH will automatically create sub folders
         reference_gtf: path to gtf annotation (optional)
@@ -683,6 +683,7 @@ class Annotator:
         update_gtf: whether to update gtf annotation using bam file
         build: parse parameter
         """
+        self.logger = logger
         self.multiple_bam = True if len(bam_path)>1 else False
         self.multiple_samples = True if len(target)>1 else False
         self.workers = workers
@@ -716,13 +717,14 @@ class Annotator:
             if not os.path.exists(self.annotation_folder_path[i]):
                 os.makedirs(self.annotation_folder_path[i])
             if os.path.isfile(self.annotation_path_single_gene[i]) and os.path.isfile(self.annotation_path_meta_gene[i]):
-                print('complete gene annotation information exist')
+                self.logger.info(f'Complete gene annotation information exist at {self.annotation_path_single_gene[i]} and {self.annotation_path_meta_gene[i]}')
             else:
                 if i==0:
-                    print('complete gene annotation information does not exist, we will generate')
+                    self.logger.info(
+                        f'Complete gene annotation information does not exist, we will generate...')
                     #annotation free mode
                     if self.reference_gtf_path is None and self.reference_pkl_path is None:
-                        print('Annotation-free Mode: we will rely on given bam files to generate gene annotations')
+                        self.logger.info(f'Annotation-free Mode: we will rely on given bam files to generate gene annotations')
                         _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
                                                     self.bam_path, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
@@ -730,7 +732,8 @@ class Annotator:
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
                                                     self.min_gene_size)
                     if self.update_gtf:
-                        print('Enhanced-annotation Mode: we will update existing gene annotations using given bam files')
+                        self.logger.info(
+                            f'Enhanced-annotation Mode: we will update existing gene annotations using given bam files')
                         _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
                                                     self.bam_path, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
@@ -738,7 +741,8 @@ class Annotator:
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
                                                     self.min_gene_size)
                     else:
-                        print('Annotation-only Mode: we will only use existing gene annotations')
+                        self.logger.info(
+                            f'Annotation-only Mode: we will only use existing gene annotations')
                         _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
                                                     None, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
@@ -747,7 +751,7 @@ class Annotator:
                                                     self.min_gene_size)
                 else:
                     # Copy the generated files from the first target to the current target
-                    print(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
+                    self.logger.info(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
                     shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
 
     def annotation_bam(self):
@@ -755,9 +759,9 @@ class Annotator:
             if not os.path.exists(self.bamInfo_folder_path[i]):
                 os.makedirs(self.bamInfo_folder_path[i])
             if os.path.isfile(self.bamInfo_pkl_path[i]) == True and os.path.isfile(self.bamInfo_csv_path[i]) == True:
-                print('bam file information exist')
+                self.logger.info(f'bam file information exist at {self.bamInfo_pkl_path[i]} and {self.bamInfo_csv_path[i]}')
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == True:
-                print('extracting bam file pickle information')
+                self.logger.info('Extracting bam file pickle information')
                 bam_info = pd.read_csv(self.bamInfo_csv_path[i])
                 qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
                 with open(self.bamInfo_pkl_path[i], 'wb') as file:
@@ -768,7 +772,7 @@ class Annotator:
                     with open(self.bamInfo3_pkl_path[i], 'wb') as file:
                         pickle.dump(qname_sample_dict, file)
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
-                print('extracting bam file information')
+                self.logger.info('Extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
                     bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio)
                 else:
@@ -779,7 +783,7 @@ class Annotator:
                     else:
                         bam_info = extract_bam_info(self.bam_path[i])
                 bam_info.to_csv(self.bamInfo_csv_path[i])
-                print('generating bam file pickle information')
+                self.logger.info('Generating bam file pickle information')
                 qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
                 with open(self.bamInfo_pkl_path[i], 'wb') as file:
                     pickle.dump(qname_dict, file)

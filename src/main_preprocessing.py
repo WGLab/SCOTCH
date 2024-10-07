@@ -125,7 +125,7 @@ def main():
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Reference GTF Path: {args.reference}')
         logger.info(f'Update GTF option: {args.update_gtf}')
-        readmapper = cp.ReadMapper2(target=args.target, bam_path = args.bam,
+        readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match_low, lowest_match1=args.match_high,
                                     small_exon_threshold = args.small_exon_threshold,
                                    small_exon_threshold1=args.small_exon_threshold_high,
