@@ -564,6 +564,8 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     :param build: used for parse platform naming
     :return: metageneStructureInformation
     """
+    print('refGeneFile_path is: '+str(refGeneFile_path))
+    print('bamfile_path is:'+str(bamfile_path))
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
     genes = None
@@ -722,7 +724,7 @@ class Annotator:
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
                                                     self.min_gene_size)
                     if self.update_gtf:
-                        print('Semi-annotation Mode: we will update existing gene annotations using given bam files')
+                        print('Enhanced-annotation Mode: we will update existing gene annotations using given bam files')
                         _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
                                                     self.coverage_threshold_gene, self.coverage_threshold_exon,
