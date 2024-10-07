@@ -543,8 +543,8 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     else:
         geneIDs = list(geneStructureInformation.keys())
         #re-order geneID
-        chunks = np.array_split(geneIDs, workers)
-        geneIDs = [item for sublist in zip(*chunks) for item in sublist]
+        #chunks = np.array_split(geneIDs, workers)
+        #geneIDs = [item for sublist in zip(*chunks) for item in sublist]
         results = Parallel(n_jobs=workers)(
             delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
@@ -613,22 +613,26 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         if build is not None:
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
-        shutil.copy(refGeneFile_gtf_path, output)
+        shutil.copy(refGeneFile_pkl_path, output) #copy existing pickle file over
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
         if bamfile_path is not None:
             print('rely on bam file to update existing gene annotations')
-            geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
+            output_update = output[:-4]+'updated.pkl'
+            if os.path.isfile(output_update):
+                geneStructureInformation = load_pickle(output_update)
+            else:
+                geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
                                                       bamfile_path=bamfile_path,
                                                       coverage_threshold_gene=coverage_threshold_gene,
                                                       coverage_threshold_exon=coverage_threshold_exon,
                                                       coverage_threshold_splicing=coverage_threshold_splicing,
                                                       z_score_threshold = z_score_threshold,
                                                       min_gene_size=min_gene_size, workers=num_cores)
-            if output is not None:
-                with open(output[:-4]+'updated.pkl', 'wb') as file:
-                    pickle.dump(geneStructureInformation, file)
+                if output is not None:
+                    with open(output[:-4]+'updated.pkl', 'wb') as file:
+                        pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
         print('meta gene information does not exist, will generate.')

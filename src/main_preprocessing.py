@@ -125,8 +125,6 @@ def main():
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Reference GTF Path: {args.reference}')
         logger.info(f'Update GTF option: {args.update_gtf}')
-        #for i in range(len(args.target)):
-            #logger.info('processing the sample of: '+str(args.bam[i]))
         readmapper = cp.ReadMapper2(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match_low, lowest_match1=args.match_high,
                                     small_exon_threshold = args.small_exon_threshold,
@@ -135,7 +133,6 @@ def main():
                                    platform = args.platform, reference_gtf_path=args.reference)
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                       total_jobs=args.total_jobs,current_job_index=args.job_index)
-            #if (args.update_gtf and reference is not None) or (reference is None):
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
