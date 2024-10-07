@@ -1,5 +1,4 @@
 from preprocessing import *
-import argparse
 import os
 import shutil
 import pandas as pd
@@ -57,17 +56,19 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     gene_cols_index = [i for i, col in enumerate(pkl['var']) if gene in col]
     sub_mtx = dense_mtx[:, gene_cols_index]
     col_pct = np.sum(sub_mtx, axis=0) / np.sum(sub_mtx)
-    over_1_percent_cols = np.where(col_pct > novel_pct)[1]
+    over_1_percent_cols = np.where(col_pct > novel_pct)[1].tolist()
     #known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
     known_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'ENST' in pkl['var'][gene_cols_index[ind]]]
     novel_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'novel' in pkl['var'][gene_cols_index[ind]]]
     #further filter gtf, only keeping major novel isoform
+    known_isoform_names = [isoform.split('_',1)[1] for isoform in known_isoform_names]
+    novel_isoform_names = [isoform.split('_',1)[1] for isoform in novel_isoform_names]
     selected_isoform = known_isoform_names + novel_isoform_names
     transcript_ids = filtered_gtf['attribute'].apply(
         lambda x: re.search(r'transcript_id "([^"]+)"', x).group(1) if re.search(r'transcript_id "([^"]+)"',
                                                                                  x) else None
     )
-    filtered_gtf = filtered_gtf[transcript_ids.isin(selected_isoform)]
+    filtered_gtf = pd.concat([filtered_gtf.iloc[[0]], filtered_gtf[transcript_ids.isin(selected_isoform)]], ignore_index=True)
     #locate reads belonging to known and novel
     compatible_matrix_path = os.path.join(target,'compatible_matrix')
     compatible_matrix_path = os.path.join(compatible_matrix_path,[cp for cp in os.listdir(compatible_matrix_path) if cp.startswith(str(gene)+'_')][0])
@@ -75,10 +76,22 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     new_columns = df.columns.tolist()
     new_columns[0] = 'CBUMI'
     df.columns = new_columns
-    mask_novel = df[novel_isoform_names].gt(0).any(axis=1)
     mask_enst = df[known_isoform_names].gt(0).any(axis=1)
-    cbumi_novel = df.loc[mask_novel, 'CBUMI'].tolist()
     cbumi_enst = df.loc[mask_enst, 'CBUMI'].tolist()
+    if df[novel_isoform_names].shape[1]<len(novel_isoform_names):
+        ##TODO: add parse
+        geneStrand = filtered_gtf.iloc[[0]]['strand'].tolist()[0]
+        df_novel = df.filter(like='novelIsoform')
+        child_id_list = [int(col.split('_')[1]) for col in df_novel.columns.tolist()]
+        novel_isoform_id_list = [int(novel.split('_')[1]) for novel in novel_isoform_names]
+        col_index_list = []
+        for i, child_id in enumerate(child_id_list):
+            if find_parent_isoform(novel_isoform_id_list, child_id, geneStrand) is not None:
+                col_index_list.append(i)
+        mask_novel = df_novel.iloc[:,col_index_list].gt(0).any(axis=1)
+    else:
+        mask_novel = df[novel_isoform_names].gt(0).any(axis=1)
+    cbumi_novel = df.loc[mask_novel, 'CBUMI'].tolist()
     # write bam file
     if os.path.isfile(bamFile)==False: #bamFile is a folder
         bamFile_name = [f for f in os.listdir(bamFile) if f.endswith('.bam') and '.'+gene_chr+'.' in f]
