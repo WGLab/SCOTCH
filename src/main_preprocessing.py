@@ -80,12 +80,6 @@ def copy_log_to_targets(log_file, targets):
 def main():
     global args
     args = parser.parse_args()
-    if args.reference_pkl=='None' and args.reference=='None':
-        reference = None
-    elif args.reference_pkl=='None' and args.reference!='None':
-        reference = args.reference
-    else:
-        reference = args.reference_pkl
     for t in args.target:
         if not os.path.exists(t):
             os.makedirs(t)
@@ -102,7 +96,8 @@ def main():
         logger.info(f'Coverage threshold (splicing): {args.coverage_threshold_splicing}')
         logger.info(f'Z-score threshold: {args.z_score_threshold}')
         logger.info(f'Minimum gene size: {args.min_gene_size}')
-        annotator = annot.Annotator(target=args.target, reference_gtf_path=reference,
+        annotator = annot.Annotator(target=args.target,
+                                    reference_gtf_path=args.reference, reference_pkl_path = args.reference_pkl,
                                     bam_path=args.bam, update_gtf=args.update_gtf,
                                     workers=args.workers, coverage_threshold_gene=args.coverage_threshold_gene,
                                     coverage_threshold_exon=args.coverage_threshold_exon,
