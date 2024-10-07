@@ -58,10 +58,7 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     col_pct = np.sum(sub_mtx, axis=0) / np.sum(sub_mtx)
     over_1_percent_cols = np.where(col_pct > novel_pct)[1].tolist()
     known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
-    #known_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'ENST' in pkl['var'][gene_cols_index[ind]]]
     novel_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'novel' in pkl['var'][gene_cols_index[ind]]]
-    #further filter gtf, only keeping major novel isoform
-    known_isoform_names = [isoform.split('_',1)[1] for isoform in known_isoform_names]
     novel_isoform_names = [isoform.split('_',1)[1] for isoform in novel_isoform_names]
     selected_isoform = known_isoform_names + novel_isoform_names
     transcript_ids = filtered_gtf['attribute'].apply(
