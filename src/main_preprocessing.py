@@ -40,6 +40,10 @@ parser.add_argument('--match_high',type=float,default=0.6, help="the base percen
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
 parser.add_argument('--group_novel', action='store_true', help="whether to further group novel isoforms generated in compatible matrix, default is true")
 parser.add_argument('--group_novel_off', action='store_false', dest='group_novel')
+parser.add_argument('--save_csv', action='store_true', help="whether to save count matrix output as csv format")
+parser.add_argument('--save_csv_false', action='store_false', dest='save_csv')
+parser.add_argument('--save_mtx', action='store_true', help="whether to save count matrix output as mtx format")
+parser.add_argument('--save_mtx_false', action='store_false', dest='save_mtx')
 
 #general
 parser.add_argument('--workers',type=int,default=8, help="number of workers per work")

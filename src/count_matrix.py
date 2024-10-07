@@ -142,7 +142,8 @@ def split_list(lst, n):
     return result
 
 class CountMatrix:
-    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1, logger = None):
+    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1,
+                 csv = True, mtx =True, logger = None):
         self.logger = logger
         self.target = target
         self.workers = workers
@@ -151,6 +152,8 @@ class CountMatrix:
         self.parse = self.platform == 'parse'
         self.pacbio = self.platform == 'pacbio'
         self.group_novel = group_novel
+        self.csv = csv
+        self.mtx = mtx
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
         self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + '.pkl')
         if platform=='parse':
@@ -355,21 +358,8 @@ class CountMatrix:
             adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
         self.adata_gene_unfiltered_list = adata_gene_unfiltered_list
         self.adata_transcript_unfiltered_list = adata_transcript_unfiltered_list
-    def save_multiple_samples(self, csv = True, mtx = True):
-        if csv:
-            self.logger.info('saving count matrix in csv format')
-            for i in range(self.n_samples):
-                output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n) + '.csv')
-                output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.csv')
-                # save gene
-                print('saving count matrix on gene level ')
-                adata_gene_unfiltered_df = self.adata_gene_unfiltered_list[i].to_df()
-                adata_gene_unfiltered_df.to_csv(output_gene_unfiltered)
-                # save transcript
-                print('saving count matrix on transcript level ')
-                adata_transcript_unfiltered_df = self.adata_transcript_unfiltered_list[i].to_df()
-                adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
-        if mtx:
+    def save_multiple_samples(self):
+        if self.mtx:
             for i in range(self.n_samples):
                 # save gene
                 self.logger.info('saving count matrix in mtx format')
@@ -388,6 +378,19 @@ class CountMatrix:
                 with open(os.path.join(self.count_matrix_folder_path_list[i],
                                        'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
                     pickle.dump(transcript_meta_unfiltered, f)
+        if self.csv:
+            self.logger.info('saving count matrix in csv format')
+            for i in range(self.n_samples):
+                output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n) + '.csv')
+                output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.csv')
+                # save gene
+                print('saving count matrix on gene level ')
+                adata_gene_unfiltered_df = self.adata_gene_unfiltered_list[i].to_df()
+                adata_gene_unfiltered_df.to_csv(output_gene_unfiltered)
+                # save transcript
+                print('saving count matrix on transcript level ')
+                adata_transcript_unfiltered_df = self.adata_transcript_unfiltered_list[i].to_df()
+                adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
     def _extract_attribute(self, attributes, attribute_name):
         try:
             return attributes.split(f'{attribute_name} "')[1].split('"')[0]
