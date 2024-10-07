@@ -606,7 +606,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
     if refGeneFile_pkl_path is not None: ###use pickle
         assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
         print('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_gtf_path))
-        geneStructureInformation = load_pickle(refGeneFile_gtf_path)
+        geneStructureInformation = load_pickle(refGeneFile_pkl_path)
         #check if geneStructureInformation contains build
         if build is not None:
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
