@@ -169,13 +169,13 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
     field2 = ['bam'] * len(field1)
     field3_0 = [os.path.basename(os.path.dirname(path)) for path in field1]
     field3_1 = [
-        re.search(r'novelIsoform_\d+', os.path.basename(path)).group(0) if "novel" in os.path.basename(
-            path) else "known"
+        (match.group(0) if (match := re.search(r'novelIsoform_\d+', os.path.basename(path))) else "known")
         for path in field1
     ]
     field3 = [f'{a}\n{b}' for a, b in zip(field3_0, field3_1)]
     field4 = ['#b2182b' if ii=='novel' else '#2166ac' for ii in field3_1 ]
     bamfile_tsv = pd.DataFrame({'path':field1, 'type':field2, 'label':field3, 'color':field4})
+    bamfile_tsv = bamfile_tsv.sort_values(by='label').reset_index(drop=True)
     bamfile_tsv.to_csv(bamfile_tsv_path, sep='\t', index=False, header=False)
     genomic_region = f"{gene_chr}:{gene_start}-{gene_end}"
     command = [
