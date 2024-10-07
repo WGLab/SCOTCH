@@ -403,7 +403,7 @@ class ReadMapper:
             return_samples = []
             for sample in unique_samples:
                 Read_novelIsoform_sample, Read_knownIsoform_sample, Read_knownIsoform_scores_sample, Read_novelIsoform_poly_sample = [],[], {}, []
-                sample_target = os.path.join(self.target, 'samples/'+sample)
+                sample_target = os.path.join(self.target[0], 'samples/'+sample)
                 if not os.path.exists(sample_target):
                     os.makedirs(sample_target)
                 sample_index_novel = [i for i, s in enumerate(samples_novel) if s == sample]
@@ -461,7 +461,7 @@ class ReadMapper:
             unique_samples = list(set(samples))
             return_samples = []
             for sample in unique_samples:
-                sample_target = os.path.join(self.target, 'samples/'+sample)
+                sample_target = os.path.join(self.target[0], 'samples/'+sample)
                 if not os.path.exists(sample_target):
                     os.makedirs(sample_target)
                 sample_index = [i for i, s in enumerate(samples) if s == sample]
@@ -548,8 +548,8 @@ class ReadMapper:
         else:
             print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
             if self.parse:
-                self.compatible_matrix_folder_paths = find_subfolder(self.target, subfolder='compatible_matrix')
-                self.read_mapping_paths = find_subfolder(self.target, subfolder='auxillary')
+                self.compatible_matrix_folder_paths = find_subfolder(self.target[0], subfolder='compatible_matrix')
+                self.read_mapping_paths = find_subfolder(self.target[0], subfolder='auxillary')
                 genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
                                   for file in os.listdir(folder_path) if file.endswith('.csv')]
                 for folder_path in self.compatible_matrix_folder_paths:
@@ -990,7 +990,7 @@ class ReadMapper2:
                                                   Read_knownIsoform_scores_sample, self.qname_cbumi_dict,
                                                   self.metageneStructureInformationwNovel[meta_gene][index][1],
                                                   self.metageneStructureInformationwNovel[meta_gene][index][2],
-                                                  self.target, self.parse)
+                                                  sample_target, self.parse)
                 else:
                     for sample in unique_samples:
                         Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
