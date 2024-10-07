@@ -816,7 +816,7 @@ class ReadMapper2:
                     sample = 'sample'+str(sample_ind)
                     Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                     for readname in list(Read_Isoform_compatibleVector.keys()):
-                        if self.qname_sample_dict[readname] == sample:
+                        if qname_sample_dict[readname] == sample:
                             Read_Isoform_compatibleVector_sample[readname] = Read_Isoform_compatibleVector[readname]
                             if readname in Read_knownIsoform_scores.keys():
                                 Read_knownIsoform_scores_sample[readname] = Read_knownIsoform_scores[readname]
