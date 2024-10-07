@@ -57,8 +57,8 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     sub_mtx = dense_mtx[:, gene_cols_index]
     col_pct = np.sum(sub_mtx, axis=0) / np.sum(sub_mtx)
     over_1_percent_cols = np.where(col_pct > novel_pct)[1].tolist()
-    #known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
-    known_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'ENST' in pkl['var'][gene_cols_index[ind]]]
+    known_isoform_names = [tr for tr in transcript_ids if 'ENST' in tr]
+    #known_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'ENST' in pkl['var'][gene_cols_index[ind]]]
     novel_isoform_names = [pkl['var'][gene_cols_index[ind]] for ind in over_1_percent_cols if 'novel' in pkl['var'][gene_cols_index[ind]]]
     #further filter gtf, only keeping major novel isoform
     known_isoform_names = [isoform.split('_',1)[1] for isoform in known_isoform_names]
@@ -66,8 +66,7 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     selected_isoform = known_isoform_names + novel_isoform_names
     transcript_ids = filtered_gtf['attribute'].apply(
         lambda x: re.search(r'transcript_id "([^"]+)"', x).group(1) if re.search(r'transcript_id "([^"]+)"',
-                                                                                 x) else None
-    )
+                                                                                 x) else None)
     filtered_gtf = pd.concat([filtered_gtf.iloc[[0]], filtered_gtf[transcript_ids.isin(selected_isoform)]], ignore_index=True)
     #locate reads belonging to known and novel
     compatible_matrix_path = os.path.join(target,'compatible_matrix')
@@ -78,20 +77,21 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     df.columns = new_columns
     mask_enst = df[known_isoform_names].gt(0).any(axis=1)
     cbumi_enst = df.loc[mask_enst, 'CBUMI'].tolist()
-    if df[novel_isoform_names].shape[1]<len(novel_isoform_names):
-        ##TODO: add parse
-        geneStrand = filtered_gtf.iloc[[0]]['strand'].tolist()[0]
-        df_novel = df.filter(like='novelIsoform')
-        child_id_list = [int(col.split('_')[1]) for col in df_novel.columns.tolist()]
-        novel_isoform_id_list = [int(novel.split('_')[1]) for novel in novel_isoform_names]
+    ##TODO: add parse
+    geneStrand = filtered_gtf.iloc[[0]]['strand'].tolist()[0]
+    df_novel = df.filter(like='novelIsoform')
+    child_id_list = [int(col.split('_')[1]) for col in df_novel.columns.tolist()]
+    novel_isoform_id_list = [int(novel.split('_')[1]) for novel in novel_isoform_names]
+    novel_cbumi_dict = {}
+    for ii in range(len(novel_isoform_id_list)):
         col_index_list = []
         for i, child_id in enumerate(child_id_list):
-            if find_parent_isoform(novel_isoform_id_list, child_id, geneStrand) is not None:
+            if find_parent_isoform([novel_isoform_id_list[ii]], child_id, geneStrand) is not None:
                 col_index_list.append(i)
-        mask_novel = df_novel.iloc[:,col_index_list].gt(0).any(axis=1)
-    else:
-        mask_novel = df[novel_isoform_names].gt(0).any(axis=1)
-    cbumi_novel = df.loc[mask_novel, 'CBUMI'].tolist()
+        if len(col_index_list)>0:
+            mask_novel = df_novel.iloc[:,col_index_list].gt(0).any(axis=1)
+            cbumi_novel = df.loc[mask_novel, 'CBUMI'].tolist()
+            novel_cbumi_dict[novel_isoform_names[ii]] = cbumi_novel
     # write bam file
     if os.path.isfile(bamFile)==False: #bamFile is a folder
         bamFile_name = [f for f in os.listdir(bamFile) if f.endswith('.bam') and '.'+gene_chr+'.' in f]
@@ -102,21 +102,33 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     bam_existing_path=os.path.join(out_path, gene+'_known_isoform.bam')
     bam_existing_sorted_path = os.path.join(out_path,gene+'_known_isoform_sorted.bam')
     bam_existing = pysam.AlignmentFile(bam_existing_path, "wb", template=bamFilePysam)
-    bam_novel_path=os.path.join(out_path, gene+'_novel_isoform.bam')
-    bam_novel_sorted_path = os.path.join(out_path, gene+'_novel_isoform_sorted.bam')
-    bam_novel = pysam.AlignmentFile(bam_novel_path, "wb", template=bamFilePysam)
+    bam_novel_files = {}
+    bam_novel_paths = {}
+    bam_novel_sorted_paths = {}
+    for novel_isoform in novel_cbumi_dict.keys():
+        bam_novel_path = os.path.join(out_path, f'{gene}_{novel_isoform}_isoform.bam')
+        bam_novel_sorted_path = os.path.join(out_path, f'{gene}_{novel_isoform}_isoform_sorted.bam')
+        bam_novel_files[novel_isoform] = pysam.AlignmentFile(bam_novel_path, "wb", template=bamFilePysam)
+        # Store paths for sorting and indexing later
+        bam_novel_paths[novel_isoform] = bam_novel_path
+        bam_novel_sorted_paths[novel_isoform] = bam_novel_sorted_path
     for read in reads:
         CBUMI = read.get_tag('CB')+'_'+read.get_tag('UB')
         if CBUMI in cbumi_enst:
             bam_existing.write(read)
-        if CBUMI in cbumi_novel:
-            bam_novel.write(read)
+        else:
+            for novel_isoform, cbumi_list in novel_cbumi_dict.items():
+                if CBUMI in cbumi_list:
+                    bam_novel_files[novel_isoform].write(read)
     bam_existing.close()
-    bam_novel.close()
+    for bam_file in bam_novel_files.values():
+        bam_file.close()
     subprocess.run(["samtools", "sort", "-o", bam_existing_sorted_path, bam_existing_path])
     subprocess.run(["samtools", "index", bam_existing_sorted_path])
-    subprocess.run(["samtools", "sort", "-o", bam_novel_sorted_path, bam_novel_path])
-    subprocess.run(["samtools", "index", bam_novel_sorted_path])
+    for novel_isoform, bam_novel_path in bam_novel_paths.items():
+        bam_novel_sorted_path = bam_novel_sorted_paths[novel_isoform]
+        subprocess.run(["samtools", "sort", "-o", bam_novel_sorted_path, bam_novel_path])
+        subprocess.run(["samtools", "index", bam_novel_sorted_path])
     filtered_gtf.to_csv(os.path.join(out_path, gene+'_SCOTCH_filtered.gtf'), sep='\t', index=False, header=False,quoting=3)
     return gene_chr, gene_start, gene_end
 
