@@ -621,6 +621,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             print('rely on bam file to update existing gene annotations')
             output_update = output[:-4]+'updated.pkl'
             if os.path.isfile(output_update):
+                print('enhanced gene annotation already exist')
                 geneStructureInformation = load_pickle(output_update)
             else:
                 geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
