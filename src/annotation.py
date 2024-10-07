@@ -551,7 +551,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
 
 
-def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
+def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_path, num_cores=8,
                             output="geneStructureInformation.pkl", build=None,
                             coverage_threshold_gene=5, coverage_threshold_exon=0.01,coverage_threshold_splicing=0.01, z_score_threshold = 10,
                             min_gene_size=50):
@@ -564,16 +564,13 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     :param build: used for parse platform naming
     :return: metageneStructureInformation
     """
-    print('refGeneFile_path is: '+str(refGeneFile_path))
-    print('bamfile_path is:'+str(bamfile_path))
-
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
     genes = None
     #####################################################
     #option1: ---------rely on bam file alone---------###
     #####################################################
-    if refGeneFile_path is None and bamfile_path is not None:
+    if refGeneFile_gtf_path is None and refGeneFile_pkl_path is None and bamfile_path is not None:
         print('rely on bam file alone to generate gene annotations')
         geneStructureInformation = annotate_genes(geneStructureInformation = None,
                                                   bamfile_path = bamfile_path,
@@ -589,34 +586,32 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     #####################################################
     # option2: --------rely on existing annotation alone#
     #####################################################
-    if refGeneFile_path is not None:
-        if refGeneFile_path.endswith('gtf'):
-            print('use the existing gtf file for gene annotations')
-            genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_path)
-            Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
-            #generate single gene annotations if not existing
-            if os.path.isfile(output) == False:
-                geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
-                geneStructureInformation = dict(geneStructureInformation)
+    if refGeneFile_pkl_path is None and refGeneFile_gtf_path is not None: ###use gtf
+        print('use the existing gtf file for gene annotations')
+        genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
+        Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
+        #generate single gene annotations if not existing
+        if os.path.isfile(output) == False:
+            geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
+            geneStructureInformation = dict(geneStructureInformation)
+            geneStructureInformation = add_build(geneStructureInformation, build)
+            print('finish generating geneStructureInformation.pkl')
+            #save to output, single gene
+            if output is not None:
+                with open(output, 'wb') as file:
+                    pickle.dump(geneStructureInformation, file)
+        else:#there exist pre-computate annotation file
+            print('load existing annotation pickle file of each single gene at: '+str(output))
+            geneStructureInformation = load_pickle(output)
+    if refGeneFile_pkl_path is not None: ###use pickle
+        assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
+        print('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_gtf_path))
+        geneStructureInformation = load_pickle(refGeneFile_gtf_path)
+        #check if geneStructureInformation contains build
+        if build is not None:
+            if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
-                print('finish generating geneStructureInformation.pkl')
-                #save to output, single gene
-                if output is not None:
-                    with open(output, 'wb') as file:
-                        pickle.dump(geneStructureInformation, file)
-            else:#there exist pre-computate annotation file
-                print('load existing annotation pickle file of each single gene at: '+str(output))
-                geneStructureInformation = load_pickle(output)
-        elif refGeneFile_path.endswith('pkl'):
-            print('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_path))
-            geneStructureInformation = load_pickle(refGeneFile_path)
-            #check if geneStructureInformation contains build
-            if build is not None:
-                if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
-                    geneStructureInformation = add_build(geneStructureInformation, build)
-            shutil.copy(refGeneFile_path, output)
-        else:
-            print('Only gtf and pkl files are supported!')
+        shutil.copy(refGeneFile_gtf_path, output)
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
@@ -670,7 +665,7 @@ def add_build(geneStructureInformation, build):
     return geneStructureInformation
 
 class Annotator:
-    def __init__(self, target:list, reference_gtf_path:str, bam_path:list, update_gtf, workers,
+    def __init__(self, target:list, reference_gtf_path:str, reference_pkl_path:str, bam_path:list, update_gtf, workers,
                  coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,z_score_threshold,
                  min_gene_size, build = None, platform = '10x'):
         """
@@ -684,7 +679,8 @@ class Annotator:
         self.multiple_samples = True if len(target)>1 else False
         self.workers = workers
         self.target = target
-        self.reference_gtf_path = reference_gtf_path # can also be pickle file
+        self.reference_gtf_path = reference_gtf_path
+        self.reference_pkl_path = reference_pkl_path
         self.bam_path = bam_path
         self.update_gtf = update_gtf
         self.build = build
@@ -717,23 +713,26 @@ class Annotator:
                 if i==0:
                     print('complete gene annotation information does not exist, we will generate')
                     #annotation free mode
-                    if self.reference_gtf_path is None:
+                    if self.reference_gtf_path is None and self.reference_pkl_path is None:
                         print('Annotation-free Mode: we will rely on given bam files to generate gene annotations')
-                        _ = extract_annotation_info(None, self.bam_path, self.workers,
-                                        self.annotation_path_single_gene[i], self.build,
-                                        self.coverage_threshold_gene, self.coverage_threshold_exon,
+                        _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
+                                                    self.bam_path, self.workers,
+                                                    self.annotation_path_single_gene[i], self.build,
+                                                    self.coverage_threshold_gene, self.coverage_threshold_exon,
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
                                                     self.min_gene_size)
                     if self.update_gtf:
                         print('Enhanced-annotation Mode: we will update existing gene annotations using given bam files')
-                        _ = extract_annotation_info(self.reference_gtf_path, self.bam_path, self.workers,
+                        _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
+                                                    self.bam_path, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
                                                     self.coverage_threshold_gene, self.coverage_threshold_exon,
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
                                                     self.min_gene_size)
                     else:
                         print('Annotation-only Mode: we will only use existing gene annotations')
-                        _ = extract_annotation_info(self.reference_gtf_path, None, self.workers,
+                        _ = extract_annotation_info(self.reference_gtf_path, self.reference_pkl_path,
+                                                    None, self.workers,
                                                     self.annotation_path_single_gene[i], self.build,
                                                     self.coverage_threshold_gene, self.coverage_threshold_exon,
                                                     self.coverage_threshold_splicing,self.z_score_threshold,
