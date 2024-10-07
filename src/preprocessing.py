@@ -958,12 +958,6 @@ def compile_compatible_vectors(Read_novelIsoform_polished, Read_knownIsoform_pol
     novel_read_novelisoform_df_expanded = None
     #make novel isoform df
     if len(Read_novelIsoform_polished) > 0:
-        #read_poly_dict = {}
-        #for i, (readname, readpct, readmapping) in enumerate(Read_novelIsoform):
-        #    if isinstance(poly, list):
-        #        read_poly_dict[readname] = poly[i]
-        #    else:
-        #        read_poly_dict[readname] = poly
         read_novelisoform_df = pd.DataFrame(Read_novelIsoform_polished, columns=['read', 'isoform'])
         read_novelisoform_df_expanded = pd.crosstab(read_novelisoform_df['read'], read_novelisoform_df['isoform'])
         isoform_pct = read_novelisoform_df_expanded.sum(axis=0)/read_novelisoform_df_expanded.shape[0]
