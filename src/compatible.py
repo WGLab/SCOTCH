@@ -645,7 +645,6 @@ class ReadMapper2:
             self.sorted_bam_path_list = None
             self.qname_sample_dict_list = [load_pickle(bamInfo3_pkl_path) for bamInfo3_pkl_path in self.bamInfo3_pkl_path_list]
         else:
-        # bam information file
             self.qname_dict = load_pickle(self.bamInfo_pkl_path_list[0])
             self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path_list[0])
             self.sorted_bam_path = None
@@ -1008,8 +1007,9 @@ class ReadMapper2:
                 return return_samples
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
         if self.parse==False:
-            if not os.path.exists(self.compatible_matrix_folder_path):
-                os.makedirs(self.compatible_matrix_folder_path)
+            for compatible_matrix_folder_path in self.compatible_matrix_folder_path_list:
+                if not os.path.exists(compatible_matrix_folder_path):
+                    os.makedirs(compatible_matrix_folder_path, exist_ok=True)
         MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
         if total_jobs > 1:
             step_size = math.ceil(len(MetaGenes) / total_jobs)
@@ -1025,8 +1025,8 @@ class ReadMapper2:
         else:
             print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
             if self.parse:
-                self.compatible_matrix_folder_paths = find_subfolder(self.target, subfolder='compatible_matrix')
-                self.read_mapping_paths = find_subfolder(self.target, subfolder='auxillary')
+                self.compatible_matrix_folder_paths = find_subfolder(self.target[0], subfolder='compatible_matrix')
+                self.read_mapping_paths = find_subfolder(self.target[0], subfolder='auxillary')
                 genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
                                   for file in os.listdir(folder_path) if file.endswith('.csv')]
                 for folder_path in self.compatible_matrix_folder_paths:
@@ -1035,10 +1035,13 @@ class ReadMapper2:
                         gene_df = pd.read_csv(log_file_path, header=None)
                         genes_existing += gene_df.iloc[:, 0].tolist()
             else:
-                genes_existing = [g[:-4] for g in os.listdir(self.compatible_matrix_folder_path)]
-                if os.path.isfile(os.path.join(self.compatible_matrix_folder_path, 'log.txt')):
-                    gene_df = pd.read_csv(os.path.join(self.compatible_matrix_folder_path, 'log.txt'), header=None)
-                    genes_existing = genes_existing + gene_df.iloc[:, 0].tolist()
+                genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_path_list
+                                  for file in os.listdir(folder_path) if file.endswith('.csv')]
+                for folder_path in self.compatible_matrix_folder_path_list:
+                    log_file_path = os.path.join(folder_path, 'log.txt')
+                    if os.path.isfile(log_file_path):
+                        gene_df = pd.read_csv(log_file_path, header=None)
+                        genes_existing += gene_df.iloc[:, 0].tolist()
             print('there exist ' + str(len(set(genes_existing))) + ' genes')
         MetaGene_Gene_dict = {}
         for metagene_name, genes_info in self.metageneStructureInformation.items():
@@ -1067,17 +1070,18 @@ class ReadMapper2:
         gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
         self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
-        if total_jobs>1:
-            file_name_pkl = self.annotation_path_meta_gene_novel[:-4] + '_' + str(current_job_index) +'.pkl'
-            file_name_gtf = self.annotation_path_gtf_novel[:-4] + '_' + str(current_job_index) +'.gtf'
-        else:
-            file_name_pkl = self.annotation_path_meta_gene_novel
-            file_name_gtf = self.annotation_path_gtf_novel
-        #save pickle file
-        with open(file_name_pkl, 'wb') as file:
-            pickle.dump(self.metageneStructureInformationwNovel, file)
-        #save gtf file
-        convert_to_gtf(self.metageneStructureInformationwNovel, file_name_gtf, self.gtf_df_job, num_cores=1)
+        for i in range(len(self.annotation_path_meta_gene_list)):
+            if total_jobs>1:
+                file_name_pkl = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index) +'.pkl'
+                file_name_gtf = self.annotation_path_gtf_novel_list[i][:-4] + '_' + str(current_job_index) +'.gtf'
+            else:
+                file_name_pkl = self.annotation_path_meta_gene_novel_list[i]
+                file_name_gtf = self.annotation_path_gtf_novel_list[i]
+            #save pickle file
+            with open(file_name_pkl, 'wb') as file:
+                pickle.dump(self.metageneStructureInformationwNovel, file)
+            #save gtf file
+            convert_to_gtf(self.metageneStructureInformationwNovel, file_name_gtf, self.gtf_df_job, num_cores=1)
 
 
 
