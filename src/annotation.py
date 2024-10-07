@@ -566,6 +566,7 @@ def extract_annotation_info(refGeneFile_path, bamfile_path, num_cores=8,
     """
     print('refGeneFile_path is: '+str(refGeneFile_path))
     print('bamfile_path is:'+str(bamfile_path))
+
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
     genes = None
