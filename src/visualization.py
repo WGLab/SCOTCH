@@ -198,13 +198,13 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while generating the plot: {e}")
 
-def visualization(gene, bamFiles, targets, novel_pct, final_target, sample_names, width, height):
+def visualization(gene, bamFiles, targets, novel_pct, junction_num, final_target, sample_names, width, height):
     output = generate_subbam_subgtf_multiple_samples(gene=gene, bamFiles=bamFiles, targets=targets,
                                                          novel_pct=novel_pct, final_target=final_target,
                                                          sample_names=sample_names)
     gene_chr, gene_start, gene_end = output
     run_trackplot(target_vis=final_target, gene_name=gene, gene_chr=gene_chr, gene_start=gene_start, gene_end=gene_end,
-                      dpi=300, width=width, height=height, junction_num=100, intron_scale=1)
+                      dpi=300, width=width, height=height, junction_num=junction_num, intron_scale=1)
 
 #gene='CD74'
 #bamFile='/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams'

@@ -56,6 +56,7 @@ parser.add_argument('--gene',type=str, help="gene name to visualize")
 parser.add_argument('--target_vis',type=str, help="target path for visualization")
 parser.add_argument('--sample_names',type=str,nargs='+', help="sample names for visualization")#a list
 parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel isoform annotation if expression in count matrix surpass the threshold")
+parser.add_argument('--junction_num',type=int,default=10, help="only keep junctions over this number")
 parser.add_argument('--width',type=int,default=12)
 parser.add_argument('--height',type=int,default=1)
 
@@ -191,7 +192,7 @@ def main():
         run_count()
 
     if args.task =='visualization': #currently only support 10X file structure
-        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.target_vis, args.sample_names, args.width, args.height)
+        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.junction_num, args.target_vis, args.sample_names, args.width, args.height)
 
 if __name__ == '__main__':
     main()
