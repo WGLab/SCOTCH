@@ -714,8 +714,8 @@ def map_read_to_gene_parse(read, Info_singlegene, lowest_match=0.2, lowest_match
     return read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
 
 
-def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, lowest_match1 = 0.8, small_exon_threshold = 20, small_exon_threshold1=100,
-                     truncation_match = 0.5, pacbio = False):
+def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0, small_exon_threshold1=80,
+                     truncation_match = 0.4, pacbio = False):
     def generate_read_exon_map_vector(exon_map_pct):
         # read-exon mapping vector
         exon_map_vector_mapped = [1 if pct >= upper_match else 0 for pct in exon_map_pct]
@@ -1101,7 +1101,7 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
         poly_bool, poly = detect_poly(read, window=20, n=15)
         #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and poly_bool and readName == qname_dict[readName]):
         if (poly_bool and readName == qname_dict[readName]):
-            read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes, lowest_match, lowest_match1, small_exon_threshold, truncation_match,small_exon_threshold1, False)
+            read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes, lowest_match, lowest_match1, small_exon_threshold, small_exon_threshold1,truncation_match, False)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
             if read_isoform_compatibleVector_tuple is not None:

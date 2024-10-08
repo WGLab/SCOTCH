@@ -7,12 +7,7 @@ import re
 import subprocess
 from scipy.io import mmread
 
-#step1: generate a subset bam
-#step2: transform bam to bw
-#step3: trackplot
-#step2: transform to bedgraph: bedtools genomecov -bg -ibam myseq.bam | gzip > myseq.bedGraph.gz
-#bedgraph: https://blog.liang2.tw/posts/2016/01/plot-seq-depth-gviz/
-
+#NFKBIA--535612368/535612383
 
 def sub_gtf(gene_name, gtf_path, out_path = None):
     gtf = pd.read_csv(gtf_path, sep='\t', comment='#', header=None)
