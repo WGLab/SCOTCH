@@ -191,7 +191,7 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
         "-t", str(junction_num),  # threshold
         "--intron-scale", str(intron_scale),  # Intron scaling factor
         "--same-y",
-        "--transcripts-to-show", "transcript_id"
+        "--transcripts-to-show", "transcript_id" # show transcript id
     ]
     try:
         subprocess.run(command, check=True)
