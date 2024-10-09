@@ -120,22 +120,23 @@ def main():
     def run_compatible():
         logger, log_file = setup_logger(args.target[0], 'compatible')
         logger.info(f'Start generating compatible matrix step for all targets. Job: {args.job_index}')
-        logger.info(f'Target directories: {args.target}')
-        logger.info(f'BAM files: {args.bam}')
-        logger.info(f'Lowest match: {args.match_low}')
-        logger.info(f'Highest match: {args.match_high}')
-        logger.info(f'Small exon threshold (low): {args.small_exon_threshold}')
-        logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high})')
-        logger.info(f'Truncation match: {args.truncation_match} or 100bps')
-        logger.info(f'Platform: {args.platform}')
-        logger.info(f'Reference GTF Path: {args.reference}')
-        logger.info(f'Update GTF option: {args.update_gtf}')
+        logger.info(f'Target directories: {args.target}. Job: {args.job_index}')
+        logger.info(f'BAM files: {args.bam}. Job: {args.job_index}')
+        logger.info(f'Lowest match: {args.match_low}. Job: {args.job_index}')
+        logger.info(f'Highest match: {args.match_high}. Job: {args.job_index}')
+        logger.info(f'Small exon threshold (low): {args.small_exon_threshold}. Job: {args.job_index}')
+        logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high}). Job: {args.job_index}')
+        logger.info(f'Truncation match: {args.truncation_match} or 100bps. Job: {args.job_index}')
+        logger.info(f'Platform: {args.platform}. Job: {args.job_index}')
+        logger.info(f'Reference GTF Path: {args.reference}. Job: {args.job_index}')
+        logger.info(f'Update GTF option: {args.update_gtf}. Job: {args.job_index}')
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match_low, lowest_match1=args.match_high,
                                     small_exon_threshold = args.small_exon_threshold,
                                    small_exon_threshold1=args.small_exon_threshold_high,
                                    truncation_match = args.truncation_match,
-                                   platform = args.platform, reference_gtf_path=args.reference)
+                                   platform = args.platform, reference_gtf_path=args.reference,
+                                   logger = logger)
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                       total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')

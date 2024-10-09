@@ -181,7 +181,8 @@ def summarise_auxillary(target):
 class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.8, small_exon_threshold = 20,
                  small_exon_threshold1=100, truncation_match=0.5, platform = '10x',
-                 reference_gtf_path = None):
+                 reference_gtf_path = None, logger = None):
+        self.logger = logger
         self.target = target
         self.bam_path = bam_path
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
@@ -593,7 +594,6 @@ class ReadMapper:
             MetaGenes_job = MetaGenes[s:e]
         else:#total_jobs = 1
             MetaGenes_job = MetaGenes
-        print(str(len(MetaGenes_job)) + ' metagenes for this job')
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []
@@ -629,7 +629,8 @@ class ReadMapper:
                 if len(genes_) > 0:
                     MetaGene_Gene_dict[metagene_name] = genes_
         MetaGenes_job = list(MetaGene_Gene_dict.keys())
-        print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
+        self.logger.info(f'{str(len(MetaGenes_job))} metagenes for job {current_job_index}')
+        #print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
         if self.parse:
             for meta_gene in MetaGenes_job:
                 print(meta_gene)
@@ -645,6 +646,7 @@ class ReadMapper:
         gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
         self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
+        self.logger.info(f'Saving annotation file...')
         for i in range(len(self.annotation_path_meta_gene_list)):
             if total_jobs>1:
                 file_name_pkl = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index) +'.pkl'
