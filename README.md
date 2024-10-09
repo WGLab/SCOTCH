@@ -26,13 +26,13 @@ conda activate SCOTCH
 
 ## Run SCOTCH preprocessing pipeline
 
-`main_preprocessing.py` is the primary function for running the SCOTCH preprocessing pipeline. This pipeline consists of four steps: (1) generating gene annotation files, (2) generating the compatibility matrix, (3) generating the count matrix, and (4) summarizing novel gene annotations. We will cover more details below.
+`main_preprocessing.py` is the primary function for running the SCOTCH preprocessing pipeline. This pipeline consists of four steps: (1) generating gene annotation files, (2) generating the compatibility matrix, (3) summarizing novel gene annotations, and (4) generating the count matrix. We will cover more details below.
 
 ### Input and Output 
 
 In general, SCOTCH accepts BAM file(s) tagged by vendor-supplied pipelines for its preprocessing pipeline (For ONT data, please see [here](https://github.com/epi2me-labs/wf-single-cell) for more details), and output a series of information including read-isoform mappings, gene count matrix, isoform count matrix, and updated gene annotations. The `--bam` argument is used to assign input file(s), and `--target` is used to assign the output folder(s). 
 
-The SCOTCH pipeline allows users to process one sample at a time or multiple samples simultaneously depending on study design. When preprocessing multiple samples together, SCOTCH generates a unified gene/isoform annotation based on all BAM files. This approach is particularly beneficial in studies involving multiple samples, as it ensures consistent identification and consolidation of novel isoforms across different samples. Some usage examples are below:
+The SCOTCH pipeline allows users to process one sample at a time or multiple samples simultaneously depending on study designs. When preprocessing multiple samples together, SCOTCH generates a unified gene/isoform annotation based on all BAM files. This approach is particularly beneficial in studies involving multiple samples, as it ensures consistent identification and consolidation of novel isoforms across different samples. Some usage examples are below:
 
 Example1: `--bam` accepts a single bam file
 ```
@@ -73,7 +73,7 @@ In this step, SCOTCH will generate annotation files for the reference genome and
 
 SCOTCH offers three modes for generating gene annotations: 
 1. **Annotation-Only Mode**: SCOTCH can rely entirely on existing gene annotations. This mode allows for the discovery of novel isoforms defined by combinations of known exons. This mode will fail to identify novel isoforms involving unknown exons, such as intron retention. Set `--reference` as path to gene annotation .gtf file. To save time, users can also set `--reference_pkl` as the path to SCOTCH generated annotation based on given gtf file. SCOTCH has pre-computated this file based on [this](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz) (human hg38) provided by 10X genome. In addition, set `--update_gtf_off`.
-2. **Semi-Annotation Mode**: SCOTCH can use BAM files from one or multiple samples to update and refine existing gene annotations. This mode allows for the discovery of de novo (sub)exons with more types of novel isoforms than annotation-only mode. Set `--reference` as path to gene annotation .gtf file. To save time, users can also set `--reference_pkl` as the path to SCOTCH generated annotation based on given gtf file. SCOTCH has pre-computated this file based on [this](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz) (human hg38) provided by 10X genome. In addition, set `--update_gtf`.
+2. **Enhanced-Annotation Mode**: SCOTCH can use BAM files from one or multiple samples to update and refine existing gene annotations. This mode allows for the discovery of de novo (sub)exons with more types of novel isoforms than annotation-only mode. Set `--reference` as path to gene annotation .gtf file. To save time, users can also set `--reference_pkl` as the path to SCOTCH generated annotation based on given gtf file. SCOTCH has pre-computated this file based on [this](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz) (human hg38) provided by 10X genome. In addition, set `--update_gtf`.
 3. **Annotation-Free Mode**: SCOTCH can generate gene and isoform annotations based solely on BAM files, allowing for the discovery of novel genes and isoforms. Set `--reference None` and `--reference_pkl None`. 
 
 #### arguments
@@ -84,7 +84,7 @@ SCOTCH offers three modes for generating gene annotations:
 - `--z_score_threshold`: z score threshold to discovery sharp changes of read coverage, larger values will be more conservative, default is 10.
 
 
-Below is an example of generating annotation in the Semi-Annotation Mode for two samples simultanuously. See `example/annotation.sh` for an implementation in slurm.
+Below is an example of generating annotation in the Enhanced-Annotation Mode for two samples simultanuously. See `example/annotation.sh` for an implementation in slurm.
 
 ```
 python3 src/main_preprocessing.py \
@@ -101,37 +101,21 @@ In this step, SCOTCH aligns reads to existing gene isoforms and identifies novel
 
 - `--target`: the same with step1
 - `--bam` the same with step1
-- `--match` exon percentage threshold to call a read-exon mapping/unmapping. For example, setting 0.2 means reads covers >80% of the exon length as mapped, and reads covers <20% of the exon length as unmapped.
+- `--match_low` exon percentage lower threshold to call a read-exon unmapping. For example, setting 0.2 means reads covers <20% of the exon length as unmapped. (default is 0.2)
+- `--match_low` exon percentage upper threshold to call a read-exon mapping. For example, setting 0.6 means reads covers <20% of the exon length as mapped. (default is 0.6)
 - `--total_jobs`: the number of batches to split genes and run in parallel
 - `--job_index`: the batch/job index current task to run
-- `--cover_existing`: overwrite existing results, default. `--cover_existing_false`: do not overwrite existing results, only generate compatible matrix for genes do not have compatible matrix results.
 
 ```
 python3 src/main_preprocessing.py \
 --task 'compatible matrix' \
 --target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
---bam path/to/bam/file/or/bamfolder/sample1 path/to/bam/file/or/bamfolder/sample2 \
---match 0.2 
+--bam path/to/bam/file/or/bamfolder/sample1 path/to/bam/file/or/bamfolder/sample2 
 ```
+### Step3: update gene annotations 
+In this step, SCOTCH will generate a new gene annotation file, including all novel isoforms identified. Set `--tast summary` to run this step. See `example/summary.sh` for an implementation in SLURM.
 
-### Step3: generate count matrix
-In this step, SCOTCH will generate gene- and isoform-level copunt matrix. Set `--tast 'count matrix'` to run this step. See `example/count.sh` for an implementation in SLURM.
-
-- `--target`: the same with step1
-- '--novel_read_n' filter out novel isoform is the number of reads mapped for the sample less than `novel_read_n`, and reads mapped to this novel isoform will be treated as uncategorized. Default is 20.
-- `--workers`: number of threads for parallel computing. 
-
-```
-python3 src/main_preprocessing.py \
---task 'count matrix' \
---target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
---workers 20
-```
-
-### Step4: update gene annotations (optional)
-Finally, if you ran annotation-free or semi-annotation mode, SCOTCH will generate a new gene annotation file. Set `--tast summary` to run this step. See `example/summary.sh` for an implementation in SLURM.
-
-- `--reference`: set to None if using annotation free mode; set to known annotation gtf file path if using semi-annotation mode.
+- `--reference`: set to None if using the annotation-free mode; set to known annotation gtf file path if using enhanced-annotation or annotation-only mode.
 
 ```
 python3 src/main_preprocessing.py \
@@ -139,6 +123,23 @@ python3 src/main_preprocessing.py \
 --target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2
 --reference path/to/reference/genes.gtf
 ```
+
+### Step4: generate count matrix
+Finally, SCOTCH will generate gene- and isoform-level copunt matrix. Set `--tast 'count matrix'` to run this step. See `example/count.sh` for an implementation in SLURM.
+
+- `--target`: the same with step1
+- '--novel_read_n' filter out novel isoform is the number of reads mapped for the sample less than `novel_read_n`, and reads mapped to this novel isoform will be treated as uncategorized. Default is 20.
+- `--workers`: number of threads for parallel computing. 
+- `--save_csv`/`--save_mtx`: these settings are used to set up output format. Saving csv files takes some time.(default is to save in both csv and mtx formats)
+
+```
+python3 src/main_preprocessing.py \
+--task 'count matrix' \
+--target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
+--workers 20 --save_csv_false --save_mtx
+```
+
+
 
 
 
