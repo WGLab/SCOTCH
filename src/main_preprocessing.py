@@ -148,11 +148,12 @@ def main():
         logger, log_file = setup_logger(args.target[0], 'count')
         logger.info('Start generating count matrix for all targets.')
         logger.info(f'Target directories: {args.target}')
-        logger.info(f'Cover existing files: {args.cover_existing}')
         logger.info(f'Novel read threshold: {args.novel_read_n}')
         logger.info(f'Platform: {args.platform}')
         logger.info(f'Group novel isoforms: {args.group_novel}')
         logger.info(f'Workers: {args.workers}')
+        logger.info(f'saving count matrix csv: {args.save_csv}')
+        logger.info(f'saving count matrix mtx: {args.save_mtx}')
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n,
                                         platform = args.platform, workers = args.workers,
                                      group_novel = args.group_novel, logger = logger,
