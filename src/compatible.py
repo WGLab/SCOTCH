@@ -71,11 +71,12 @@ def summarise_annotation(target):
         output_gtf = os.path.join(reference_folder, "SCOTCH_updated_annotation.gtf")
         if os.path.isfile(output_gtf):
             continue
-        pattern_pkl = re.compile(r".*_\d+\.pkl$")
-        pattern_gtf = re.compile(r".*_\d+\.gtf$")
-        file_names_pkl = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if pattern_pkl.match(f)]
-        file_names_gtf = [os.path.join(target, 'reference', f) for f in os.listdir(os.path.join(target, "reference")) if
-                          pattern_gtf.match(f)]
+        file_names_pkl = [os.path.join(target, 'reference', f) for f in
+                          os.listdir(os.path.join(target, "reference")) if
+                          re.match(r'metageneStructureInformationwNovel_\d+\.pkl', f)]
+        file_names_gtf = [os.path.join(target, 'reference', f) for f in
+                          os.listdir(os.path.join(target, "reference")) if
+                          re.match(r'gene_annotations_scotch_\d+\.gtf', f)]
         if len(file_names_pkl)>0 and len(file_names_gtf)>0:
             # merge pkl annotation file
             print('merging new isoform annotations')
