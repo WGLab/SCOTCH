@@ -134,7 +134,7 @@ def summarise_auxillary(target):
             auxillary_folders.append(os.path.join(root, 'auxillary'))
     for auxillary_folder in auxillary_folders:
         print('summarising read-isoform mapping files at: ' + str(auxillary_folder))
-        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)]
+        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder) if 'ENSG' in f]
         df_list = Parallel(n_jobs=-1)(delayed(read_file)(file_path) for file_path in file_paths)
         DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
         DF['MappingScore'] = DF['MappingScore'].fillna(-1)
