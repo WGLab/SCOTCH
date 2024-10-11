@@ -33,7 +33,7 @@ parser.add_argument('--cover_existing_false', action='store_false',dest='cover_e
 parser.add_argument('--small_exon_threshold',type=int,default=0, help="dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--small_exon_threshold_high',type=int,default=80, help="the upper bound of dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--truncation_match',type =float, default=0.4, help="higher than this threshold at the truncation end will be adjusted to 1")
-parser.add_argument('--match_low',type=float,default=0.2, help="the base percentage to call a read-exon unmatched")
+parser.add_argument('--match_low',type=float,default=0.1, help="the base percentage to call a read-exon unmatched")
 parser.add_argument('--match_high',type=float,default=0.6, help="the base percentage to call a read-exon matched")
 
 #task is count
