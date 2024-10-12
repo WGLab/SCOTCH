@@ -53,7 +53,7 @@ LRT_test = function(X1, X2, group_novel = FALSE, bootstrap = FALSE){
     novel_cols2 <- grep("novel", colnames(X2))
     if(length(novel_cols1) > 0){
       novel_isoform_sum1 <- rowSums(X1[, novel_cols1, drop = FALSE])
-      if (len(novel_cols1)==1){
+      if (length(novel_cols1)==1){
         novel_isoform_name <- colnames(X1)[novel_cols1]
       }else{
         novel_isoform_name <- str_remove(colnames(X1)[novel_cols1][1], '[_-]\\d+')
@@ -64,7 +64,7 @@ LRT_test = function(X1, X2, group_novel = FALSE, bootstrap = FALSE){
     }
     if (length(novel_cols2) > 0){
       novel_isoform_sum2 <- rowSums(X2[, novel_cols2, drop = FALSE])
-      if (len(novel_cols2)==1){
+      if (length(novel_cols2)==1){
         novel_isoform_name <- colnames(X1)[novel_cols2]
       }else{
         novel_isoform_name <- str_remove(colnames(X2)[novel_cols2][1], '[_-]\\d+')
