@@ -20,9 +20,10 @@ def sub_gtf(gene_name, gtf_path, out_path = None):
     gene_chr = filtered_gtf['seqname'].iloc[0]
     gene_start = filtered_gtf['start'].min()
     gene_end = filtered_gtf['end'].max()
+    gene_strand = filtered_gtf['strand'].iloc[0]
     if out_path is not None:
         filtered_gtf.to_csv(out_path, sep='\t', index=False, header=False, quoting=3)
-    return filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end
+    return filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end, gene_strand
 
 
 def merge_gtf_files(gtf_paths: list, out_path=None):
@@ -38,7 +39,7 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
     gtf_path = os.path.join(target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
     if not os.path.exists(out_path):
         os.makedirs(out_path, exist_ok=True)
-    filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end = sub_gtf(gene, gtf_path, out_path=None)
+    filtered_gtf, transcript_ids, gene_chr, gene_start, gene_end, gene_strand = sub_gtf(gene, gtf_path, out_path=None)
     #-------get major novel isoform names and known isoform names
     count_matrix_path = os.path.join(target, 'count_matrix')
     count_matrix_path_mtx = [os.path.join(count_matrix_path, i) for i in os.listdir(count_matrix_path) if
@@ -122,14 +123,14 @@ def generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct=0.1):
         subprocess.run(["samtools", "sort", "-o", bam_novel_sorted_path, bam_novel_path])
         subprocess.run(["samtools", "index", bam_novel_sorted_path])
     filtered_gtf.to_csv(os.path.join(out_path, gene+'_SCOTCH_filtered.gtf'), sep='\t', index=False, header=False,quoting=3)
-    return gene_chr, gene_start, gene_end
+    return gene_chr, gene_start, gene_end, gene_strand
 
 def generate_subbam_subgtf_multiple_samples(gene:str, bamFiles:list, targets:list, novel_pct=0.1,
                                             final_target = None, sample_names = None):
     gtf_paths, target_gene_folders = [], []
-    gene_chr, gene_start, gene_end = None, None, None
+    gene_chr, gene_start, gene_end, gene_strand = None, None, None, None
     for bamFile, target in list(zip(bamFiles, targets)):
-        gene_chr, gene_start, gene_end = generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct)
+        gene_chr, gene_start, gene_end, gene_strand = generate_subbam_subgtf_single_sample(gene, bamFile, target, novel_pct)
         gtf_path = os.path.join(target, 'visualization', gene, gene+'_SCOTCH_filtered.gtf')
         gtf_paths.append(gtf_path)
         target_gene_folder = os.path.join(target, 'visualization', gene)
@@ -146,10 +147,10 @@ def generate_subbam_subgtf_multiple_samples(gene:str, bamFiles:list, targets:lis
                 shutil.copytree(folder, dest_folder)
             merged_gtf_path = os.path.join(final_target, gene + '_merged.gtf')
             _ = merge_gtf_files(gtf_paths, out_path=merged_gtf_path)
-    return gene_chr, gene_start, gene_end
+    return gene_chr, gene_start, gene_end, gene_strand
 
 #path, bam, label, color
-def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
+def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,gene_strand,
                   dpi=300, width=12, height=1, junction_num=100, intron_scale=1):
     #target_vis, files are at target_vis/visualization/gene/sample1/
     gtf_file = os.path.join(target_vis, 'visualization', gene_name, gene_name+'_merged.gtf')
@@ -172,7 +173,7 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,
     bamfile_tsv = pd.DataFrame({'path':field1, 'type':field2, 'label':field3, 'color':field4})
     bamfile_tsv = bamfile_tsv.sort_values(by='label').reset_index(drop=True)
     bamfile_tsv.to_csv(bamfile_tsv_path, sep='\t', index=False, header=False)
-    genomic_region = f"{gene_chr}:{gene_start}-{gene_end}"
+    genomic_region = f"{gene_chr}:{gene_start}-{gene_end}:{gene_strand}"
     command = [
         "trackplot",
         "-e", genomic_region,
@@ -197,9 +198,9 @@ def visualization(gene, bamFiles, targets, novel_pct, junction_num, final_target
     output = generate_subbam_subgtf_multiple_samples(gene=gene, bamFiles=bamFiles, targets=targets,
                                                          novel_pct=novel_pct, final_target=final_target,
                                                          sample_names=sample_names)
-    gene_chr, gene_start, gene_end = output
+    gene_chr, gene_start, gene_end, gene_strand = output
     run_trackplot(target_vis=final_target, gene_name=gene, gene_chr=gene_chr, gene_start=gene_start, gene_end=gene_end,
-                      dpi=300, width=width, height=height, junction_num=junction_num, intron_scale=1)
+                  gene_strand = gene_strand,dpi=300, width=width, height=height, junction_num=junction_num, intron_scale=1)
 
 #gene='CD74'
 #bamFile='/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams'
