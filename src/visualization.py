@@ -151,7 +151,7 @@ def generate_subbam_subgtf_multiple_samples(gene:str, bamFiles:list, targets:lis
 
 #path, bam, label, color
 def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,gene_strand,
-                  dpi=300, width=12, height=1, junction_num=100, intron_scale=1):
+                  dpi=300, width=12, height=1, junction_num=100, intron_scale=1, annotation_scale=0.25):
     #target_vis, files are at target_vis/visualization/gene/sample1/
     gtf_file = os.path.join(target_vis, 'visualization', gene_name, gene_name+'_merged.gtf')
     folder_path = os.path.join(target_vis, 'visualization', gene_name)
@@ -187,7 +187,8 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,gene_str
         "-t", str(junction_num),  # threshold
         "--intron-scale", str(intron_scale),  # Intron scaling factor
         "--same-y",
-        "--distance-ratio", '0.1'
+        "--distance-ratio", '0.1',
+        "--annotation-scale", str(annotation_scale)
     ]
     try:
         subprocess.run(command, check=True)
@@ -195,13 +196,14 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,gene_str
     except subprocess.CalledProcessError as e:
         print(f"An error occurred while generating the plot: {e}")
 
-def visualization(gene, bamFiles, targets, novel_pct, junction_num, final_target, sample_names, width, height):
+def visualization(gene, bamFiles, targets, novel_pct, junction_num, final_target, sample_names, width, height, annotation_scale):
     output = generate_subbam_subgtf_multiple_samples(gene=gene, bamFiles=bamFiles, targets=targets,
                                                          novel_pct=novel_pct, final_target=final_target,
                                                          sample_names=sample_names)
     gene_chr, gene_start, gene_end, gene_strand = output
     run_trackplot(target_vis=final_target, gene_name=gene, gene_chr=gene_chr, gene_start=gene_start, gene_end=gene_end,
-                  gene_strand = gene_strand,dpi=300, width=width, height=height, junction_num=junction_num, intron_scale=1)
+                  gene_strand = gene_strand,dpi=300, width=width, height=height, junction_num=junction_num, intron_scale=1,
+                  annotation_scale = annotation_scale)
 
 #gene='CD74'
 #bamFile='/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams'

@@ -59,6 +59,7 @@ parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel 
 parser.add_argument('--junction_num',type=int,default=10, help="only keep junctions over this number")
 parser.add_argument('--width',type=int,default=12)
 parser.add_argument('--height',type=float,default=1)
+parser.add_argument("--annotation_scale", type=float, default=0.25, help="annotation plot scale")
 
 def setup_logger(target, task_name):
     logger = logging.getLogger()
@@ -194,7 +195,8 @@ def main():
         run_count()
 
     if args.task =='visualization': #currently only support 10X file structure
-        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.junction_num, args.target_vis, args.sample_names, args.width, args.height)
+        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.junction_num, args.target_vis,
+                          args.sample_names, args.width, args.height, args.annotation_scale)
 
 if __name__ == '__main__':
     main()
