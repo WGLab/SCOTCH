@@ -186,7 +186,8 @@ def run_trackplot(target_vis, gene_name, gene_chr, gene_start, gene_end,gene_str
         "--show-junction-num",  # Show junction numbers
         "-t", str(junction_num),  # threshold
         "--intron-scale", str(intron_scale),  # Intron scaling factor
-        "--same-y"
+        "--same-y",
+        "--distance_ratio", 0.1
     ]
     try:
         subprocess.run(command, check=True)
