@@ -110,7 +110,8 @@ def main():
                                     coverage_threshold_exon=args.coverage_threshold_exon,
                                     coverage_threshold_splicing=args.coverage_threshold_splicing,
                                     z_score_threshold=args.z_score_threshold,
-                                    min_gene_size=args.min_gene_size, build=args.build, platform=args.platform)
+                                    min_gene_size=args.min_gene_size, build=args.build, platform=args.platform,
+                                    logger=logger)
         # generate gene annotation
         logger.info('Start generating gene annotation.')
         annotator.annotate_genes()
