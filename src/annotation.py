@@ -506,7 +506,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
                                 f.endswith('.bam') and '.' + str(chrom) + '.' in f]
                 bamfiles = [pysam.AlignmentFile(os.path.join(bamfile_path, bamFile_name[0]))]  # bamfile is a file path now
             else:
-                bamfiles = [pysam.AlignmentFile(bamfile_path, "rb")]  # bamfile is a file path
+                bamfiles = [pysam.AlignmentFile(bamfile_path, "rb", check_sq=False)]  # bamfile is a file path
         # -----from multiple samples
         elif isinstance(bamfile_path, list):
             if os.path.isfile(bamfile_path[0]) == False:  # bamfile = [folderpath1, folderpath2, ...]
@@ -515,9 +515,9 @@ def annotate_genes(geneStructureInformation, bamfile_path,
                     for file in os.listdir(folder):
                         if file.endswith('.bam') and '.' + str(chrom) + '.' in file:
                             bamFile_name.append(os.path.join(folder, file))
-                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamFile_name]
+                bamfiles = [pysam.AlignmentFile(bfn, "rb", check_sq=False) for bfn in bamFile_name]
             else:
-                bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamfile_path]
+                bamfiles = [pysam.AlignmentFile(bfn, "rb", check_sq=False) for bfn in bamfile_path]
         else:
             print('bamfile must be a list or str')
         exons_bam = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
