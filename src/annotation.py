@@ -29,11 +29,11 @@ def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
     ReadTagsDF = pd.concat(df).reset_index(drop=True)
     return ReadTagsDF
 
-def extract_bam_info(bam):
+def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB'):
     #extract readname, cb, umi from bam file
     # bam: path to bam file
     bamFilePysam = pysam.Samfile(bam, "rb")
-    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('UB'), read.qend-read.qstart) for read in bamFilePysam]
+    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend-read.qstart) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0]>0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
@@ -63,10 +63,10 @@ def extract_bam_info_parse(bam):
         ReadTagsDF = None
     return ReadTagsDF
 
-def extract_bam_info_pacbio(bam):
+def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM'):
     bamFilePysam = pysam.Samfile(bam, "rb")
     #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.get_tag('CB'), read.get_tag('XM'), read.reference_end-read.reference_start) for read in bamFilePysam]
+    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_end-read.reference_start) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0] > 0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
