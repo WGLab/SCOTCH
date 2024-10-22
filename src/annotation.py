@@ -66,10 +66,11 @@ def extract_bam_info_parse(bam):
 def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM'):
     bamFilePysam = pysam.Samfile(bam, "rb")
     #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_end-read.reference_start) for read in bamFilePysam]
+    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_length) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0] > 0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+        ReadTagsDF.fillna(value=0, axis=1, inplace=True)
         ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
         ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
         ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
