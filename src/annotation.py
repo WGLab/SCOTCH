@@ -70,10 +70,10 @@ def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM'):
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0] > 0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-        ReadTagsDF.fillna(value=0, axis=1, inplace=True)
+        ReadTagsDF.dropna(inplace=True)
         ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
         ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(str)
+        ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(int).astype(str)
     else:
         ReadTagsDF = None
     return ReadTagsDF
