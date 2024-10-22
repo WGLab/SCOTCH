@@ -268,12 +268,15 @@ class ReadMapper:
                 sample = 'sample' + str(i)
                 reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
                 for read in reads:
+                    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
                     result = process_read(read, self.qname_dict_list[i], self.lowest_match, self.lowest_match1,
                                           self.small_exon_threshold,
                                           self.small_exon_threshold1, self.truncation_match, Info_singlegene,
                                           self.parse, self.pacbio)
                     if result is not None:
-                        qname_sample_dict[read.qname] = sample
+                        if self.pacbio:
+                            readName = readName + '_' + str(readEnd - readStart)
+                        qname_sample_dict[readName] = sample
                     result_novel, result_known, result_known_scores = result
                     if result_novel is not None:
                         Read_novelIsoform.append(result_novel)
@@ -330,12 +333,15 @@ class ReadMapper:
                 reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
                 # process reads metagene
                 for read in reads:
+                    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
                     out = process_read_metagene(read,self.qname_dict_list[i], Info_multigenes, self.lowest_match,self.lowest_match1,
                                                 self.small_exon_threshold,self.small_exon_threshold1,
                                                 self.truncation_match, self.parse, self.pacbio)
                     if out is not None: #may not within this meta gene region
                         results.append(out)
-                        qname_sample_dict[read.qname] = 'sample' + str(i)
+                        if self.pacbio:
+                            readName = readName + '_' + str(readEnd - readStart)
+                        qname_sample_dict[readName] = 'sample' + str(i)
             Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, Read_knownIsoform_metagene_scores = [], [], [], []
             for result in results:
                 if result is not None:
