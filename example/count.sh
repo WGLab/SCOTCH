@@ -1,10 +1,10 @@
 #! /bin/bash -l
-#SBATCH --cpus-per-task=20
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=200G
 
 path="path/to/SCOTCH"
 
 python3 ${path}/src/main_preprocessing.py \
---task 'count matrix' --platform '10x' \
+--task 'count matrix' --platform '10x-ont' \
 --target path/to/sample1 path/to/sample2 \
---novel_read_n 20 --workers 100
+--workers 8 --save_mtx --save_csv --group_novel
