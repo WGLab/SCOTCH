@@ -676,7 +676,7 @@ def add_build(geneStructureInformation, build):
 class Annotator:
     def __init__(self, target:list, reference_gtf_path:str, reference_pkl_path:str, bam_path:list, update_gtf, workers,
                  coverage_threshold_gene, coverage_threshold_exon, coverage_threshold_splicing,z_score_threshold,
-                 min_gene_size, build = None, platform = '10x', logger = None):
+                 min_gene_size, build = None, platform = '10x-ont', logger = None):
         """
         target: root path to save annotation files. SCOTCH will automatically create sub folders
         reference_gtf: path to gtf annotation (optional)
@@ -695,8 +695,8 @@ class Annotator:
         self.update_gtf = update_gtf
         self.build = build
         self.platform = platform
-        self.parse = self.platform == 'parse'
-        self.pacbio = self.platform == 'pacbio'
+        self.parse = self.platform == 'parse-ont'
+        self.pacbio = self.platform == '10x-pacbio'
         # gene annotation information
         self.annotation_folder_path = [os.path.join(t, "reference") for t in target]
         self.annotation_path_single_gene = [os.path.join(t, "reference/geneStructureInformation.pkl") for t in target]

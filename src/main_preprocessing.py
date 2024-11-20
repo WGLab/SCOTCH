@@ -11,7 +11,7 @@ import subprocess
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
 parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")
-parser.add_argument('--platform',type=str,default='10x',help="platform: 10x, parse, or pacbio")
+parser.add_argument('--platform',type=str,default='10x',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
 parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")#a list
 parser.add_argument('--build',type=str,help="genome build, bam files for parse platform have contigs in the format of build_chr1")
@@ -139,8 +139,7 @@ def main():
                                    truncation_match = args.truncation_match,
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger)
-        readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
-                                      total_jobs=args.total_jobs,current_job_index=args.job_index)
+        readmapper.map_reads_allgenes(cover_existing=True,total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')

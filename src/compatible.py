@@ -71,11 +71,9 @@ def summarise_annotation(target):
         output_gtf = os.path.join(reference_folder, "SCOTCH_updated_annotation.gtf")
         if os.path.isfile(output_gtf):
             continue
-        file_names_pkl = [os.path.join(target, 'reference', f) for f in
-                          os.listdir(os.path.join(target, "reference")) if
+        file_names_pkl = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
                           re.match(r'metageneStructureInformationwNovel_\d+\.pkl', f)]
-        file_names_gtf = [os.path.join(target, 'reference', f) for f in
-                          os.listdir(os.path.join(target, "reference")) if
+        file_names_gtf = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
                           re.match(r'gene_annotations_scotch_\d+\.gtf', f)]
         if len(file_names_pkl)>0 and len(file_names_gtf)>0:
             # merge pkl annotation file
@@ -180,8 +178,8 @@ def summarise_auxillary(target):
 
 
 class ReadMapper:
-    def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.8, small_exon_threshold = 20,
-                 small_exon_threshold1=100, truncation_match=0.5, platform = '10x',
+    def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
+                 small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
                  reference_gtf_path = None, logger = None):
         self.logger = logger
         self.target = target
@@ -210,10 +208,10 @@ class ReadMapper:
         self.lowest_match = lowest_match
         self.lowest_match1 = lowest_match1
         self.platform = platform
-        self.parse = self.platform == 'parse'
-        self.pacbio = self.platform == 'pacbio'
+        self.parse = self.platform == 'parse-ont'
+        self.pacbio = self.platform == '10x-pacbio'
         # some paths
-        if platform != 'parse':
+        if platform != 'parse-ont':
             self.nsamples = len(self.target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, "compatible_matrix") for target_ in target] #not for parse
             self.read_mapping_path_list = [os.path.join(target_, "auxillary") for target_ in target] #not for parse

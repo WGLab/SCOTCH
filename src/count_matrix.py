@@ -142,21 +142,21 @@ def split_list(lst, n):
     return result
 
 class CountMatrix:
-    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x', workers:int = 1,
+    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x-ont', workers:int = 1,
                  csv = True, mtx =True, logger = None):
         self.logger = logger
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
         self.platform = platform
-        self.parse = self.platform == 'parse'
-        self.pacbio = self.platform == 'pacbio'
+        self.parse = self.platform == 'parse-ont'
+        self.pacbio = self.platform == '10x-pacbio'
         self.group_novel = group_novel
         self.csv = csv
         self.mtx = mtx
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
         self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + '.pkl')
-        if platform=='parse':
+        if platform=='parse-ont':
             self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
             self.n_samples = len(self.sample_names)
             self.samples_folder_path = os.path.join(self.target[0], 'samples')
