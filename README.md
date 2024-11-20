@@ -94,7 +94,6 @@ python3 src/main_preprocessing.py \
 --platform 10x-ont \
 --target path/to/output/folder/of/sample1 path/to/output/folder/of/sample2 \
 --bam path/to/bam/file/or/bamfolder/sample1 path/to/bam/file/or/bamfolder/sample2 \
---reference path/to/genes.gtf \
 --update_gtf \
 --reference path/to/reference/genes.gtf \
 --reference_pkl data/geneStructureInformation.pkl \
