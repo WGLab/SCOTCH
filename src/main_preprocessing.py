@@ -11,7 +11,7 @@ import subprocess
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
 parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")
-parser.add_argument('--platform',type=str,default='10x',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
+parser.add_argument('--platform',type=str,default='10x-ont',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
 parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")#a list
 parser.add_argument('--build',type=str,help="genome build, bam files for parse platform have contigs in the format of build_chr1")
