@@ -16,16 +16,16 @@ import shutil
 ##############################annotation##############################
 ######################################################################
 
-def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False):
+def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False,barcode_cell = None, barcode_umi = None):
     files = os.listdir(bam_folder)
     bamfiles = [os.path.join(bam_folder,f) for f in files if f.endswith('.bam')]
     if parse:
         bamfiles = [bam for bam in bamfiles if bam+'.bai' in files]
         df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_parse)(bam) for bam in bamfiles)
     elif pacbio:
-        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam) for bam in bamfiles)
+        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info_pacbio)(bam,barcode_cell, barcode_umi) for bam in bamfiles)
     else:
-        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam) for bam in bamfiles)
+        df = Parallel(n_jobs=num_cores)(delayed(extract_bam_info)(bam,barcode_cell, barcode_umi) for bam in bamfiles)
     ReadTagsDF = pd.concat(df).reset_index(drop=True)
     return ReadTagsDF
 
@@ -755,7 +755,7 @@ class Annotator:
                     self.logger.info(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
                     shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
 
-    def annotation_bam(self):
+    def annotation_bam(self, barcode_cell, barcode_umi):
         for i in range(len(self.target)):
             if not os.path.exists(self.bamInfo_folder_path[i]):
                 os.makedirs(self.bamInfo_folder_path[i])
@@ -775,14 +775,14 @@ class Annotator:
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 self.logger.info('Extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
-                    bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio)
+                    bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio,barcode_cell, barcode_umi)
                 else:
                     if self.parse:
                         bam_info = extract_bam_info_parse(self.bam_path[i])
                     elif self.pacbio:
-                        bam_info = extract_bam_info_pacbio(self.bam_path[i])
+                        bam_info = extract_bam_info_pacbio(self.bam_path[i],barcode_cell, barcode_umi)
                     else:
-                        bam_info = extract_bam_info(self.bam_path[i])
+                        bam_info = extract_bam_info(self.bam_path[i],barcode_cell, barcode_umi)
                 bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
                 qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)

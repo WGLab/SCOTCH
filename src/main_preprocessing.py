@@ -25,6 +25,10 @@ parser.add_argument('--coverage_threshold_exon',type=float, default=0.02, help="
 parser.add_argument('--coverage_threshold_splicing',type=float, default=0.02, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
 parser.add_argument('--z_score_threshold',type=int, default=10, help="threshold to support exon coverage sharp change discovery")
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
+
+parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
+parser.add_argument('--barcode_umi',type=str, help="umi barcode tag in bam file")
+
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
 parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork")
@@ -86,6 +90,18 @@ def copy_log_to_targets(log_file, targets):
 def main():
     global args
     args = parser.parse_args()
+    if args.reference_pkl=='None':
+        args.reference_pkl = None
+    if args.platform=='10x-ont':
+        if args.barcode_cell is None:
+            args.barcode_cell = "CB"
+        if args.barcode_umi is None:
+            args.barcode_umi = "UB"
+    elif args.platform == '10x-pacbio':
+        if args.barcode_cell is None:
+            args.barcode_cell = "XC"
+        if args.barcode_umi is None:
+            args.barcode_umi = "XM"
     for t in args.target:
         if not os.path.exists(t):
             os.makedirs(t)
@@ -117,7 +133,7 @@ def main():
         annotator.annotate_genes()
         # bam information
         logger.info('Start processing bam file information.')
-        annotator.annotation_bam()
+        annotator.annotation_bam(args.barcode_cell, args.barcode_umi)
         copy_log_to_targets(log_file, args.target)
     def run_compatible():
         logger, log_file = setup_logger(args.target[0], 'compatible')
