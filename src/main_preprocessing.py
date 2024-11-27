@@ -25,7 +25,6 @@ parser.add_argument('--coverage_threshold_exon',type=float, default=0.02, help="
 parser.add_argument('--coverage_threshold_splicing',type=float, default=0.02, help="threshold to support splicing discovery, percentage to the maximum splicing junctions")
 parser.add_argument('--z_score_threshold',type=int, default=10, help="threshold to support exon coverage sharp change discovery")
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
-
 parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
 parser.add_argument('--barcode_umi',type=str, help="umi barcode tag in bam file")
 
