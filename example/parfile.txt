@@ -1,0 +1,6 @@
+bc_edit_dist    3
+inqc_fastqc_run False
+pre_check_name_match    False
+pre_check_name_R1R2 False
+pre_head_keep_seq_index False
+mol_min_mapq_score  60
