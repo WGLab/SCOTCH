@@ -1,1 +1,1 @@
-This folder contains codes (parse_pipeline.sh) for preprocessing fastq files from Parse platform. The python codes of `onp_create_reads.py` is provided by Parse. 
+This folder contains codes (parse_pipeline.sh) for preprocessing fastq files from Parse platform. The python codes of `onp_create_reads.py` is provided by Parse. The output is tagged bam file to be used by SCOTCH.
