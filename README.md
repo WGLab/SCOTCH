@@ -69,7 +69,7 @@ Below is the directory structure of output under each `target` folder you can ex
 
 ### Step1: prepare annotation file
 
-In this step, SCOTCH will generate annotation files for the reference genome and tagged BAM files. Set `--tast annotation` to run this step. Note that, users have to use the same gtf file throughout, including during the genome alignment step, which is typically processed by vendor-supplied pipelines.
+In this step, SCOTCH will generate annotation files for the reference genome and tagged BAM files. Set `--task annotation` to run this step. Note that, users have to use the same gtf file throughout, including during the genome alignment step, which is typically processed by vendor-supplied pipelines.
 
 SCOTCH offers three modes for generating gene annotations: 
 1. **Annotation-Only Mode**: SCOTCH can rely entirely on existing gene annotations. This mode allows for the discovery of novel isoforms defined by combinations of known exons. This mode will fail to identify novel isoforms involving unknown exons, such as intron retention. Set `--reference` as path to gene annotation .gtf file. To save time, users can also set `--reference_pkl` as the path to SCOTCH generated annotation based on given gtf file. SCOTCH has pre-computated this file based on [this](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz) (human hg38) provided by 10X genome. In addition, set `--update_gtf_off`.
