@@ -1219,8 +1219,26 @@ def map_read_to_novelisoform(isoformInfo_dict, isoform_assignment_vector_list, r
 #-------------------------------end----------------------------#
 
 
-
-
+#----------------spliced/unspliced------------------#
+def get_intron_cover(read, isoform_name, Info_singlegene):
+    def get_intron_info(exonInfo):
+        introns = []
+        for i in range(len(exonInfo) - 1):
+            intron_start = exonInfo[i][1]  # end of current exon
+            intron_end = exonInfo[i + 1][0]  # start of next exon
+            introns.append((intron_start, intron_end))
+        return introns
+    geneInfo, exonInfo, isoformInfo = Info_singlegene
+    exons = [exonInfo[exon_ind] for exon_ind in isoformInfo[isoform_name]]
+    intronInfo = get_intron_info(exons)
+    referencePositions = read.get_reference_positions(full_length=False)
+    intronhit = exon_hit(referencePositions, intronInfo)
+    intron_covers = 0
+    if len(intronhit) > 0:
+        intronhitbases = dict(pd.Series(intronhit).value_counts())
+        intron_map_base = [intronhitbases.get(i, 0) for i in range(len(intronInfo))]
+        intron_covers = max(intron_map_base)
+    return intron_covers
 
 #####some functions to delete ########
 

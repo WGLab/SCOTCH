@@ -10,7 +10,8 @@ import subprocess
 
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
-parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")#compatible matrix splicing
+parser.add_argument('--generate_splicing', action='store_true', default= False, help="do not generate spliced/unspliced count matrix for velocity calculation")
 parser.add_argument('--platform',type=str,default='10x-ont',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
 parser.add_argument('--bam',type=str,nargs='+', help="one or multiple bam file paths or bam folder paths")#a list
@@ -38,6 +39,9 @@ parser.add_argument('--small_exon_threshold_high',type=int,default=80, help="the
 parser.add_argument('--truncation_match',type =float, default=0.4, help="higher than this threshold at the truncation end will be adjusted to 1")
 parser.add_argument('--match_low',type=float,default=0.1, help="the base percentage to call a read-exon unmatched")
 parser.add_argument('--match_high',type=float,default=0.6, help="the base percentage to call a read-exon matched")
+
+#task is compatible matrix splicing
+parser.add_argument('--unsplice_threshold',type=int, default=15, help="threshold for deciding unspliced reads")
 
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
@@ -159,10 +163,25 @@ def main():
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
         copy_log_to_targets(log_file, args.target)
+
+    def run_compatible_splicing():
+        logger, log_file = setup_logger(args.target[0], 'compatible matrix splicing')
+        logger.info(f'Start generating spliced/unspliced compatible matrix for all targets. Job: {args.job_index}')
+        logger.info(f'BAM files: {args.bam}. Job: {args.job_index}')
+        logger.info(f'Unspliced threshold: {args.unsplice_threshold}. Job: {args.job_index}')
+        cr = cp.ClassifyReadsSplice(scotch_target = args.target,
+                                    bam_path = args.bam,
+                                    unsplice_threshold = args.unsplice_threshold,
+                                    n_jobs = args.total_jobs, job_index = args.job_index,
+                                    logger=logger)
+        cr.split_compatible()
+        logger.info(f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
+
     def run_count():
         # target has to be len 1 for parse platform
         logger, log_file = setup_logger(args.target[0], 'count')
         logger.info('Start generating count matrix for all targets.')
+        logger.info(f'Spliced/unspliced count matrix generation is set as {args.generate_splicing}')
         logger.info(f'Target directories: {args.target}')
         logger.info(f'Novel read threshold: {args.novel_read_n}')
         logger.info(f'Platform: {args.platform}')
@@ -176,12 +195,13 @@ def main():
                                      csv = args.save_csv, mtx = args.save_mtx)
         if args.platform=='parse':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
-        countmatrix.generate_multiple_samples()
+        countmatrix.generate_multiple_samples(generate_splicing=args.generate_splicing)
         logger.info('Saving count matrix')
-        countmatrix.save_multiple_samples()
+        countmatrix.save_multiple_samples(generate_splicing=args.generate_splicing)
         countmatrix.filter_gtf()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
+
     def run_summary():
         logger, log_file = setup_logger(args.target[0], 'summary')
         logger.info('Start summarizing read isoform mapping and annotations for all targets.')
@@ -200,6 +220,8 @@ def main():
         run_compatible()
     if args.task == 'summary':
         run_summary()
+    if args.task=='compatible matrix splicing':
+        run_compatible_splicing()
     if args.task == 'count matrix': # task is to generate count matrix
         run_count()
 

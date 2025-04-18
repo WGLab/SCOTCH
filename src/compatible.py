@@ -7,6 +7,10 @@ import csv
 import math
 import copy
 from joblib import Parallel, delayed
+
+
+
+
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
         gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
@@ -668,3 +672,87 @@ class ReadMapper:
 
 
 
+class ClassifyReadsSplice:
+    def __init__(self, scotch_target:str, bam_path:str, unsplice_threshold:int, n_jobs = 1, job_index = 0, logger = None):
+        self.logger = logger
+        self.bam_path = bam_path
+        self.scotch_target = scotch_target
+        self.unsplice_threshold = unsplice_threshold
+        self.compatible_folder = os.path.join(scotch_target, 'compatible_matrix')
+        self.splice_folder = os.path.join(scotch_target, 'spliced_compatible_matrix')
+        self.unsplice_folder = os.path.join(scotch_target, 'unspliced_compatible_matrix')
+        self.read_isoform_mapping_path = os.path.join(scotch_target, 'auxillary/all_read_isoform_exon_mapping.tsv')
+        self.mapping_df = self._read_mapping()
+        self.metageneStructureInformation = load_pickle(os.path.join(scotch_target, 'reference/metageneStructureInformationwNovel.pkl'))
+        self.geneStructureInformation = self._seperate_metageneInfo()
+        self.n_jobs = n_jobs
+        self.job_index = job_index
+    def _seperate_metageneInfo(self):
+        geneStructureInformation = {}
+        metagenes = list(self.metageneStructureInformation.keys())
+        for metagene in metagenes:
+            multi_gene_info = self.metageneStructureInformation[metagene]
+            for gene_info in multi_gene_info:
+                genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
+                geneStructureInformation[genename] = gene_info
+        return geneStructureInformation
+    def _read_mapping(self):
+        mapping_df = pd.read_csv(self.read_isoform_mapping_path, sep='\t')
+        mapping_df = mapping_df[mapping_df['Keep'] == 1].reset_index(drop=True)
+        mapping_df = mapping_df[['Read', 'Isoform' , 'geneName', 'geneChr', 'CBUMI']]
+        return mapping_df
+    def _read_bam(self, chrom=None):
+        bamFilePysam = None
+        if os.path.isfile(self.bam_path) == False:  # If it's a folder, find the BAM file based on chrom
+            if chrom is not None:
+                bamFile_name = [f for f in os.listdir(self.bam_path) if
+                                f.endswith('.bam') and '.' + chrom + '.' in f]
+                if bamFile_name:  # Ensure a matching BAM file is found
+                    bamFile = os.path.join(self.bam_path, bamFile_name[0])  # Not .bai
+                    bamFilePysam = pysam.Samfile(bamFile, "rb")
+        else: # If it's a BAM file path, read it directly
+            bamFilePysam = pysam.Samfile(self.bam_path, "rb")
+        return bamFilePysam
+    def _split_compatible_gene(self, gene):
+        print(f'processing gene: {gene}')
+        Info_singlegene = self.geneStructureInformation[gene]
+        bam = self._read_bam(Info_singlegene[0]['geneChr'])
+        mapping_df_gene = self.mapping_df[self.mapping_df['geneName'] == Info_singlegene[0]['geneName']]
+        read_isoform_dict = mapping_df_gene.set_index('Read')['Isoform'].to_dict()
+        read_cbumi_dict = mapping_df_gene.set_index('Read')['CBUMI'].to_dict()
+        reads_list = mapping_df_gene.Read.tolist()
+        reads = bam.fetch(Info_singlegene[0]['geneChr'], Info_singlegene[0]['geneStart'], Info_singlegene[0]['geneEnd'])
+        CBUMI_unspliced, CBUMI_spliced = [], []
+        for read in reads:
+            if read.qname in reads_list:
+                isoform_name = read_isoform_dict[read.qname]
+                intron_cover = get_intron_cover(read, isoform_name, Info_singlegene)
+                if intron_cover > self.unsplice_threshold:
+                    CBUMI_unspliced.append(read_cbumi_dict[read.qname])
+                else:
+                    CBUMI_spliced.append(read_cbumi_dict[read.qname])
+                return CBUMI_unspliced, CBUMI_spliced
+    def split_compatible(self):
+        os.makedirs(self.splice_folder, exist_ok=True)
+        os.makedirs(self.unsplice_folder, exist_ok=True)
+        compatible_matrix_dict = {
+            f.split('_')[0]: os.path.join(self.compatible_folder, f)
+            for f in os.listdir(self.compatible_folder)
+            if f.endswith(".csv")
+        } #gene: path
+        genes = list(compatible_matrix_dict.keys())
+        genes_job = np.array_split(genes, self.n_jobs)[self.job_index]
+        self.logger.info(f'{str(len(genes))} genes for job {self.job_index}')
+        for gene in genes_job:
+            CBUMI_unspliced, CBUMI_spliced = self._split_compatible_gene(gene)
+            comp_mat = pd.read_csv(compatible_matrix_dict[gene])
+            comp_mat.columns = ['CBUMI'] + list(comp_mat.columns[1:])
+            if len(CBUMI_unspliced)>0:
+                comp_mat_unspliced = comp_mat[comp_mat.CBUMI.isin(CBUMI_unspliced)].reset_index(drop = True)
+                filename = os.path.join(self.splice_folder, os.path.basename(compatible_matrix_dict[gene]))
+                comp_mat_unspliced.to_csv(filename, index=False)
+            if len(CBUMI_spliced) > 0:
+                comp_mat_spliced = comp_mat[comp_mat.CBUMI.isin(CBUMI_spliced)].reset_index(drop = True)
+                filename = os.path.join(self.unsplice_folder, os.path.basename(compatible_matrix_dict[gene]))
+                comp_mat_spliced.to_csv(filename, index=False)
+        self.logger.info(f'Job {self.job_index} completed')
