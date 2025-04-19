@@ -175,14 +175,14 @@ def main():
                 cr = cp.ClassifyReadsSplice(scotch_target = target_, bam_path = bam_,
                                             unsplice_threshold = args.unsplice_threshold,
                                             n_jobs = args.total_jobs, job_index = args.job_index,
-                                            logger=logger)
+                                            logger=logger, platform = args.platform)
                 cr.split_compatible()
                 logger.info(f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
         if isinstance(args.target, str) and isinstance(args.bam, str):
                 cr = cp.ClassifyReadsSplice(scotch_target=args.target, bam_path=args.bam,
                                             unsplice_threshold=args.unsplice_threshold,
                                             n_jobs=args.total_jobs, job_index=args.job_index,
-                                            logger=logger)
+                                            logger=logger, platform = args.platform)
                 cr.split_compatible()
                 logger.info(
                     f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
