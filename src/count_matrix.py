@@ -294,8 +294,6 @@ class CountMatrix:
                         novel_isoform_drop = df_novel.sum(axis=0) < self.novel_read_n
                         novel_isoform_drop = novel_isoform_drop[novel_isoform_drop].index.tolist()
                         novel_isoform_del = novel_isoform_del + novel_isoform_drop
-                    else:
-                        novel_isoform_drop = self.novel_isoform_del_dict.get(gene, []) #delete cols in self.novel_isoform_del_dict[gene]
                     if novel_isoform_drop:  # only proceed if there are columns to drop
                         df_drop = df.loc[:, novel_isoform_drop].sum(axis=1).tolist()
                         df = df.drop(columns=novel_isoform_drop)
