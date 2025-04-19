@@ -730,6 +730,8 @@ class ClassifyReadsSplice:
             readName = readName + '_' + str(readEnd - readStart) if self.platform=='10x-pacbio' else readName
             if readName in reads_list:
                 isoform_name = read_isoform_dict[readName]
+                if 'uncategorized' in isoform_name:
+                    continue
                 intron_cover = get_intron_cover(read, isoform_name, Info_singlegene)
                 if intron_cover > self.unsplice_threshold:
                     CBUMI_unspliced.append(read_cbumi_dict[readName])
