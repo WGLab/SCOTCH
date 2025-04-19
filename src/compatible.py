@@ -673,7 +673,8 @@ class ReadMapper:
 
 
 class ClassifyReadsSplice:
-    def __init__(self, scotch_target:str, bam_path:str, unsplice_threshold:int, n_jobs = 1, job_index = 0, logger = None):
+    def __init__(self, scotch_target:str, bam_path:str, unsplice_threshold:int, n_jobs = 1, job_index = 0, logger = None,
+                 pacbio = False):
         self.logger = logger
         self.bam_path = bam_path
         self.scotch_target = scotch_target
@@ -687,6 +688,7 @@ class ClassifyReadsSplice:
         self.geneStructureInformation = self._seperate_metageneInfo()
         self.n_jobs = n_jobs
         self.job_index = job_index
+        self.pacbio = pacbio
     def _seperate_metageneInfo(self):
         geneStructureInformation = {}
         metagenes = list(self.metageneStructureInformation.keys())
@@ -724,14 +726,16 @@ class ClassifyReadsSplice:
         reads = bam.fetch(Info_singlegene[0]['geneChr'], Info_singlegene[0]['geneStart'], Info_singlegene[0]['geneEnd'])
         CBUMI_unspliced, CBUMI_spliced = [], []
         for read in reads:
-            if read.qname in reads_list:
-                isoform_name = read_isoform_dict[read.qname]
+            readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+            readName = readName + '_' + str(readEnd - readStart) if self.pacbio else readName
+            if readName in reads_list:
+                isoform_name = read_isoform_dict[readName]
                 intron_cover = get_intron_cover(read, isoform_name, Info_singlegene)
                 if intron_cover > self.unsplice_threshold:
-                    CBUMI_unspliced.append(read_cbumi_dict[read.qname])
+                    CBUMI_unspliced.append(read_cbumi_dict[readName])
                 else:
-                    CBUMI_spliced.append(read_cbumi_dict[read.qname])
-                return CBUMI_unspliced, CBUMI_spliced
+                    CBUMI_spliced.append(read_cbumi_dict[readName])
+        return CBUMI_unspliced, CBUMI_spliced
     def split_compatible(self):
         os.makedirs(self.splice_folder, exist_ok=True)
         os.makedirs(self.unsplice_folder, exist_ok=True)

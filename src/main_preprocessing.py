@@ -165,7 +165,7 @@ def main():
         copy_log_to_targets(log_file, args.target)
 
     def run_compatible_splicing():
-        logger, log_file = setup_logger(args.target[0], 'compatible matrix splicing')
+        logger, log_file = setup_logger(args.target[0], 'compatible_matrix)splicing')
         logger.info(f'Start generating spliced/unspliced compatible matrix for all targets. Job: {args.job_index}')
         logger.info(f'BAM files: {args.bam}. Job: {args.job_index}')
         logger.info(f'Unspliced threshold: {args.unsplice_threshold}. Job: {args.job_index}')
