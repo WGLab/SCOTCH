@@ -171,7 +171,7 @@ def main():
         logger.info(f'Unspliced threshold: {args.unsplice_threshold}. Job: {args.job_index}')
 
         if isinstance(args.target, list) and isinstance(args.bam, list):
-            for target_, bam_ in args.target, args.bam:
+            for target_, bam_ in list(zip(args.target, args.bam)):
                 cr = cp.ClassifyReadsSplice(scotch_target = target_, bam_path = bam_,
                                             unsplice_threshold = args.unsplice_threshold,
                                             n_jobs = args.total_jobs, job_index = args.job_index,
