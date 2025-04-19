@@ -169,13 +169,23 @@ def main():
         logger.info(f'Start generating spliced/unspliced compatible matrix for all targets. Job: {args.job_index}')
         logger.info(f'BAM files: {args.bam}. Job: {args.job_index}')
         logger.info(f'Unspliced threshold: {args.unsplice_threshold}. Job: {args.job_index}')
-        cr = cp.ClassifyReadsSplice(scotch_target = args.target,
-                                    bam_path = args.bam,
-                                    unsplice_threshold = args.unsplice_threshold,
-                                    n_jobs = args.total_jobs, job_index = args.job_index,
-                                    logger=logger)
-        cr.split_compatible()
-        logger.info(f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
+
+        if isinstance(args.target, list) and isinstance(args.bam, list):
+            for target_, bam_ in args.target, args.bam:
+                cr = cp.ClassifyReadsSplice(scotch_target = target_, bam_path = bam_,
+                                            unsplice_threshold = args.unsplice_threshold,
+                                            n_jobs = args.total_jobs, job_index = args.job_index,
+                                            logger=logger)
+                cr.split_compatible()
+                logger.info(f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
+        if isinstance(args.target, str) and isinstance(args.bam, str):
+                cr = cp.ClassifyReadsSplice(scotch_target=args.target, bam_path=args.bam,
+                                            unsplice_threshold=args.unsplice_threshold,
+                                            n_jobs=args.total_jobs, job_index=args.job_index,
+                                            logger=logger)
+                cr.split_compatible()
+                logger.info(
+                    f'Completed generating spliced/unspliced compatible matrix for all targets.  Job: {args.job_index}')
 
     def run_count():
         # target has to be len 1 for parse platform
