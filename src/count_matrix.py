@@ -312,7 +312,7 @@ class CountMatrix:
                     'Cell')
                 triple_transcript = df_to_triple(df_all)
                 triple_gene = df_to_triple(df_gene)
-                with open(os.path.join(self.count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
+                with open(os.path.join(count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
                     pickle.dump((triple_gene, triple_transcript), f)
         return {gene: novel_isoform_del}
 
