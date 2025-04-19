@@ -674,7 +674,7 @@ class ReadMapper:
 
 class ClassifyReadsSplice:
     def __init__(self, scotch_target:str, bam_path:str, unsplice_threshold:int, n_jobs = 1, job_index = 0, logger = None,
-                 pacbio = False):
+                 platform = False):
         self.logger = logger
         self.bam_path = bam_path
         self.scotch_target = scotch_target
@@ -688,7 +688,7 @@ class ClassifyReadsSplice:
         self.geneStructureInformation = self._seperate_metageneInfo()
         self.n_jobs = n_jobs
         self.job_index = job_index
-        self.pacbio = pacbio
+        self.platform = platform
     def _seperate_metageneInfo(self):
         geneStructureInformation = {}
         metagenes = list(self.metageneStructureInformation.keys())
@@ -727,7 +727,7 @@ class ClassifyReadsSplice:
         CBUMI_unspliced, CBUMI_spliced = [], []
         for read in reads:
             readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
-            readName = readName + '_' + str(readEnd - readStart) if self.pacbio else readName
+            readName = readName + '_' + str(readEnd - readStart) if self.platform=='10x-pacbio' else readName
             if readName in reads_list:
                 isoform_name = read_isoform_dict[readName]
                 intron_cover = get_intron_cover(read, isoform_name, Info_singlegene)
