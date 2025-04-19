@@ -1230,14 +1230,15 @@ def get_intron_cover(read, isoform_name, Info_singlegene):
         return introns
     geneInfo, exonInfo, isoformInfo = Info_singlegene
     exons = [exonInfo[exon_ind] for exon_ind in isoformInfo[isoform_name]]
-    intronInfo = get_intron_info(exons)
-    referencePositions = read.get_reference_positions(full_length=False)
-    intronhit = exon_hit(referencePositions, intronInfo)
     intron_covers = 0
-    if len(intronhit) > 0:
-        intronhitbases = dict(pd.Series(intronhit).value_counts())
-        intron_map_base = [intronhitbases.get(i, 0) for i in range(len(intronInfo))]
-        intron_covers = max(intron_map_base)
+    if len(exons) > 1:
+        intronInfo = get_intron_info(exons)
+        referencePositions = read.get_reference_positions(full_length=False)
+        intronhit = exon_hit(referencePositions, intronInfo)
+        if len(intronhit) > 0:
+            intronhitbases = dict(pd.Series(intronhit).value_counts())
+            intron_map_base = [intronhitbases.get(i, 0) for i in range(len(intronInfo))]
+            intron_covers = max(intron_map_base)
     return intron_covers
 
 #####some functions to delete ########

@@ -719,7 +719,9 @@ class ClassifyReadsSplice:
         print(f'processing gene: {gene}')
         Info_singlegene = self.geneStructureInformation[gene]
         bam = self._read_bam(Info_singlegene[0]['geneChr'])
-        mapping_df_gene = self.mapping_df[self.mapping_df['geneName'] == Info_singlegene[0]['geneName']]
+        mapping_df_gene = self.mapping_df[
+            (self.mapping_df['geneName'] == Info_singlegene[0]['geneName']) &
+            (~self.mapping_df['Isoform'].str.contains('uncategorized', na=False))]
         read_isoform_dict = mapping_df_gene.set_index('Read')['Isoform'].to_dict()
         read_cbumi_dict = mapping_df_gene.set_index('Read')['CBUMI'].to_dict()
         reads_list = mapping_df_gene.Read.tolist()
@@ -730,8 +732,6 @@ class ClassifyReadsSplice:
             readName = readName + '_' + str(readEnd - readStart) if self.platform=='10x-pacbio' else readName
             if readName in reads_list:
                 isoform_name = read_isoform_dict[readName]
-                if 'uncategorized' in isoform_name:
-                    continue
                 intron_cover = get_intron_cover(read, isoform_name, Info_singlegene)
                 if intron_cover > self.unsplice_threshold:
                     CBUMI_unspliced.append(read_cbumi_dict[readName])
