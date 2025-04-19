@@ -674,7 +674,7 @@ class ReadMapper:
 
 class ClassifyReadsSplice:
     def __init__(self, scotch_target:str, bam_path:str, unsplice_threshold:int, n_jobs = 1, job_index = 0, logger = None,
-                 platform = False):
+                 platform = '10x-ont'):
         self.logger = logger
         self.bam_path = bam_path
         self.scotch_target = scotch_target
