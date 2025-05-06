@@ -755,10 +755,10 @@ class ClassifyReadsSplice:
             comp_mat.columns = ['CBUMI'] + list(comp_mat.columns[1:])
             if len(CBUMI_unspliced)>0:
                 comp_mat_unspliced = comp_mat[comp_mat.CBUMI.isin(CBUMI_unspliced)].reset_index(drop = True)
-                filename = os.path.join(self.splice_folder, os.path.basename(compatible_matrix_dict[gene]))
+                filename = os.path.join(self.unsplice_folder, os.path.basename(compatible_matrix_dict[gene]))
                 comp_mat_unspliced.to_csv(filename, index=False)
             if len(CBUMI_spliced) > 0:
                 comp_mat_spliced = comp_mat[comp_mat.CBUMI.isin(CBUMI_spliced)].reset_index(drop = True)
-                filename = os.path.join(self.unsplice_folder, os.path.basename(compatible_matrix_dict[gene]))
+                filename = os.path.join(self.splice_folder, os.path.basename(compatible_matrix_dict[gene]))
                 comp_mat_spliced.to_csv(filename, index=False)
         self.logger.info(f'Job {self.job_index} completed')

@@ -346,6 +346,8 @@ class CountMatrix:
             for count_path in self.count_matrix_unspliced_folder_path_list:
                 os.makedirs(count_path, exist_ok=True)
         adata_gene_unfiltered_list, adata_transcript_unfiltered_list = [], []
+        adata_gene_unfiltered_list_spliced, adata_transcript_unfiltered_list_spliced = [], []
+        adata_gene_unfiltered_list_unspliced, adata_transcript_unfiltered_list_unspliced = [], []
         annotation_pkl = None
         if self.group_novel:
             annotation_pkl = {}
@@ -383,6 +385,7 @@ class CountMatrix:
             for additional_target in self.target[1:]:
                 dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
+        #--------overall count mat--------#
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if f.endswith('_unfiltered_count.pickle')]
             self.logger.info(f'reading {len(out_paths_unfiltered)} count pickles')
@@ -402,6 +405,7 @@ class CountMatrix:
             adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
         self.adata_gene_unfiltered_list = adata_gene_unfiltered_list
         self.adata_transcript_unfiltered_list = adata_transcript_unfiltered_list
+        # --------splicing count mat--------#
         if generate_splicing:
             #spliced
             for i, count_path in enumerate(self.count_matrix_spliced_folder_path_list):
@@ -420,10 +424,10 @@ class CountMatrix:
                 self.logger.info('removing pickles')
                 for op in out_paths_unfiltered:
                     os.remove(op)
-                adata_gene_unfiltered_list.append(adata_gene_unfiltered)
-                adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
-            self.adata_gene_unfiltered_list_spliced = adata_gene_unfiltered_list
-            self.adata_transcript_unfiltered_list_spliced = adata_transcript_unfiltered_list
+                adata_gene_unfiltered_list_spliced.append(adata_gene_unfiltered)
+                adata_transcript_unfiltered_list_spliced.append(adata_transcript_unfiltered)
+            self.adata_gene_unfiltered_list_spliced = adata_gene_unfiltered_list_spliced
+            self.adata_transcript_unfiltered_list_spliced = adata_transcript_unfiltered_list_spliced
             # unspliced
             for i, count_path in enumerate(self.count_matrix_unspliced_folder_path_list):
                 out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if
@@ -441,10 +445,10 @@ class CountMatrix:
                 self.logger.info('removing pickles')
                 for op in out_paths_unfiltered:
                     os.remove(op)
-                adata_gene_unfiltered_list.append(adata_gene_unfiltered)
-                adata_transcript_unfiltered_list.append(adata_transcript_unfiltered)
-            self.adata_gene_unfiltered_list_unspliced = adata_gene_unfiltered_list
-            self.adata_transcript_unfiltered_list_unspliced = adata_transcript_unfiltered_list
+                adata_gene_unfiltered_list_unspliced.append(adata_gene_unfiltered)
+                adata_transcript_unfiltered_list_unspliced.append(adata_transcript_unfiltered)
+            self.adata_gene_unfiltered_list_unspliced = adata_gene_unfiltered_list_unspliced
+            self.adata_transcript_unfiltered_list_unspliced = adata_transcript_unfiltered_list_unspliced
     def save_multiple_samples(self, generate_splicing = False):
         if self.mtx:
             for i in range(self.n_samples):
