@@ -33,7 +33,10 @@ def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB'):
     #extract readname, cb, umi from bam file
     # bam: path to bam file
     bamFilePysam = pysam.Samfile(bam, "rb")
-    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend-read.qstart) for read in bamFilePysam]
+    if barcode_cell is None and barcode_umi is None:
+        ReadTags = [(read.qname,read.qname, 'NA', read.qend - read.qstart) for read in bamFilePysam]
+    else:
+        ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend-read.qstart) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0]>0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
