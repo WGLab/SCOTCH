@@ -184,10 +184,11 @@ def summarise_auxillary(target):
 class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
                  small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
-                 reference_gtf_path = None, logger = None):
+                 reference_gtf_path = None, logger = None, barcode_umi = None):
         self.logger = logger
         self.target = target
         self.bam_path = bam_path
+        self.barcode_umi = barcode_umi
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         if reference_gtf_path is not None or reference_gtf_path=='None':
             self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
@@ -274,7 +275,7 @@ class ReadMapper:
                     result = process_read(read, self.qname_dict_list[i], self.lowest_match, self.lowest_match1,
                                           self.small_exon_threshold,
                                           self.small_exon_threshold1, self.truncation_match, Info_singlegene,
-                                          self.parse, self.pacbio)
+                                          self.parse, self.pacbio, self.barcode_umi)
                     if result is not None:
                         if self.pacbio:
                             readName = readName + '_' + str(readEnd - readStart)
@@ -338,7 +339,7 @@ class ReadMapper:
                     readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
                     out = process_read_metagene(read,self.qname_dict_list[i], Info_multigenes, self.lowest_match,self.lowest_match1,
                                                 self.small_exon_threshold,self.small_exon_threshold1,
-                                                self.truncation_match, self.parse, self.pacbio)
+                                                self.truncation_match, self.parse, self.pacbio, self.barcode_umi)
                     if out is not None: #may not within this meta gene region
                         results.append(out)
                         if self.pacbio:
@@ -435,7 +436,7 @@ class ReadMapper:
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=15)
                 result = process_read(read, self.qname_dict, self.lowest_match,self.lowest_match1, self.small_exon_threshold,self.small_exon_threshold1,
-                                      self.truncation_match, Info_singlegene, self.parse, self.pacbio)
+                                      self.truncation_match, Info_singlegene, self.parse, self.pacbio, self.barcode_umi)
                 result_novel, result_known, result_known_scores = result
                 samples_list.append(self.qname_sample_dict[read.qname])
                 if result_novel is not None:
@@ -499,7 +500,7 @@ class ReadMapper:
             for read in reads:
                 poly, _ = detect_poly_parse(read, window=20, n=15)
                 out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.lowest_match1,self.small_exon_threshold,self.small_exon_threshold1,
-                                            self.truncation_match, self.parse, self.pacbio)
+                                            self.truncation_match, self.parse, self.pacbio, self.barcode_umi)
                 if out is not None: #may not within this meta gene region
                     polies.append(poly)
                     results.append(out)
