@@ -563,7 +563,7 @@ class ReadMapper:
                 self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
                 if save:
                     for sample in unique_samples:
-                        sample_target = os.path.join(self.target[0], 'samples/' + sample)
+                        sample_target = os.path.join(self.target[0], 'samples/' + str(sample))
                         if not os.path.exists(sample_target):
                             os.makedirs(sample_target)
                         Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
