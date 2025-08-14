@@ -53,10 +53,15 @@ def extract_bam_info_parse(bam):
         sublib = match.group(1)
     else:
         sublib = '1'
+    def get_tag_case_insensitive(read, tag_name):
+        for tag, value in read.get_tags():
+            if tag.lower() == tag_name.lower():
+                return value
+        return None
     #qname cb umi cbumi length
     ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3],
                  read.qname.split('_')[-1] , len(read.query_alignment_sequence),
-                 read.get_tag('pS'), sublib) for read in bamFilePysam]
+                 get_tag_case_insensitive(read, 'pS'), sublib) for read in bamFilePysam]
     ReadTagsDF = pd.DataFrame(ReadTags)
     if ReadTagsDF.shape[0] > 0:
         ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE', 'SUBLIB']
