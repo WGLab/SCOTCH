@@ -161,7 +161,8 @@ def main():
                                    truncation_match = args.truncation_match,
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger, barcode_umi=args.barcode_umi)
-        readmapper.map_reads_allgenes(cover_existing=True,total_jobs=args.total_jobs,current_job_index=args.job_index)
+        readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
+                                      total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
