@@ -1,3 +1,4 @@
+import os.path
 import pickle
 
 from preprocessing import *
@@ -69,16 +70,17 @@ def summarise_annotation(target):
         if 'reference' in dirs:
             reference_folders.append(os.path.join(root, 'reference'))
     def get_numeric_key(key):
-        return int(key.split('_')[-1])
+        match = re.search(r'_(\d+)$', key)
+        return int(match.group(1)) if match else 0
     for reference_folder in reference_folders:
         output_pkl = os.path.join(reference_folder, "metageneStructureInformationwNovel.pkl")
         output_gtf = os.path.join(reference_folder, "SCOTCH_updated_annotation.gtf")
         if os.path.isfile(output_gtf):
             continue
         file_names_pkl = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
-                          re.match(r'metageneStructureInformationwNovel_\d+\.pkl', f)]
+                          re.match(r'metageneStructureInformationwNovel(_\d+(\.\d+)?)?\.pkl', f)]
         file_names_gtf = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
-                          re.match(r'gene_annotations_scotch_\d+\.gtf', f)]
+                          re.match(r'gene_annotations_scotch_\d+(\.\d+)?\.gtf', f)]
         if len(file_names_pkl)>0 and len(file_names_gtf)>0:
             # merge pkl annotation file
             print('merging new isoform annotations')
@@ -659,12 +661,17 @@ class ReadMapper:
         self.logger.info(f'Saving annotation file...')
         for i in range(len(self.annotation_path_meta_gene_list)):
             if total_jobs>1:
-                file_name_pkl = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index) +'.pkl'
-                file_name_gtf = self.annotation_path_gtf_novel_list[i][:-4] + '_' + str(current_job_index) +'.gtf'
+                base = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index)
             else:
-                file_name_pkl = self.annotation_path_meta_gene_novel_list[i]
-                file_name_gtf = self.annotation_path_gtf_novel_list[i]
+                base = self.annotation_path_meta_gene_novel_list[i][:-4]
+            file_name_pkl = base + ".pkl"
+            file_name_gtf = base + ".gtf"
             #save pickle file
+            version = 1
+            while os.path.exists(file_name_pkl) or os.path.exists(file_name_gtf):
+                file_name_pkl = f"{base}.{version}.pkl"
+                file_name_gtf = f"{base}.{version}.gtf"
+                version += 1
             with open(file_name_pkl, 'wb') as file:
                 pickle.dump(self.metageneStructureInformationwNovel, file)
             #save gtf file
