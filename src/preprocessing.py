@@ -1102,9 +1102,10 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
             if read_isoform_compatibleVector_tuple is not None:
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     else: #10x
-        poly_bool, poly = detect_poly(read, window=20, n=15, barcode_umi=barcode_umi)
+        #poly_bool, poly = detect_poly(read, window=20, n=15, barcode_umi=barcode_umi)
         #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and poly_bool and readName == qname_dict[readName]):
-        if (poly_bool and readName == qname_dict[readName]):
+        #if (poly_bool and readName == qname_dict[readName]):
+        if (readName == qname_dict[readName]):
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes, lowest_match, lowest_match1, small_exon_threshold, small_exon_threshold1,truncation_match, False)
             if read_novelisoform_tuple is not None:
                 novelIsoformResults = read_novelisoform_tuple
@@ -1136,9 +1137,9 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     else:
-        poly_bool, poly = detect_poly(read, window=20, n=15, barcode_umi = barcode_umi)
-        if poly_bool and readName == qname_dict[readName]:
-        #if (readStart >= start and readEnd < end and poly_bool and readName == qname_dict[readName]):
+        #poly_bool, poly = detect_poly(read, window=20, n=15, barcode_umi = barcode_umi)
+        #if poly_bool and readName == qname_dict[readName]:
+        if readName == qname_dict[readName]:
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta(read, Info_multigenes,
                                                                                                       lowest_match,lowest_match1, small_exon_threshold,small_exon_threshold1,
                                                                                                       truncation_match,pacbio=False)
