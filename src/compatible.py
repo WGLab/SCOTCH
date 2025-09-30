@@ -80,7 +80,7 @@ def summarise_annotation(target):
         file_names_pkl = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
                           re.match(r'metageneStructureInformationwNovel(_\d+(\.\d+)?)?\.pkl', f)]
         file_names_gtf = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
-                          re.match(r'gene_annotations_scotch_\d+(\.\d+)?\.gtf', f)]
+                          re.match(r'metageneStructureInformationwNovel_\d+(\.\d+)?\.gtf', f)]
         if len(file_names_pkl)>0 and len(file_names_gtf)>0:
             # merge pkl annotation file
             print('merging new isoform annotations')
@@ -201,7 +201,7 @@ class ReadMapper:
         self.annotation_path_single_gene_list = [os.path.join(target_, 'reference/geneStructureInformation.pkl') for target_ in target]
         self.annotation_path_meta_gene_list = [os.path.join(target_, "reference/metageneStructureInformation.pkl") for target_ in target]
         self.annotation_path_meta_gene_novel_list = [os.path.join(target_, "reference/metageneStructureInformationwNovel.pkl") for target_ in target]
-        self.annotation_path_gtf_novel_list = [os.path.join(target_, "reference/gene_annotations_scotch.gtf") for target_ in target]
+        #self.annotation_path_gtf_novel_list = [os.path.join(target_, "reference/gene_annotations_scotch.gtf") for target_ in target]
         # bam information path
         self.bamInfo_folder_path_list = [os.path.join(target_, "bam") for target_ in target]
         self.bamInfo_pkl_path_list = [os.path.join(target_, 'bam/bam.Info.pkl') for target_ in target]#bamInfo_pkl_file
