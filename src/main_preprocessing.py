@@ -222,9 +222,15 @@ def main():
         logger.info(f'Target directories: {args.target}')
         for i in range(len(args.target)):
             logger.info(f'Start summarizing annotation for target: {args.target[i]}')
-            cp.summarise_annotation(args.target[i])
+            try:
+                cp.summarise_annotation(args.target[i])
+            except Exception as e:
+                logger.exception(f"summarise_annotation failed for target: {t}")
             logger.info(f'Start summarizing read mapping information for target: {args.target[i]}')
-            cp.summarise_auxillary(args.target[i])
+            try:
+                cp.summarise_auxillary(args.target[i])
+            except Exception as e:
+                logger.exception(f"summarise_auxillary failed for target: {t}")
         logger.info('Completed summarizing annotations and auxiliary information for all targets.')
         copy_log_to_targets(log_file, args.target)
 
