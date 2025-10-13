@@ -8,7 +8,7 @@ import csv
 import math
 import copy
 from joblib import Parallel, delayed
-
+import shutil
 
 
 
@@ -64,7 +64,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
 
 
 
-def summarise_annotation(target):
+def summarise_annotation(target,logger=None):
     reference_folders = []
     for root, dirs, files in os.walk(target):
         if 'reference' in dirs:
@@ -75,29 +75,32 @@ def summarise_annotation(target):
     for reference_folder in reference_folders:
         output_pkl = os.path.join(reference_folder, "metageneStructureInformationwNovel.pkl")
         output_gtf = os.path.join(reference_folder, "SCOTCH_updated_annotation.gtf")
-        if os.path.isfile(output_gtf):
-            continue
-        file_names_pkl = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
-                          re.match(r'metageneStructureInformationwNovel(_\d+(\.\d+)?)?\.pkl', f)]
-        file_names_gtf = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if
-                          re.match(r'metageneStructureInformationwNovel_\d+(\.\d+)?\.gtf', f)]
-        if len(file_names_pkl)>0 and len(file_names_gtf)>0:
+        pkl_pat = re.compile(r'^metageneStructureInformationwNovel_\d+(?:\.\d+)?\.pkl$')
+        gtf_pat = re.compile(r'^metageneStructureInformationwNovel_\d+(?:\.\d+)?\.gtf$')
+        file_names_pkl = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if pkl_pat.match(f)]
+        file_names_gtf = [os.path.join(reference_folder, f) for f in os.listdir(reference_folder) if gtf_pat.match(f)]
+        if len(file_names_pkl)>0:
+            backup_dir = os.path.join(reference_folder, "files_jobs")
+            os.makedirs(backup_dir, exist_ok=True)
             # merge pkl annotation file
-            print('merging new isoform annotations')
+            logger.info('merging new isoform annotations')
             metageneStructureInformationwNovel = {}
             for file_name_pkl in file_names_pkl:
                 metageneStructureInformation = load_pickle(file_name_pkl)
                 metageneStructureInformationwNovel.update(metageneStructureInformation)
             metageneStructureInformationwNovel = dict(
-                sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0]))
-            )
+                sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0])))
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
             for file_name_pkl in file_names_pkl:
-                os.remove(file_name_pkl)
-            print('mergered new isoform annotation saved at: '+str(output_pkl))
+                shutil.move(file_name_pkl, backup_dir)
+                #os.remove(file_name_pkl)
+            logger.info('mergered new isoform annotation saved at: '+str(output_pkl))
+        if len(file_names_gtf) > 0:
+            backup_dir = os.path.join(reference_folder, "files_jobs")
+            os.makedirs(backup_dir, exist_ok=True)
             # merge gtf annotation file
-            print('Merging new GTF annotations...')
+            logger.info('Merging new GTF annotations...')
             gtf_lines = []
             for file_name_gtf in file_names_gtf:
                 with open(file_name_gtf, 'r') as gtf_file:
@@ -108,7 +111,7 @@ def summarise_annotation(target):
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
             for file_name_gtf in file_names_gtf:
-                os.remove(file_name_gtf)
+                shutil.move(file_name_gtf, backup_dir)
             print('Merged GTF annotations saved at: ' + output_gtf)
         else:
             print('novel isoform annotations does not exist!')
