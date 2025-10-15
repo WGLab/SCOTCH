@@ -354,11 +354,12 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
     def process_bam_file(bam_file, coverage_threshold, min_region_size):
         #bam_file: a single path or a list of paths for consensus results
         if isinstance(bam_file, str):
-            bams = pysam.AlignmentFile(bam_file, "rb")
+            bams = [pysam.AlignmentFile(bam_file, "rb")]
         else: #list
             bams = [ pysam.AlignmentFile(bam, "rb") for bam in bam_file]
         coverage = defaultdict(lambda: defaultdict(int))
-        chromosomes = list(set([bam.references for bam in bams]))
+        #chromosomes = list(set([bam.references for bam in bams]))
+        chromosomes = sorted(set(ref for bam in bams for ref in bam.references))
         for chrom in chromosomes:
             for bam in bams:
                 if chrom in bam.references:
@@ -623,7 +624,6 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
         shutil.copy(refGeneFile_pkl_path, output) #copy existing pickle file over
-
     ##############################################################
     #option3: ---------update existing annotation using bam file##
     ##############################################################
@@ -763,7 +763,6 @@ class Annotator:
                     # Copy the generated files from the first target to the current target
                     self.logger.info(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
                     shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
-
     def annotation_bam(self, barcode_cell, barcode_umi):
         for i in range(len(self.target)):
             if not os.path.exists(self.bamInfo_folder_path[i]):
