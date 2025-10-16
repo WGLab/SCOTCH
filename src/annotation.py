@@ -356,7 +356,7 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 20, min_region_size=
         if isinstance(bam_file, str):
             bams = [pysam.AlignmentFile(bam_file, "rb")]
         else: #list
-            bams = [ pysam.AlignmentFile(bam, "rb") for bam in bam_file]
+            bams = [pysam.AlignmentFile(bam, "rb") for bam in bam_file]
         coverage = defaultdict(lambda: defaultdict(int))
         chromosomes = sorted(set(ref for bam in bams for ref in bam.references))
         for chrom in chromosomes:
@@ -375,7 +375,6 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 20, min_region_size=
     if isinstance(input_bam_path, list):
         if os.path.isdir(input_bam_path[0]): # a list of folders
             bam_files = [os.path.join(folder, file) for folder in input_bam_path for file in folder]
-            #bam_files = [os.path.join(input_bam_path, f) for f in os.listdir(input_bam_path) if f.endswith('.bam')]
         else: # a list of paths
             bam_files = input_bam_path
     else:#single sample
@@ -529,6 +528,9 @@ def annotate_genes(geneStructureInformation, bamfile_path,
                 bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamfile_path]
         else:
             print('bamfile must be a list or str')
+        chromosomes = sorted(set(ref for bam in bamfiles for ref in bam.references))
+        if chrom not in chromosomes:
+            return None
         exons_bam = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
         original_exons = geneStructureInformation[geneID][1]
         updated_exons = update_exons(exons_bam, original_exons)
@@ -558,7 +560,7 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         results = Parallel(n_jobs=workers)(
             delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon,
                                        coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
-        annotations = {k: v for result in results for k, v in result.items()}
+        annotations = {k: v for result in results if result is not None for k, v in result.items()}
         logger.info(f'finished updating')
     return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
 
@@ -619,7 +621,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             geneStructureInformation = load_pickle(output)
     if refGeneFile_pkl_path is not None: ###use pickle
         assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
-        logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_gtf_path))
+        logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_pkl_path))
         geneStructureInformation = load_pickle(refGeneFile_pkl_path)
         #check if geneStructureInformation contains build
         if build is not None:
