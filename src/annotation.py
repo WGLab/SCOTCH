@@ -617,7 +617,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         else:#there exist pre-computated annotation file
             logger.info('load existing annotation pickle file of each single gene at: '+str(output))
             geneStructureInformation = load_pickle(output)
-    if refGeneFile_pkl_path is not None and bamfile_path is None: ###use pickle
+    if refGeneFile_pkl_path is not None: ###use pickle
         assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
         logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_gtf_path))
         geneStructureInformation = load_pickle(refGeneFile_pkl_path)
@@ -626,25 +626,25 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
         shutil.copy(refGeneFile_pkl_path, output) #copy existing pickle file over
-    ##############################################################
-    #option3: ---------update existing annotation using bam file##
-    ##############################################################
-    if bamfile_path is not None:
-        logger.info('rely on bam file to update existing gene annotations')
-        output_update = output[:-4]+'updated.pkl'
-        if os.path.isfile(output_update):
-            logger.info('enhanced gene annotation already exist')
-            geneStructureInformation = load_pickle(output_update)
-        else:
-            geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
-                                                  bamfile_path=bamfile_path,
-                                                  coverage_threshold_gene=coverage_threshold_gene,
-                                                  coverage_threshold_exon=coverage_threshold_exon,
-                                                  coverage_threshold_splicing=coverage_threshold_splicing,
-                                                  z_score_threshold = z_score_threshold,
-                                                  min_gene_size=min_gene_size, workers=num_cores, logger = logger)
-            with open(output_update, 'wb') as file:
-                pickle.dump(geneStructureInformation, file)
+        ##############################################################
+        #option3: ---------update existing annotation using bam file##
+        ##############################################################
+        if bamfile_path is not None:
+            logger.info('rely on bam file to update existing gene annotations')
+            output_update = output[:-4]+'updated.pkl'
+            if os.path.isfile(output_update):
+                logger.info('enhanced gene annotation already exist')
+                geneStructureInformation = load_pickle(output_update)
+            else:
+                geneStructureInformation = annotate_genes(geneStructureInformation=geneStructureInformation,
+                                                      bamfile_path=bamfile_path,
+                                                      coverage_threshold_gene=coverage_threshold_gene,
+                                                      coverage_threshold_exon=coverage_threshold_exon,
+                                                      coverage_threshold_splicing=coverage_threshold_splicing,
+                                                      z_score_threshold = z_score_threshold,
+                                                      min_gene_size=min_gene_size, workers=num_cores, logger = logger)
+                with open(output_update, 'wb') as file:
+                    pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
         logger.info('meta gene information does not exist, will generate.')
