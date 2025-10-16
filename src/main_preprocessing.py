@@ -223,7 +223,7 @@ def main():
         for i in range(len(args.target)):
             logger.info(f'Start summarizing annotation for target: {args.target[i]}')
             try:
-                cp.summarise_annotation(args.target[i])
+                cp.summarise_annotation(args.target[i], logger = logger)
                 logger.info(f'Completed summarizing annotation for target: {args.target[i]}')
             except Exception as e:
                 logger.exception(f"summarise_annotation failed for target: {t}")

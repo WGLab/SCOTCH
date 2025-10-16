@@ -83,7 +83,7 @@ def summarise_annotation(target,logger=None):
             backup_dir = os.path.join(reference_folder, "files_jobs")
             os.makedirs(backup_dir, exist_ok=True)
             # merge pkl annotation file
-            logger.info('merging new isoform annotations')
+            logger.info('Merging new isoform annotations')
             metageneStructureInformationwNovel = {}
             for file_name_pkl in file_names_pkl:
                 metageneStructureInformation = load_pickle(file_name_pkl)
