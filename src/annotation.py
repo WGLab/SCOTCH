@@ -350,7 +350,7 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
     return exons
 
 
-def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=50):
+def get_genes_from_bam(input_bam_path, coverage_threshold = 20, min_region_size=50):
     def process_bam_file(bam_file, coverage_threshold, min_region_size):
         #bam_file: a single path or a list of paths for consensus results
         if isinstance(bam_file, str):
@@ -358,7 +358,6 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 5, min_region_size=5
         else: #list
             bams = [ pysam.AlignmentFile(bam, "rb") for bam in bam_file]
         coverage = defaultdict(lambda: defaultdict(int))
-        #chromosomes = list(set([bam.references for bam in bams]))
         chromosomes = sorted(set(ref for bam in bams for ref in bam.references))
         for chrom in chromosomes:
             for bam in bams:
@@ -443,7 +442,7 @@ def update_exons(A, B, distance_threshold = 20):
 #modes involving bam file
 def annotate_genes(geneStructureInformation, bamfile_path,
                    coverage_threshold_gene=20, coverage_threshold_exon=0.02,coverage_threshold_splicing=0.02,z_score_threshold = 10,
-                   min_gene_size=50, workers=1):
+                   min_gene_size=50, workers=1, logger = None):
     """
     generate geneStructureInformation either using bamfile alone (leave geneStructureInformation blank) or update existing annotation file using bam file
     :param geneStructureInformation: pickle file object of existing gene annotation, not path
@@ -544,20 +543,23 @@ def annotate_genes(geneStructureInformation, bamfile_path,
         return {geneID:[geneInfo, exonInfo, isoformInfo]}
     #generate gene annotation solely based on bam file
     if geneStructureInformation is None:
+        logger.info(f'generating gene annotation solely based on bam file-----')
         all_genes = get_genes_from_bam(bamfile_path, coverage_threshold_gene, min_gene_size) #{'chr1':[(100,200),(300,400)]}
         chroms = list(all_genes.keys())
         results = Parallel(n_jobs=workers)(
-            delayed(novel_gene_annotation)(chrom, all_genes, bamfile_path, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for chrom in chroms)
+            delayed(novel_gene_annotation)(chrom, all_genes, bamfile_path, coverage_threshold_exon, coverage_threshold_splicing,
+                                           z_score_threshold) for chrom in chroms)
         annotations = {k: v for result in results for k, v in result.items()}
+        logger.info(f'finished generating')
     #update existing gene annotation using bam file
     else:
+        logger.info(f'updating existing gene annotation using bam file-----')
         geneIDs = list(geneStructureInformation.keys())
-        #re-order geneID
-        #chunks = np.array_split(geneIDs, workers)
-        #geneIDs = [item for sublist in zip(*chunks) for item in sublist]
         results = Parallel(n_jobs=workers)(
-            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
+            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon,
+                                       coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
         annotations = {k: v for result in results for k, v in result.items()}
+        logger.info(f'finished updating')
     return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
 
 
@@ -577,6 +579,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
     if refGeneFile_gtf_path is not None:
+        logger.info(f'load existing reference gtf file from {refGeneFile_gtf_path}')
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
     else:
         genes = None
@@ -592,10 +595,9 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                                                   coverage_threshold_splicing = coverage_threshold_splicing,
                                                   z_score_threshold = z_score_threshold,
                                                   min_gene_size=min_gene_size,
-                                                  workers=num_cores)#no need to add build
-        if output is not None:
-            with open(output, 'wb') as file:
-                pickle.dump(geneStructureInformation, file)
+                                                  workers=num_cores, logger = logger)#no need to add build
+        with open(output, 'wb') as file:
+            pickle.dump(geneStructureInformation, file)
     #####################################################
     # option2: --------rely on existing annotation alone#
     #####################################################
@@ -640,10 +642,9 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                                                   coverage_threshold_exon=coverage_threshold_exon,
                                                   coverage_threshold_splicing=coverage_threshold_splicing,
                                                   z_score_threshold = z_score_threshold,
-                                                  min_gene_size=min_gene_size, workers=num_cores)
-            if output is not None:
-                with open(output[:-4]+'updated.pkl', 'wb') as file:
-                    pickle.dump(geneStructureInformation, file)
+                                                  min_gene_size=min_gene_size, workers=num_cores, logger = logger)
+            with open(output_update, 'wb') as file:
+                pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
     if os.path.isfile(meta_output) == False:
         logger.info('meta gene information does not exist, will generate.')
