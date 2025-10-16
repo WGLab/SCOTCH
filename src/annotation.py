@@ -625,7 +625,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         if build is not None:
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
-        shutil.copy(refGeneFile_pkl_path, output) #copy existing pickle file over
+        if os.path.abspath(refGeneFile_pkl_path) != os.path.abspath(output):
+            shutil.copy(refGeneFile_pkl_path, output)
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
@@ -642,7 +643,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                                                       coverage_threshold_exon=coverage_threshold_exon,
                                                       coverage_threshold_splicing=coverage_threshold_splicing,
                                                       z_score_threshold = z_score_threshold,
-                                                      min_gene_size=min_gene_size, workers=num_cores, logger = logger)
+                                                      min_gene_size=min_gene_size, workers=num_cores,
+                                                          logger = logger)
                 with open(output_update, 'wb') as file:
                     pickle.dump(geneStructureInformation, file)
     #########group genes into meta-genes########
