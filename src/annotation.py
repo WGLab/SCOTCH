@@ -658,7 +658,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             for i, geneID in enumerate(geneIDs):
                 row = [geneStructureInformation[geneID][0]['geneChr'], geneStructureInformation[geneID][0]['geneStart'],
                 geneStructureInformation[geneID][0]['geneEnd'], geneStructureInformation[geneID][0]['geneID'],
-                geneStructureInformation[geneID][0]['geneName'], '.','.', i]
+                geneStructureInformation[geneID][0]['geneName'], '.','.', i+1]
                 rows.append(row)
             genes = pd.DataFrame(rows)
         genes.columns = ['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME', 'GENE_TYPE', 'STRAND', 'META_GENE']
@@ -670,7 +670,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             gene_ids = grouped_dict[i+1]
             meta_gene_info = []
             for id in gene_ids:
-                meta_gene_info.append(geneStructureInformation[id])
+                if id in geneStructureInformation:
+                    meta_gene_info.append(geneStructureInformation[id])
             metageneStructureInformation[meta_gene] = meta_gene_info
         # save to output, meta gene
         with open(meta_output, 'wb') as file:
