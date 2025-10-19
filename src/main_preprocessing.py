@@ -33,6 +33,7 @@ parser.add_argument('--z_score_threshold',type=int, default=10, help="threshold 
 parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length of novel discovered gene")
 parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
 parser.add_argument('--barcode_umi',type=str,  help="umi barcode tag in bam file")
+parser.add_argument('--save_mem_ann', action='store_true', help="whether to use save memory mode to process in chunks")
 
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
@@ -137,9 +138,9 @@ def main():
         # bam information
         logger.info('Start processing bam file information.')
         if args.bulk:
-            annotator.annotation_bam(None, None)
+            annotator.annotation_bam(None, None, save_mem = args.save_mem_ann)
         else:
-            annotator.annotation_bam(args.barcode_cell, args.barcode_umi)
+            annotator.annotation_bam(args.barcode_cell, args.barcode_umi, save_mem = args.save_mem_ann)
         copy_log_to_targets(log_file, args.target)
     def run_compatible():
         logger, log_file = setup_logger(args.target[0], 'compatible')
