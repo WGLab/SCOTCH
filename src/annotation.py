@@ -10,6 +10,7 @@ from preprocessing import load_pickle, merge_exons
 from scipy.ndimage import gaussian_filter1d
 import numpy as np
 import shutil
+import gc
 
 
 ######################################################################
@@ -29,61 +30,151 @@ def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False,b
     ReadTagsDF = pd.concat(df).reset_index(drop=True)
     return ReadTagsDF
 
-def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB'):
-    #extract readname, cb, umi from bam file
-    # bam: path to bam file
+def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB', chunk_size = 100000):
+    #extract readname, cb, umi from bam file # bam: path to bam file
     bamFilePysam = pysam.Samfile(bam, "rb")
-    if barcode_cell is None and barcode_umi is None:
-        ReadTags = [(read.qname,read.qname, 'NA', read.qend - read.qstart) for read in bamFilePysam]
-    else:
-        ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend-read.qstart) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0]>0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI']=ReadTagsDF.CB.astype(str)+'_'+ReadTagsDF.UMI.astype(str)
+    all_chunks = []
+    current_chunk = []
+    counter = 0
+    for read in bamFilePysam.fetch(until_eof=True):
+        try:
+            if barcode_cell is None and barcode_umi is None:
+                current_chunk.append((read.qname, read.qname, 'NA', read.qend - read.qstart))
+            else:
+                current_chunk.append(
+                    (read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend - read.qstart))
+        except KeyError:
+            continue
+        counter += 1
+        if counter % chunk_size == 0:
+            df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
+            all_chunks.append(df_chunk)
+            del current_chunk
+            current_chunk = []
+            gc.collect()
+    if current_chunk:
+        df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
+        all_chunks.append(df_chunk)
+        del current_chunk
+        gc.collect()
+    if len(all_chunks) > 0:
+        ReadTagsDF = pd.concat(all_chunks, ignore_index=True)
+        del all_chunks
+        gc.collect()
+        ReadTagsDF = ReadTagsDF.sort_values(by=['CB', 'UMI', 'LENGTH'], ascending=[True, True, False]).reset_index(
+            drop=True)
+        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
     else:
         ReadTagsDF = None
+    bamFilePysam.close()
+    gc.collect()
     return ReadTagsDF
 
-def extract_bam_info_parse(bam):
+def extract_bam_info_parse(bam, chunk_size=100000):
     bamFilePysam = pysam.Samfile(bam, "rb")
+    all_chunks = []
+    current_chunk = []
+    counter = 0
     match = re.search(r'sublibrary(\d+)', bam)
-    if match:
-        sublib = match.group(1)
-    else:
-        sublib = '1'
+    sublib = match.group(1) if match else '1'
     def get_tag_case_insensitive(read, tag_name):
         for tag, value in read.get_tags():
             if tag.lower() == tag_name.lower():
                 return value
         return None
-    #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3],
-                 read.qname.split('_')[-1] , len(read.query_alignment_sequence),
-                 get_tag_case_insensitive(read, 'pS'), sublib) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0] > 0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE', 'SUBLIB']
-        ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
-        ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str) + '_' + ReadTagsDF.SUBLIB.astype(str)
+    for read in bamFilePysam.fetch(until_eof=True):
+        try:
+            cb = read.qname.split('_')[-5] + '_' + read.qname.split('_')[-4] + '_' + read.qname.split('_')[-3]
+            umi = read.qname.split('_')[-1]
+            length = len(read.query_alignment_sequence)
+            sample = get_tag_case_insensitive(read, 'pS')
+            current_chunk.append((read.qname, cb, umi, length, sample, sublib))
+        except Exception:
+            continue
+        counter += 1
+        if counter % chunk_size == 0:
+            df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH', 'SAMPLE', 'SUBLIB'])
+            all_chunks.append(df_chunk)
+            del current_chunk
+            current_chunk = []
+            gc.collect()
+    if current_chunk:
+        df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH', 'SAMPLE', 'SUBLIB'])
+        all_chunks.append(df_chunk)
+        del current_chunk
+        gc.collect()
+    if len(all_chunks) > 0:
+        ReadTagsDF = pd.concat(all_chunks, ignore_index=True)
+        del all_chunks
+        gc.collect()
+        ReadTagsDF = ReadTagsDF.sort_values(
+            by=['SAMPLE', 'CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]
+        ).reset_index(drop=True)
+        ReadTagsDF['CBUMI'] = (ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str) + '_' + ReadTagsDF.SUBLIB.astype(str))
     else:
         ReadTagsDF = None
+    bamFilePysam.close()
+    gc.collect()
+    #qname cb umi cbumi length
+    # ReadTags = [(read.qname, read.qname.split('_')[-5]+'_'+read.qname.split('_')[-4]+'_'+read.qname.split('_')[-3],
+    #              read.qname.split('_')[-1] , len(read.query_alignment_sequence),
+    #              get_tag_case_insensitive(read, 'pS'), sublib) for read in bamFilePysam]
+    # ReadTagsDF = pd.DataFrame(ReadTags)
+    # if ReadTagsDF.shape[0] > 0:
+    #     ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH','SAMPLE', 'SUBLIB']
+    #     ReadTagsDF = ReadTagsDF.sort_values(by=['SAMPLE','CB', 'UMI', 'LENGTH'], ascending=[True, True, True, False]).reset_index(drop=True)
+    #     ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str) + '_' + ReadTagsDF.SUBLIB.astype(str)
+    # else:
+    #     ReadTagsDF = None
     return ReadTagsDF
 
-def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM'):
+def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM', chunk_size=100000):
     bamFilePysam = pysam.Samfile(bam, "rb")
-    #qname cb umi cbumi length
-    ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_length) for read in bamFilePysam]
-    ReadTagsDF = pd.DataFrame(ReadTags)
-    if ReadTagsDF.shape[0] > 0:
-        ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+    all_chunks = []
+    current_chunk = []
+    counter = 0
+    for read in bamFilePysam.fetch(until_eof=True):
+        try:
+            cb = read.get_tag(barcode_cell)
+            umi = read.get_tag(barcode_umi)
+            length = read.reference_length
+            current_chunk.append((read.qname, cb, umi, length))
+        except KeyError:
+            continue
+        counter += 1
+        if counter % chunk_size == 0:
+            df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
+            all_chunks.append(df_chunk)
+            del current_chunk
+            current_chunk = []
+            gc.collect()
+    if current_chunk:
+        df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
+        all_chunks.append(df_chunk)
+        del current_chunk
+        gc.collect()
+    if len(all_chunks) > 0:
+        ReadTagsDF = pd.concat(all_chunks, ignore_index=True)
+        del all_chunks
+        gc.collect()
         ReadTagsDF.dropna(inplace=True)
-        ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
+        ReadTagsDF = ReadTagsDF.sort_values(by=['CB', 'UMI', 'LENGTH'], ascending=[True, True, False]).reset_index(drop=True)
         ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
         ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(int).astype(str)
     else:
         ReadTagsDF = None
+    bamFilePysam.close()
+    gc.collect()
+    # ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_length) for read in bamFilePysam]
+    # ReadTagsDF = pd.DataFrame(ReadTags)
+    # if ReadTagsDF.shape[0] > 0:
+    #     ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
+    #     ReadTagsDF.dropna(inplace=True)
+    #     ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
+    #     ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+    #     ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(int).astype(str)
+    # else:
+    #     ReadTagsDF = None
     return ReadTagsDF
 
 def bam_info_to_dict(bam_info, parse=False):
@@ -100,6 +191,36 @@ def bam_info_to_dict(bam_info, parse=False):
     if parse:
         qname_sample_dict = dict(zip(bam_info['QNAME'], bam_info['SAMPLE']))
     return qname_dict, qname_cbumi_dict, qname_sample_dict
+
+def bam_info_to_dict_mem(bam_info_path, parse=False, chunksize=500000):
+    cbumi_to_max_qname = {}
+    for chunk in pd.read_csv(bam_info_path, chunksize=chunksize):
+        chunk = chunk.sort_values(by=["CBUMI", "LENGTH"], ascending=[True, False])
+        local_max = chunk.drop_duplicates(subset="CBUMI", keep="first")
+        for _, row in local_max.iterrows():
+            cbumi = row["CBUMI"]
+            length = row["LENGTH"]
+            qname = row["QNAME"]
+            if (cbumi not in cbumi_to_max_qname) or (length > cbumi_to_max_qname[cbumi][1]):
+                cbumi_to_max_qname[cbumi] = (qname, length)
+        del chunk, local_max
+        gc.collect()
+    cbumi_to_max_qname = {k: v[0] for k, v in cbumi_to_max_qname.items()}
+    qname_dict = {}
+    qname_cbumi_dict = {}
+    qname_sample_dict = {} if parse else None
+    for chunk in pd.read_csv(bam_info_path, chunksize=chunksize):
+        for _, row in chunk.iterrows():
+            qname = row["QNAME"]
+            cbumi = row["CBUMI"]
+            qname_dict[qname] = cbumi_to_max_qname.get(cbumi, None)
+            qname_cbumi_dict[qname] = cbumi
+            if parse:
+                qname_sample_dict[qname] = row["SAMPLE"]
+        del chunk
+        gc.collect()
+    return qname_dict, qname_cbumi_dict, qname_sample_dict
+
 
 def process_gene(geneID, geneName, genes ,exons, build=None):
     GeneDf = genes[genes.iloc[:, 3] == geneID].reset_index(drop=True)
@@ -769,16 +890,20 @@ class Annotator:
                     # Copy the generated files from the first target to the current target
                     self.logger.info(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
                     shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
-    def annotation_bam(self, barcode_cell, barcode_umi):
+    def annotation_bam(self, barcode_cell, barcode_umi, save_mem = False):
         for i in range(len(self.target)):
-            if not os.path.exists(self.bamInfo_folder_path[i]):
-                os.makedirs(self.bamInfo_folder_path[i])
-            if os.path.isfile(self.bamInfo_pkl_path[i]) == True and os.path.isfile(self.bamInfo_csv_path[i]) == True:
+            os.makedirs(self.bamInfo_folder_path[i], exist_ok=True)
+            if os.path.isfile(self.bamInfo_pkl_path[i]) and os.path.isfile(self.bamInfo_csv_path[i]):
                 self.logger.info(f'bam file information exist at {self.bamInfo_pkl_path[i]} and {self.bamInfo_csv_path[i]}')
-            if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == True:
+            if (not os.path.isfile(self.bamInfo_pkl_path[i])) and os.path.isfile(self.bamInfo_csv_path[i]):
                 self.logger.info('Extracting bam file pickle information')
-                bam_info = pd.read_csv(self.bamInfo_csv_path[i])
-                qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                if save_mem:
+                    qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict_mem(self.bamInfo_csv_path[i], self.parse)
+                else:
+                    bam_info = pd.read_csv(self.bamInfo_csv_path[i])
+                    qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                    del bam_info
+                    gc.collect()
                 with open(self.bamInfo_pkl_path[i], 'wb') as file:
                     pickle.dump(qname_dict, file)
                 with open(self.bamInfo2_pkl_path[i], 'wb') as file:
@@ -799,7 +924,14 @@ class Annotator:
                         bam_info = extract_bam_info(self.bam_path[i],barcode_cell, barcode_umi)
                 bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
-                qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                if save_mem:
+                    del bam_info
+                    gc.collect()
+                    qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict_mem(self.bamInfo_csv_path[i], self.parse)
+                else:
+                    qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
+                    del bam_info
+                    gc.collect()
                 with open(self.bamInfo_pkl_path[i], 'wb') as file:
                     pickle.dump(qname_dict, file)
                 with open(self.bamInfo2_pkl_path[i], 'wb') as file:
