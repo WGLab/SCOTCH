@@ -209,8 +209,7 @@ class CountMatrix:
             (os.path.join(CompatibleMatrixPath, i), idx)  # Tuple with file path and index
             for idx, CompatibleMatrixPath in enumerate(compatible_matrix_folder_path_list)
             for i in os.listdir(CompatibleMatrixPath)
-            if '.csv' in i and pattern.sub('', i) == gene
-        ]
+            if '.csv' in i and pattern.sub('', i) == gene]
         df_list = []
         for f, idx in files_with_indicators:
             df = pd.read_csv(f)
