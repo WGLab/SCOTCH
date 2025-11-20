@@ -289,7 +289,7 @@ class CountMatrix:
             if df.shape[1] > 0:
                 df_novel = df.filter(like='novel')
                 if df_novel.shape[1] > 0:
-                    novel_read_n = 0 if splicing is None else self.novel_read_n
+                    novel_read_n = 0 if splicing is not None else self.novel_read_n
                     novel_isoform_drop = df_novel.sum(axis=0) < novel_read_n
                     novel_isoform_drop = novel_isoform_drop[novel_isoform_drop].index.tolist()
                     novel_isoform_del = novel_isoform_del + novel_isoform_drop
