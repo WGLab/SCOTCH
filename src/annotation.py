@@ -135,10 +135,15 @@ def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM', chunk_
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
         try:
-            cb = read.get_tag(barcode_cell)
-            umi = read.get_tag(barcode_umi)
-            length = read.reference_length
-            current_chunk.append((read.qname, cb, umi, length))
+            if barcode_cell is None and barcode_umi is None:
+                current_chunk.append((read.qname, read.qname, 'NA', read.qend - read.qstart))
+            else:
+                current_chunk.append(
+                    (read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend - read.qstart))
+            #cb = read.get_tag(barcode_cell)
+            #umi = read.get_tag(barcode_umi)
+            #length = read.reference_length
+            #current_chunk.append((read.qname, cb, umi, length))
         except KeyError:
             continue
         counter += 1
@@ -165,16 +170,6 @@ def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM', chunk_
         ReadTagsDF = None
     bamFilePysam.close()
     gc.collect()
-    # ReadTags = [(read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.reference_length) for read in bamFilePysam]
-    # ReadTagsDF = pd.DataFrame(ReadTags)
-    # if ReadTagsDF.shape[0] > 0:
-    #     ReadTagsDF.columns = ['QNAME', 'CB', 'UMI', 'LENGTH']
-    #     ReadTagsDF.dropna(inplace=True)
-    #     ReadTagsDF = ReadTagsDF.sort_values(by=['CB','UMI','LENGTH'],ascending=[True, True, False]).reset_index(drop=True)
-    #     ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
-    #     ReadTagsDF['QNAME'] = ReadTagsDF.QNAME.astype(str) + '_' + ReadTagsDF.LENGTH.astype(int).astype(str)
-    # else:
-    #     ReadTagsDF = None
     return ReadTagsDF
 
 def bam_info_to_dict(bam_info, parse=False):
@@ -706,8 +701,15 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
     else:
         genes = None
+
+    assert any(x is not None for x in [refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_path]), \
+        "At least one of refGeneFile_gtf_path, refGeneFile_pkl_path, or bamfile_path must be provided"
+    ############################################################
+    #-------------------reference is not provided-------------##
+    ############################################################
+
     #####################################################
-    #option1: ---------rely on bam file alone---------###
+    # option1: ---------rely on bam file alone---------##
     #####################################################
     if refGeneFile_gtf_path is None and refGeneFile_pkl_path is None and bamfile_path is not None:
         logger.info('rely on bam file alone to generate gene annotations')
@@ -721,10 +723,17 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                                                   workers=num_cores, logger = logger)#no need to add build
         with open(output, 'wb') as file:
             pickle.dump(geneStructureInformation, file)
-    #####################################################
-    # option2: --------rely on existing annotation alone#
-    #####################################################
-    if refGeneFile_pkl_path is None and refGeneFile_gtf_path is not None and bamfile_path is None: ###use gtf
+
+    ############################################################
+    # -------------------reference is provided-----------------#
+    ############################################################
+
+    ###############################################################################################################
+    # option2: --------rely on existing annotation alone/ use gtf to generate raw pkl first (bam update pkl later)#
+    ###############################################################################################################
+
+    # gtf --> pkl
+    if refGeneFile_pkl_path is None and refGeneFile_gtf_path is not None: ###use gtf
         logger.info('use the existing gtf file for gene annotations')
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
@@ -740,6 +749,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         else:#there exist pre-computated annotation file
             logger.info('load existing annotation pickle file of each single gene at: '+str(output))
             geneStructureInformation = load_pickle(output)
+        refGeneFile_pkl_path = output
+    # load pkl
     if refGeneFile_pkl_path is not None: ###use pickle
         assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
         logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_pkl_path))
@@ -750,6 +761,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                 geneStructureInformation = add_build(geneStructureInformation, build)
         if os.path.abspath(refGeneFile_pkl_path) != os.path.abspath(output):
             shutil.copy(refGeneFile_pkl_path, output)
+
         ##############################################################
         #option3: ---------update existing annotation using bam file##
         ##############################################################
