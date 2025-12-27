@@ -453,12 +453,16 @@ def detect_poly_parse(read, window = 20, n = 15):
 def poly_tail(read, geneInfo, fasta_handle, window=15, threshold=8):
     if geneInfo['geneStrand'] == "+":
         pos = read.reference_end
-        seq = Seq(fasta_handle.fetch(read.reference_name, pos - window, pos + window).upper())
-        n = seq.count('A')
+        base = "A"
     else:
         pos = read.reference_start
-        seq = Seq(fasta_handle.fetch(read.reference_name, pos - window, pos + window).upper())
-        n = seq.count('T')
+        base = "T"
+    chrom = read.reference_name
+    chrom_len = fasta_handle.get_reference_length(chrom)
+    start = max(0, pos - window)
+    end = min(chrom_len, pos + window)
+    seq = fasta_handle.fetch(chrom, start, end).upper()
+    n = seq.count(base)
     tail = False if n >= threshold else True
     return tail
 

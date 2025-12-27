@@ -926,7 +926,7 @@ class Annotator:
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 self.logger.info('Extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
-                    bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio,barcode_cell, barcode_umi)
+                    bam_info = extract_bam_info_folder(self.bam_path[i], self.workers, self.parse, self.pacbio, barcode_cell, barcode_umi)
                 else:
                     if self.parse:
                         bam_info = extract_bam_info_parse(self.bam_path[i])
