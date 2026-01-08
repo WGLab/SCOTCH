@@ -276,7 +276,7 @@ class ReadMapper:
                 sample = 'sample' + str(i)
                 reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
                 for read in reads:
-                    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+                    readName, readStart, readEnd = read.qname, read.qstart, read.qend
                     result = process_read(read, self.qname_dict_list[i], self.lowest_match, self.lowest_match1,
                                           self.small_exon_threshold,
                                           self.small_exon_threshold1, self.truncation_match, Info_singlegene,
@@ -341,7 +341,7 @@ class ReadMapper:
                 reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
                 # process reads metagene
                 for read in reads:
-                    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+                    readName, readStart, readEnd = read.qname, read.qstart, read.qend
                     out = process_read_metagene(read,self.qname_dict_list[i], Info_multigenes, self.lowest_match,self.lowest_match1,
                                                 self.small_exon_threshold,self.small_exon_threshold1,
                                                 self.truncation_match, self.parse, self.pacbio, self.barcode_umi,self.fasta_handle)
@@ -739,7 +739,7 @@ class ClassifyReadsSplice:
         reads = bam.fetch(Info_singlegene[0]['geneChr'], Info_singlegene[0]['geneStart'], Info_singlegene[0]['geneEnd'])
         CBUMI_unspliced, CBUMI_spliced = [], []
         for read in reads:
-            readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+            readName, readStart, readEnd = read.qname, read.qstart, read.qend
             readName = readName + '_' + str(readEnd - readStart) if self.platform=='10x-pacbio' else readName
             if readName in reads_list:
                 isoform_name = read_isoform_dict[readName]
