@@ -130,8 +130,7 @@ def extract_bam_info_parse(bam, chunk_size=100000):
 
 def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM', chunk_size=100000):
     bamFilePysam = pysam.Samfile(bam, "rb")
-    all_chunks = []
-    current_chunk = []
+    all_chunks, current_chunk = [], []
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
         try:
@@ -193,9 +192,7 @@ def bam_info_to_dict_mem(bam_info_path, parse=False, chunksize=500000):
         chunk = chunk.sort_values(by=["CBUMI", "LENGTH"], ascending=[True, False])
         local_max = chunk.drop_duplicates(subset="CBUMI", keep="first")
         for _, row in local_max.iterrows():
-            cbumi = row["CBUMI"]
-            length = row["LENGTH"]
-            qname = row["QNAME"]
+            cbumi, length, qname = row["CBUMI"], row["LENGTH"], row["QNAME"]
             if (cbumi not in cbumi_to_max_qname) or (length > cbumi_to_max_qname[cbumi][1]):
                 cbumi_to_max_qname[cbumi] = (qname, length)
         del chunk, local_max
@@ -206,8 +203,7 @@ def bam_info_to_dict_mem(bam_info_path, parse=False, chunksize=500000):
     qname_sample_dict = {} if parse else None
     for chunk in pd.read_csv(bam_info_path, chunksize=chunksize):
         for _, row in chunk.iterrows():
-            qname = row["QNAME"]
-            cbumi = row["CBUMI"]
+            qname, cbumi = row["QNAME"], row["CBUMI"]
             qname_dict[qname] = cbumi_to_max_qname.get(cbumi, None)
             qname_cbumi_dict[qname] = cbumi
             if parse:

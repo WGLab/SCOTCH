@@ -618,7 +618,7 @@ def map_read_to_gene(read, Info_singlegene, lowest_match=0.2, lowest_match1 = 0.
                 exon_map_vector_trunct = [0] * len(exon_map_vector_notrunct)
         return exon_map_vector_trunct
     #optional: geneInfo,exonInfo, isoformInfo, qualifyExon, exonMatch
-    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    readName, readStart, readEnd = read.qname, read.qstart, read.qend
     if pacbio:
         readName = readName + '_' + str(readEnd - readStart)
     referencePositions = read.get_reference_positions(full_length=False)
@@ -975,7 +975,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
 def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_threshold,small_exon_threshold1, truncation_match, Info_Singlegenes,
                  parse=False, pacbio = False, barcode_umi = None, fasta_handle = None):
     #poly_tail: true poly tail for ont and pacbio
-    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    readName, readStart, readEnd = read.qname, read.qstart, read.qend
     mapping_scores = None
     if pacbio:
         readName = readName + '_' + str(readEnd - readStart)
@@ -1018,12 +1018,12 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
     return novelIsoformResults, isoformCompatibleVectorResults, mapping_scores
 
 def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest_match1, small_exon_threshold,small_exon_threshold1,truncation_match, parse=False, pacbio = False, barcode_umi = None, fasta_handle = None):
-    readName, readStart, readEnd = read.qname, read.reference_start, read.reference_end
+    readName, readStart, readEnd = read.qname, read.qstart, read.qend
+    if pacbio:
+        readName = readName + '_' + str(readEnd - readStart)
     if qname_dict is None: #for bulk
         qname_dict = {}
         qname_dict[readName] = readName
-    if pacbio:
-        readName = readName + '_' + str(readEnd - readStart)
     if parse:
         poly_bool, poly = detect_poly_parse(read, window=20, n=15)
         if readName == qname_dict[readName]:
