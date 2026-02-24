@@ -52,7 +52,7 @@ parser.add_argument('--unsplice_threshold',type=int, default=15, help="threshold
 
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
-parser.add_argument('--novel_read_pct',type=int, default=0, help="filter out novel isoforms with supporting read number less than % of gene coverage")
+parser.add_argument('--novel_read_pct',type=float, default=0, help="filter out novel isoforms with supporting read number less than % of gene coverage")
 parser.add_argument('--group_novel', action='store_true', help="whether to further group novel isoforms generated in compatible matrix, default is true")
 parser.add_argument('--group_novel_off', action='store_false', dest='group_novel')
 parser.add_argument('--save_csv', action='store_true', help="whether to save count matrix output as csv format")
