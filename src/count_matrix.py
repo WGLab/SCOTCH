@@ -380,13 +380,11 @@ class CountMatrix:
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         Genes_list = split_list(Genes, self.workers)
         # ---- generate overall count matrix
-        novel_isoform_del_dict, novel_name_substitution_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in Genes_list)
-        novel_isoform_del = {}
-        for d in novel_isoform_del_dict:
-            novel_isoform_del.update(d)
-        novel_name_substitution = {}
-        for d in novel_name_substitution_dict:
-            novel_name_substitution.update(d)
+        results = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in Genes_list)
+        novel_isoform_del, novel_name_substitution = {}, {}
+        for d1, d2 in results:
+            novel_isoform_del.update(d1)
+            novel_name_substitution.update(d2)
         self.logger.info('count matrix generated')
         #save novel_isoform_del
         self.novel_isoform_del_dict = novel_isoform_del
