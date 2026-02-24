@@ -297,8 +297,7 @@ class ReadMapper:
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                     Read_novelIsoform, Read_knownIsoform, n_isoforms, exonInfo, self.small_exon_threshold, self.small_exon_threshold1)
             else:
-                Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (Read_novelIsoform, novel_isoformInfo,
-                                                                                                      Read_knownIsoform)
+                Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
             #compile output into compatible matrix
             geneName, geneID, geneChr, colNames, Read_Isoform_compatibleVector = compile_compatible_vectors(
                     Read_novelIsoform_polished, Read_knownIsoform_polished, geneInfo)
