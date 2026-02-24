@@ -33,8 +33,7 @@ def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False,b
 def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB', chunk_size = 100000):
     #extract readname, cb, umi from bam file # bam: path to bam file
     bamFilePysam = pysam.Samfile(bam, "rb")
-    all_chunks = []
-    current_chunk = []
+    all_chunks, current_chunk = [], []
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
         try:

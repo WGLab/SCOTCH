@@ -85,11 +85,10 @@ def flatten_list(nested_list):
 
 def deduplicate_col(df):
     if df.shape[1]<2:
-        return df
+        return df, []
     else:
         arr = df.to_numpy()
-        r_ind = np.where(arr > 0)[0]
-        c_ind = np.where(arr > 0)[1]
+        r_ind, c_ind = np.where(arr > 0)
         ind_dict = {}
         for i in range(arr.shape[1]):
             r_ind_ = r_ind[np.where(c_ind == i)[0].tolist()].tolist()
@@ -97,13 +96,14 @@ def deduplicate_col(df):
         duplicated_cols = []
         for i in range(arr.shape[1] - 1):
             for j in range(i + 1, arr.shape[1]):
-                if len(ind_dict[i]) == len(ind_dict[j]):
-                    diff = np.array(ind_dict[i]) - np.array(ind_dict[j])
-                    if sum(diff != 0) == 0:
-                        duplicated_cols.append(j)
-        if len(duplicated_cols)>0:
-            df = df.drop(df.columns[duplicated_cols], axis=1)
-        return df
+                if ind_dict[i] == ind_dict[j]:
+                    duplicated_cols.append(j)
+        dropped_col_names = []
+        if duplicated_cols:
+            dropped_col_names = df.columns[duplicated_cols].tolist()
+            df = df.drop(columns=dropped_col_names)
+        dropped_col_names_novel = [cn for cn in dropped_col_names if cn.startswith('novel')]
+        return df, dropped_col_names_novel
 
 
 
@@ -142,20 +142,24 @@ def split_list(lst, n):
     return result
 
 class CountMatrix:
-    def __init__(self, target:list, novel_read_n: int, group_novel = True, platform = '10x-ont', workers:int = 1,
+    def __init__(self, target:list, novel_read_n: int, novel_read_pct: float = 0,
+                 group_novel = True, platform = '10x-ont', workers:int = 1,
                  csv = True, mtx =True, logger = None):
         self.logger = logger
         self.target = target
         self.workers = workers
         self.novel_read_n = novel_read_n
+        self.novel_read_pct = novel_read_pct
         self.platform = platform
         self.parse = self.platform == 'parse-ont'
         self.pacbio = self.platform == '10x-pacbio'
         self.group_novel = group_novel
+        self.novel_name_substitution = []
         self.csv = csv
         self.mtx = mtx
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
-        self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + '.pkl')
+        self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + str(self.novel_read_pct) + '.pkl')
+        self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
         if platform=='parse-ont':
             self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
             self.n_samples = len(self.sample_names)
@@ -217,7 +221,7 @@ class CountMatrix:
             if self.parse:
                 df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
             df['Cell'] = df['Cell'] + f':sample{idx}'
-            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering df
+            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering out reads not keep
             if df.shape[0] > 0:
                 df['Cell'] = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
                 df['Cell'] = df['Cell'] + f':sample{idx}'
@@ -227,15 +231,19 @@ class CountMatrix:
             return {gene: []}
         result_df = pd.concat(df_list, axis=0)
         df = result_df.fillna(0).astype(int)
+        #novel isoform in annotation but not compatible matrix
+        novel_isoform_del = [iso_name for iso_name in list(self.annotation_pkl[gene][2].keys()) if iso_name.startswith('novelIsoform_') and iso_name not in df.columns.tolist()]
+        novel_name_substitution = []
         if self.group_novel:
             df, novel_isoform_name_mapping = pp.group_novel_isoform(df, geneStrand=self.annotation_pkl[gene][0]['geneStrand'],
                                                                     parse=self.parse)
         else:
             novel_isoform_name_mapping = None
         if novel_isoform_name_mapping is not None:
-            novel_isoform_del = [key for key, value in novel_isoform_name_mapping.items() if key != value]
-        else:
-            novel_isoform_del = []
+            #delete isoform being subsituted
+            novel_isoform_del += [delete for delete, keep in novel_isoform_name_mapping.items() if delete != keep] #{isoform0 (delete): isoform1}
+            #record name subsitution
+            novel_name_substitution += [(delete, keep) for delete, keep in novel_isoform_name_mapping.items() if delete != keep]
         # split df into samples
         df['sample_id'] = df.index.str.split(':').str[1]
         df.index = df.index.str.split(':').str[0]
@@ -244,6 +252,7 @@ class CountMatrix:
         for i, df in enumerate(df_list):
             # --------delete isoforms without reads
             df_isoform = df.sum(axis=0) > 0  # cols have read
+            novel_isoform_del += [isoname for isoname in df_isoform[df_isoform==False].index.tolist() if isoname.startswith('novelIsoform_')]
             isoformNames = df_isoform[df_isoform].index.tolist()
             df = df.loc[:, isoformNames]
             # filter uncategorized reads
@@ -254,7 +263,8 @@ class CountMatrix:
                     df = df.drop(columns=df_uncategorized.columns.tolist())
             if df.shape[1] > 0:
                 # --------deal with multiple mappings
-                df = deduplicate_col(df)  # delete same mapping isoforms
+                df, dup_iso_name_novel = deduplicate_col(df)  # delete same mapping isoforms
+                novel_isoform_del += dup_iso_name_novel
                 # use unique mappings to decide multiple mappings
                 multiple_bool = df.sum(axis=1) > 1
                 multiple_index = [i for i, k in enumerate(multiple_bool.tolist()) if k]
@@ -290,9 +300,15 @@ class CountMatrix:
                 df_novel = df.filter(like='novel')
                 if df_novel.shape[1] > 0:
                     novel_read_n = 0 if splicing is not None else self.novel_read_n
-                    novel_isoform_drop = df_novel.sum(axis=0) < novel_read_n
-                    novel_isoform_drop = novel_isoform_drop[novel_isoform_drop].index.tolist()
-                    novel_isoform_del = novel_isoform_del + novel_isoform_drop
+                    novel_read_pct = 0 if splicing is not None else self.novel_read_pct
+                    #drop based on absolute read support
+                    novel_isoform_drop0 = df_novel.sum(axis=0) < novel_read_n
+                    novel_isoform_drop0 = novel_isoform_drop0[novel_isoform_drop0].index.tolist()
+                    # drop based on read pct
+                    novel_isoform_drop1 = df.sum(axis=0)/df.sum(axis=0).sum() < novel_read_pct
+                    novel_isoform_drop1 = [n_iso for n_iso in novel_isoform_drop1[novel_isoform_drop1].index.tolist() if n_iso.startswith('novel')]
+                    novel_isoform_drop = list(set(novel_isoform_drop0 + novel_isoform_drop1))
+                    novel_isoform_del += novel_isoform_drop
                     if novel_isoform_drop:  # only proceed if there are columns to drop
                         df_drop = df.loc[:, novel_isoform_drop].sum(axis=1).tolist()
                         df = df.drop(columns=novel_isoform_drop)
@@ -313,14 +329,15 @@ class CountMatrix:
                 triple_gene = df_to_triple(df_gene)
                 with open(os.path.join(count_matrix_folder_path_list[i], str(gene) + '_unfiltered_count.pickle'), 'wb') as f:
                     pickle.dump((triple_gene, triple_transcript), f)
-        return {gene: novel_isoform_del}
+        return {gene: novel_isoform_del}, {gene: novel_name_substitution}
 
     def generate_count_matrix_by_gene_list(self, gene_list, read_selection_pkl, splicing = None):
-        novel_isoform_del_dict = {}
+        novel_isoform_del_dict , novel_name_substitution_dict = {}, {}
         for gene in gene_list:
-            novel_isoform_del_dict_gene = self.generate_count_matrix_by_gene(gene, read_selection_pkl, splicing = splicing)
+            novel_isoform_del_dict_gene, novel_name_substitution_dict_gene = self.generate_count_matrix_by_gene(gene, read_selection_pkl, splicing = splicing)
             novel_isoform_del_dict.update(novel_isoform_del_dict_gene)
-        return novel_isoform_del_dict
+            novel_name_substitution_dict.update(novel_name_substitution_dict_gene)
+        return novel_isoform_del_dict, novel_name_substitution_dict
     def read_filter(self):
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
@@ -363,13 +380,17 @@ class CountMatrix:
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
         Genes_list = split_list(Genes, self.workers)
         # ---- generate overall count matrix
-        novel_isoform_del_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in Genes_list)
+        novel_isoform_del_dict, novel_name_substitution_dict = Parallel(n_jobs=self.workers)(delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in Genes_list)
         novel_isoform_del = {}
         for d in novel_isoform_del_dict:
             novel_isoform_del.update(d)
+        novel_name_substitution = {}
+        for d in novel_name_substitution_dict:
+            novel_name_substitution.update(d)
         self.logger.info('count matrix generated')
         #save novel_isoform_del
         self.novel_isoform_del_dict = novel_isoform_del
+        self.novel_name_substitution_dict = novel_name_substitution
         # ---- generate spliced/unspliced count matrix
         if generate_splicing:
             self.logger.info('generate count matrix for spliced')
@@ -380,10 +401,14 @@ class CountMatrix:
                 delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl, splicing = 'unspliced') for gene_list in Genes_list)
         with open(self.novel_isoform_del_path, 'wb') as f:
             pickle.dump(self.novel_isoform_del_dict, f)
+        with open(self.novel_name_substitution_path, 'wb') as f:
+            pickle.dump(self.novel_name_substitution, f)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
-                dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + '.pkl')
+                dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + str(self.novel_read_pct)+ '.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
+                dest_path = os.path.join(additional_target, 'reference/novel_name_substitution.pkl')
+                shutil.copyfile(self.novel_name_substitution_path, dest_path)
         #--------overall count mat--------#
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
             out_paths_unfiltered = [os.path.join(count_path, f) for f in os.listdir(count_path) if f.endswith('_unfiltered_count.pickle')]

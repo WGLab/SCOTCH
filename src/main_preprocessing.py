@@ -52,6 +52,7 @@ parser.add_argument('--unsplice_threshold',type=int, default=15, help="threshold
 
 #task is count
 parser.add_argument('--novel_read_n',type=int, default=0, help="filter out novel isoforms with supporting read number smaller than n")
+parser.add_argument('--novel_read_pct',type=int, default=0, help="filter out novel isoforms with supporting read number less than % of gene coverage")
 parser.add_argument('--group_novel', action='store_true', help="whether to further group novel isoforms generated in compatible matrix, default is true")
 parser.add_argument('--group_novel_off', action='store_false', dest='group_novel')
 parser.add_argument('--save_csv', action='store_true', help="whether to save count matrix output as csv format")
@@ -208,11 +209,10 @@ def main():
         logger.info(f'Workers: {args.workers}')
         logger.info(f'saving count matrix csv: {args.save_csv}')
         logger.info(f'saving count matrix mtx: {args.save_mtx}')
-        countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n,
-                                        platform = args.platform, workers = args.workers,
-                                     group_novel = args.group_novel, logger = logger,
+        countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n, novel_read_pct= args.novel_read_pct,
+                                        platform = args.platform, workers = args.workers, group_novel = args.group_novel, logger = logger,
                                      csv = args.save_csv, mtx = args.save_mtx)
-        if args.platform=='parse':
+        if args.platform=='parse-ont':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.generate_multiple_samples(generate_splicing=args.generate_splicing)
         logger.info('Saving count matrix')

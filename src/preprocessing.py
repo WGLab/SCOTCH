@@ -240,7 +240,7 @@ def group_novel_isoform(df, geneStrand, parse = False):
         #sort novel isoform id
         novel_isoform_id = [int(ni.split('_')[1]) for ni in df_novel.columns.tolist()]
         novel_isoform_id_len = [len(novelid_to_exonid(i)) for i in novel_isoform_id]
-        sorted_pairs = sorted(zip(novel_isoform_id_len, novel_isoform_id))
+        sorted_pairs = sorted(zip(novel_isoform_id_len, novel_isoform_id)) #(novel isoform length, novel isoform id)
         novel_isoform_id = [id for length, id in sorted_pairs]
         #group novel isoforms
         novel_isoform_group_list = []
@@ -262,12 +262,12 @@ def group_novel_isoform(df, geneStrand, parse = False):
     return df, novel_isoform_name_mapping
 
 
-def pair_isoform(novel_isoform_group_list, novel_isoform_id, query_id, geneStrand):
+def pair_isoform(novel_isoform_group_list, novel_isoform_id, query_id, geneStrand): #(finished, pool, query, strand)
     novel_isoform_id_list = novel_isoform_id.copy()
     # create new isoform group
     if query_id is None:
         child_id = novel_isoform_id_list[0]
-        novel_isoform_id_list.remove(child_id)
+        novel_isoform_id_list.remove(child_id) #take out from pool
         parent_id = find_parent_isoform(novel_isoform_id_list, child_id, geneStrand)
         if parent_id is not None:
             novel_isoform_id_list.remove(parent_id)
