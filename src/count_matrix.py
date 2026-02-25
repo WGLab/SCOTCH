@@ -593,8 +593,8 @@ class CountMatrix:
     def filter_gtf(self):
         self.logger.info('updating gtf annotation file')
         for target in self.target:
-            input_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation.gtf')
-            output_gtf = os.path.join(target, 'reference/SCOTCH_updated_annotation_filtered.gtf')
+            input_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation.gtf')
+            output_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation_filtered_{self.novel_read_n}_{self.novel_read_pct}.gtf')
             with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
                 for line in infile:
                     if line.startswith("#"):
