@@ -601,13 +601,8 @@ class ReadMapper:
                 if not os.path.exists(compatible_matrix_folder_path):
                     os.makedirs(compatible_matrix_folder_path, exist_ok=True)
         MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
-        if total_jobs > 1:
-            step_size = math.ceil(len(MetaGenes) / total_jobs)
-            s = int(list(range(0, len(MetaGenes), step_size))[current_job_index])
-            e = int(s + step_size)
-            MetaGenes_job = MetaGenes[s:e]
-        else:#total_jobs = 1
-            MetaGenes_job = MetaGenes
+        chunks = np.array_split(MetaGenes, total_jobs)
+        MetaGenes_job = chunks[current_job_index]
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []
