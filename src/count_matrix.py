@@ -479,17 +479,23 @@ class CountMatrix:
                 print('saving count matrix on gene level ')
                 gene_meta_unfiltered = {'obs': self.adata_gene_unfiltered_list[i].obs.index.tolist(),
                                         "var": self.adata_gene_unfiltered_list[i].var.index.tolist()}
-                with open(os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
+                fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
+                             f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
+                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                with open(fn_pickle,'wb') as f:
                     pickle.dump(gene_meta_unfiltered, f)
-                mmwrite(os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n)+ '.mtx'),self.adata_gene_unfiltered_list[i].X)
+                mmwrite(fn_mtx,self.adata_gene_unfiltered_list[i].X)
                 # save transcript
                 print('saving count matrix on transcript level ')
                 transcript_meta_unfiltered = {'obs': self.adata_transcript_unfiltered_list[i].obs.index.tolist(),
                                               "var": self.adata_transcript_unfiltered_list[i].var.index.tolist()}
-                mmwrite(os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.mtx'),
-                        self.adata_transcript_unfiltered_list[i].X)
-                with open(os.path.join(self.count_matrix_folder_path_list[i],
-                                       'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'),'wb') as f:
+                fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
+                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
+                                      f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                mmwrite(fn_mtx, self.adata_transcript_unfiltered_list[i].X)
+                with open(fn_pickle,'wb') as f:
                     pickle.dump(transcript_meta_unfiltered, f)
                 if generate_splicing:
                     #---------spliced
@@ -541,8 +547,10 @@ class CountMatrix:
         if self.csv:
             self.logger.info('saving count matrix in csv format')
             for i in range(self.n_samples):
-                output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],'adata_gene_unfiltered' + str(self.novel_read_n) + '.csv')
-                output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i], 'adata_transcript_unfiltered' + str(self.novel_read_n) + '.csv')
+                output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
+                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.csv')
+                output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
+                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.csv')
                 # save gene
                 print('saving count matrix on gene level ')
                 adata_gene_unfiltered_df = self.adata_gene_unfiltered_list[i].to_df()
