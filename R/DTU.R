@@ -43,7 +43,7 @@ bootstrap_dispersion = function(X){
 }
 
 
-LRT_test = function(X1, X2, group_novel = FALSE, bootstrap = FALSE){
+LRT_test = function(X1, X2, group_novel = FALSE, bootstrap = FALSE, rare_isoform_threshold = 0.05){
   require(dplyr)
   if (sum(X1)==0|sum(X2)==0){
     return(NULL)
@@ -67,7 +67,7 @@ LRT_test = function(X1, X2, group_novel = FALSE, bootstrap = FALSE){
     }
   }
   #combine rare isoforms
-  isoform_top = union(colnames(X1)[colSums(X1)/sum(X1)>=0.05],colnames(X2)[colSums(X2)/sum(X2)>=0.05])
+  isoform_top = union(colnames(X1)[colSums(X1)/sum(X1)>= rare_isoform_threshold],colnames(X2)[colSums(X2)/sum(X2)>=rare_isoform_threshold])
   top=length(isoform_top)
   #add isoforms only show up in one group
   add1 = isoform_top[isoform_top%in%colnames(X1)==F]
