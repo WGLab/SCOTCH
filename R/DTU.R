@@ -230,7 +230,7 @@ LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_tra
 #' @param ncores number of cores to use for parallel computing
 #' @param group_novel whether to group all novel isoforms together when testing DTU genes, default is FALSE
 #' @param bootstrap whether to performe bootstraping to generate CI for alpha, default is FALSE
-#' @param rare_isoform_threshold threshold to aggregate less used transcripts into 'other' category during DTU test
+#' @param rare_isoform_threshold threshold to aggregate less used transcripts into 'other' category during DTU test, default is 0.05
 #' @return result dataframe.
 #' @examples
 #' df_transcript = scotch_transcript(gene_transcript_CD4_df,gene_transcript_CD8_df, sample8_CD4_transcript, sample8_CD8_transcript, 
