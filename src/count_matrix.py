@@ -228,7 +228,7 @@ class CountMatrix:
                 df = df.set_index('Cell')
                 df_list.append(df)
         if len(df_list) == 0:
-            return {gene: []}
+            return {gene: []}, {gene: []}
         result_df = pd.concat(df_list, axis=0)
         df = result_df.fillna(0).astype(int)
         #novel isoform in annotation but not compatible matrix
