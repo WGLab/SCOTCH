@@ -314,7 +314,7 @@ class CountMatrix:
                         df = df.drop(columns=novel_isoform_drop)
                         df['uncategorized_novel'] = df_drop
             if df.shape[1] == 0:
-                return {gene: novel_isoform_del}
+                return {gene: novel_isoform_del}, {gene: novel_name_substitution}
             df_all, df_filtered = df.copy(), df.copy()
             df_all.columns = [gene + '_' + iso for iso in df_all.columns.tolist()]
             df_filtered = df_filtered[df_filtered.columns[~df_filtered.columns.str.contains('uncategorized')]]
