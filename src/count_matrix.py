@@ -158,7 +158,7 @@ class CountMatrix:
         self.csv = csv
         self.mtx = mtx
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
-        self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) + str(self.novel_read_pct) + '.pkl')
+        self.novel_isoform_del_path = os.path.join(target[0],'reference/novel_isoform_del_' + str(novel_read_n) +'_' +str(self.novel_read_pct) + '.pkl')
         self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
         if platform=='parse-ont':
             self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
@@ -403,7 +403,7 @@ class CountMatrix:
             pickle.dump(self.novel_name_substitution, f)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
-                dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + str(self.novel_read_pct)+ '.pkl')
+                dest_path = os.path.join(additional_target, 'reference/novel_isoform_del_' + str(self.novel_read_n) + '_'+str(self.novel_read_pct)+ '.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
                 dest_path = os.path.join(additional_target, 'reference/novel_name_substitution.pkl')
                 shutil.copyfile(self.novel_name_substitution_path, dest_path)
