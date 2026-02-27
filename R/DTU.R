@@ -205,14 +205,14 @@ scotch_gene = function(X1_gene, X2_gene, epsilon=0.01,ncores=10){
 }
 
 
-LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript, group_novel, bootstrap){
+LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript, group_novel, bootstrap, rare_isoform_threshold = 0.05){
   require(dplyr)
   transcripts1_gene = gene_transcript_df1%>%filter(genes==gene_name)%>%pull(transcripts)
   transcripts2_gene = gene_transcript_df2%>%filter(genes==gene_name)%>%pull(transcripts)
   X1 = X1_transcript[,transcripts1_gene]
   X2 = X2_transcript[,transcripts2_gene]
   if (is.numeric(nrow(X1)) && is.numeric(nrow(X2)) && nrow(X1) >= 20 && nrow(X2) >= 20){
-    out = LRT_test(X1,X2, group_novel, bootstrap)
+    out = LRT_test(X1,X2, group_novel, bootstrap, rare_isoform_threshold)
   }else{out = NULL}
   if (is.null(out)==F){
     out$gene = gene_name
@@ -230,12 +230,13 @@ LRT_by_gene = function(gene_name,gene_transcript_df1,gene_transcript_df2, X1_tra
 #' @param ncores number of cores to use for parallel computing
 #' @param group_novel whether to group all novel isoforms together when testing DTU genes, default is FALSE
 #' @param bootstrap whether to performe bootstraping to generate CI for alpha, default is FALSE
+#' @param rare_isoform_threshold threshold to aggregate less used transcripts into 'other' category during DTU test
 #' @return result dataframe.
 #' @examples
 #' df_transcript = scotch_transcript(gene_transcript_CD4_df,gene_transcript_CD8_df, sample8_CD4_transcript, sample8_CD8_transcript, 
 #' ncores=10)
 #' @export
-scotch_transcript = function(gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript,ncores=10, group_novel=FALSE, bootstrap = FALSE){
+scotch_transcript = function(gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript,ncores=10, group_novel=FALSE, bootstrap = FALSE, rare_isoform_threshold = 0.05){
   require(doParallel)
   require(foreach)
   registerDoParallel(cores=ncores)
@@ -245,7 +246,7 @@ scotch_transcript = function(gene_transcript_df1,gene_transcript_df2, X1_transcr
   results = foreach (i =1:length(genes),.combine = 'rbind',.errorhandling = 'pass')%dopar%{
     tryCatch({
       gene_name = genes[i]
-      LRT_by_gene(gene_name, gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript, group_novel, bootstrap)
+      LRT_by_gene(gene_name, gene_transcript_df1,gene_transcript_df2, X1_transcript, X2_transcript, group_novel, bootstrap, rare_isoform_threshold)
     },error = function(e){
       cat("Error at i =", i, "with gene:", gene_name, "Error message:", e$message, "\n")
       NULL
