@@ -187,7 +187,7 @@ def summarise_auxillary(target):
 class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
                  small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
-                 reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None):
+                 reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None, genenames_subset = None):
         self.logger = logger
         self.target = target
         self.bam_path = bam_path
@@ -204,7 +204,6 @@ class ReadMapper:
         self.annotation_path_single_gene_list = [os.path.join(target_, 'reference/geneStructureInformation.pkl') for target_ in target]
         self.annotation_path_meta_gene_list = [os.path.join(target_, "reference/metageneStructureInformation.pkl") for target_ in target]
         self.annotation_path_meta_gene_novel_list = [os.path.join(target_, "reference/metageneStructureInformationwNovel.pkl") for target_ in target]
-        #self.annotation_path_gtf_novel_list = [os.path.join(target_, "reference/gene_annotations_scotch.gtf") for target_ in target]
         # bam information path
         self.bamInfo_folder_path_list = [os.path.join(target_, "bam") for target_ in target]
         self.bamInfo_pkl_path_list = [os.path.join(target_, 'bam/bam.Info.pkl') for target_ in target]#bamInfo_pkl_file
@@ -221,6 +220,7 @@ class ReadMapper:
         self.parse = self.platform == 'parse-ont'
         self.pacbio = self.platform == '10x-pacbio'
         # some paths
+        self.genenames_subset = genenames_subset#optional, only work on these genes
         if platform != 'parse-ont':
             self.nsamples = len(self.target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, "compatible_matrix") for target_ in target] #not for parse
@@ -266,6 +266,8 @@ class ReadMapper:
         if len(Info_multigenes)==1:
             Info_singlegene = Info_multigenes[0]
             geneInfo, exonInfo, isoformInfo = Info_singlegene
+            if self.genenames_subset is not None and geneInfo['geneName'] not in self.genenames_subset:
+                return
             n_isoforms = len(isoformInfo)
             Read_novelIsoform = []  # [('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = []  # [('read name',[read-isoform mapping])]
@@ -333,6 +335,9 @@ class ReadMapper:
             if not save:
                 return sample_list
         else:
+            if self.genenames_subset is not None:
+                if not any(geneInfo['geneName'] in self.genenames_subset for geneInfo, exonInfo, isoformInfo in Info_multigenes):
+                    return
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
             qname_sample_dict={}
             results = []
@@ -430,6 +435,8 @@ class ReadMapper:
         if len(Info_multigenes)==1:
             Info_singlegene = Info_multigenes[0]
             geneInfo, exonInfo, isoformInfo = Info_singlegene
+            if self.genenames_subset is not None and geneInfo['geneName'] not in self.genenames_subset:
+                return
             n_isoforms = len(isoformInfo)
             reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
@@ -497,6 +504,9 @@ class ReadMapper:
             if save==False:
                 return return_samples
         else:
+            if self.genenames_subset is not None:
+                if not any(geneInfo['geneName'] in self.genenames_subset for geneInfo, exonInfo, isoformInfo in Info_multigenes):
+                    return
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
             reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
             # process reads metagene
