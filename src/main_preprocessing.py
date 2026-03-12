@@ -61,6 +61,9 @@ parser.add_argument('--save_mtx', action='store_true', help="whether to save cou
 parser.add_argument('--save_mtx_false', action='store_false', dest='save_mtx')
 
 
+#gene subset
+parser.add_argument('--gene_subset',type=str,nargs='+',default=None,help="Optional: restrict processing to a subset of genes. Accepts one or more gene names (e.g. --gene_subset BRCA1 TP53) or a single path to a text file with one gene name per line")
+
 #task is visualization
 parser.add_argument('--gene',type=str, help="gene name to visualize")
 parser.add_argument('--target_vis',type=str, help="target path for visualization")
@@ -111,6 +114,16 @@ def main():
     for t in args.target:
         if not os.path.exists(t):
             os.makedirs(t)
+
+    # Resolve gene_subset: accept either a list of names or a path to a file
+    gene_subset = None
+    if args.gene_subset is not None:
+        if len(args.gene_subset) == 1 and os.path.isfile(args.gene_subset[0]):
+            with open(args.gene_subset[0]) as _f:
+                gene_subset = [line.strip() for line in _f if line.strip()]
+        else:
+            gene_subset = args.gene_subset
+
     def run_annotation():
         logger, log_file = setup_logger(args.target[0], 'annotation')
         logger.info('Start annotation step for all targets.')
@@ -159,6 +172,8 @@ def main():
         logger.info(f'Reference GTF Path: {args.reference}. Job: {args.job_index}')
         logger.info(f'Reference genome Path: {args.reference_genome_fasta}. Job: {args.job_index}')
         logger.info(f'Update GTF option: {args.update_gtf}. Job: {args.job_index}')
+        if gene_subset is not None:
+            logger.info(f'Gene subset provided: processing {len(gene_subset)} genes: {gene_subset}')
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
                                    lowest_match=args.match_low, lowest_match1=args.match_high,
                                     small_exon_threshold = args.small_exon_threshold,
@@ -166,7 +181,8 @@ def main():
                                    truncation_match = args.truncation_match,
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger, barcode_umi=args.barcode_umi,
-                                   ref_fasta_path=args.reference_genome_fasta)
+                                   ref_fasta_path=args.reference_genome_fasta,
+                                   genenames_subset=gene_subset)
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                       total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
@@ -210,9 +226,11 @@ def main():
         logger.info(f'Workers: {args.workers}')
         logger.info(f'saving count matrix csv: {args.save_csv}')
         logger.info(f'saving count matrix mtx: {args.save_mtx}')
+        if gene_subset is not None:
+            logger.info(f'Gene subset provided: processing {len(gene_subset)} genes: {gene_subset}')
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n, novel_read_pct= args.novel_read_pct,
                                         platform = args.platform, workers = args.workers, group_novel = args.group_novel, logger = logger,
-                                     csv = args.save_csv, mtx = args.save_mtx)
+                                     csv = args.save_csv, mtx = args.save_mtx, gene_subset=gene_subset)
         if args.platform=='parse-ont':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.generate_multiple_samples(generate_splicing=args.generate_splicing)
