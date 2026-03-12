@@ -613,6 +613,12 @@ class ReadMapper:
         MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
         chunks = np.array_split(MetaGenes, total_jobs)
         MetaGenes_job = chunks[current_job_index]
+        if self.genenames_subset is not None:
+            gene_names_set = set(self.genenames_subset)
+            MetaGenes_job = [mg for mg in MetaGenes_job
+                             if any(gene_info[0]['geneName'] in gene_names_set
+                                    for gene_info in self.metageneStructureInformation[mg])]
+            self.logger.info(f'Gene subset applied: {len(MetaGenes_job)} metagenes match the {len(gene_names_set)} requested gene names')
         if cover_existing:
             print('If there are existing compatible matrix files, SCOTCH will overwrite them')
             genes_existing = []

@@ -144,7 +144,7 @@ def split_list(lst, n):
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, novel_read_pct: float = 0,
                  group_novel = True, platform = '10x-ont', workers:int = 1,
-                 csv = True, mtx =True, logger = None):
+                 csv = True, mtx =True, logger = None, gene_subset = None):
         self.logger = logger
         self.target = target
         self.workers = workers
@@ -157,6 +157,7 @@ class CountMatrix:
         self.novel_name_substitution = []
         self.csv = csv
         self.mtx = mtx
+        self.gene_subset = gene_subset
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
         self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
         self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
@@ -354,6 +355,10 @@ class CountMatrix:
             Genes.append(Genes_)
         Genes = flatten_list(Genes)
         Genes = list(set(Genes))
+        if self.gene_subset is not None:
+            gene_names_set = set(self.gene_subset)
+            Genes = [g for g in Genes if g in gene_names_set]
+            self.logger.info(f'Gene subset applied: {len(Genes)} genes match the {len(gene_names_set)} requested gene names')
         for count_path in self.count_matrix_folder_path_list:
             os.makedirs(count_path, exist_ok=True)
         if generate_splicing:
