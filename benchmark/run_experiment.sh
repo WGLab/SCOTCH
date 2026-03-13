@@ -31,39 +31,36 @@ set -euo pipefail
 EMAIL="cyranvvv@hotmail.com"
 
 # --- Paths ---
-SCOTCH_DIR=/path/to/SCOTCH                          # Root of SCOTCH repo
-BENCHMARK_DIR=/path/to/benchmark                    # This benchmark/ directory
-REF_FASTA=/path/to/genome.fa                        # Reference genome FASTA
-REF_GTF=/path/to/genes.gtf                          # Gene annotation GTF
-REF_PKL=/path/to/geneStructureInformation.pkl       # SCOTCH annotation pickle
-INPUT_BAM_DIR=/path/to/bam_folder                   # Directory with input BAM(s)
-DATA_DIR=/path/to/benchmark/data                    # Where subsampled BAMs go
-RESULTS_BASE=/path/to/benchmark/results             # Where results go
+SCOTCH_DIR="/home/xu3/SCOTCH"    # Root of SCOTCH codes
+BENCHMARK_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation"    # This benchmark/ directory
+REF_FASTA="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/fasta/genome.fa"    # Reference genome FASTA
+REF_GTF="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/genes.gtf"           # Gene annotation GTF
+REF_PKL="/home/xu3/SCOTCH/data/geneStructureInformation.pkl"    # SCOTCH annotation pickle
+INPUT_BAM_DIR="/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams"                # Directory with input BAM(s)
+DATA_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/data"                    # Where subsampled BAMs go
+RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"             # Where results go
 
-# --- SLURM settings ---
-PARTITION=default                                   # SLURM partition name
-ACCOUNT=""                                          # SLURM account (leave empty if N/A)
 
 # --- Resource settings: SCOTCH ---
 SCOTCH_ANNOT_CPUS=10                                # CPUs for annotation step
 SCOTCH_ANNOT_MEM=300G                               # Memory for annotation step
-SCOTCH_ANNOT_TIME=12:00:00                          # Time limit for annotation
+SCOTCH_ANNOT_TIME=1-00:00:00                          # Time limit for annotation
 
 SCOTCH_COMPAT_NJOBS=10                              # Number of array jobs for compatible matrix
 SCOTCH_COMPAT_MEM=100G                              # Memory per array task
-SCOTCH_COMPAT_TIME=12:00:00                         # Time limit per array task
+SCOTCH_COMPAT_TIME=1-00:00:00                         # Time limit per array task
 
-SCOTCH_SUMMARY_MEM=32G                              # Memory for summary step
-SCOTCH_SUMMARY_TIME=02:00:00                        # Time limit for summary
+SCOTCH_SUMMARY_MEM=80G                              # Memory for summary step
+SCOTCH_SUMMARY_TIME=04:00:00                        # Time limit for summary
 
-SCOTCH_COUNT_CPUS=10                                # CPUs for count matrix step
+SCOTCH_COUNT_CPUS=1                                # CPUs for count matrix step
 SCOTCH_COUNT_MEM=200G                               # Memory for count matrix
-SCOTCH_COUNT_TIME=06:00:00                          # Time limit for count matrix
+SCOTCH_COUNT_TIME=1-00:00:00                          # Time limit for count matrix
 
 # --- Resource settings: IsoQuant ---
 ISOQUANT_CPUS=10                                    # Threads for IsoQuant
-ISOQUANT_MEM=200G                                   # Memory for IsoQuant
-ISOQUANT_TIME=24:00:00                              # Time limit for IsoQuant
+ISOQUANT_MEM=300G                                   # Memory for IsoQuant
+ISOQUANT_TIME=5-00:00:00                              # Time limit for IsoQuant
 
 # --- Resource settings: Data preparation ---
 PREP_CPUS=4                                         # CPUs for subsampling
@@ -74,11 +71,6 @@ PREP_TIME=06:00:00                                  # Time limit for subsampling
 # END USER CONFIG — Do not edit below unless you know what you're doing
 # =============================================================================
 
-# Build common sbatch flags
-SBATCH_COMMON="--partition=${PARTITION}"
-if [ -n "${ACCOUNT}" ]; then
-    SBATCH_COMMON="${SBATCH_COMMON} --account=${ACCOUNT}"
-fi
 SBATCH_COMMON="${SBATCH_COMMON} --mail-user=${EMAIL} --mail-type=FAIL,END"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
