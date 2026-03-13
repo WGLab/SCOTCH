@@ -1,12 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=bench_prep
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
-#SBATCH --time=06:00:00
-#SBATCH --output=logs/prep_%j.out
-#SBATCH --error=logs/prep_%j.err
-
 # Subsample BAM files for benchmarking via random read sampling.
+# Resource settings (CPU, mem, time) are controlled by run_experiment.sh.
 #
 # Usage:
 #   sbatch 00_prepare_data.sh <input_bam_dir> <output_dir>
