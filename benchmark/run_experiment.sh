@@ -3,20 +3,28 @@
 # SCOTCH vs IsoQuant Benchmark — Master Experiment Runner
 # =============================================================================
 #
-# This script runs all 8 benchmark experiments with proper SLURM dependency
-# chains. Each experiment only starts after its prerequisites complete
-# successfully (afterok).
+# Run each phase independently. Phases 1-4 can run in any order, whenever
+# you have resources available. Timing is measured per-job with /usr/bin/time
+# so running phases separately does NOT affect the final metrics.
 #
 # Usage:
-#   bash run_experiment.sh
+#   bash run_experiment.sh <phase>
 #
-# Workflow:
-#   Phase 0: Data preparation (subsampling + barcode prefixing + dedup)
-#   Phase 1: SCOTCH single-sample (5M, 10M, 15M) — run in parallel
-#   Phase 2: SCOTCH multi-sample (3 x 5M)
-#   Phase 3: IsoQuant single-sample (5M, 10M, 15M) — run in parallel
-#   Phase 4: IsoQuant multi-sample (3 x 5M)
-#   Phase 5: Collect metrics (after all experiments finish)
+# Phases:
+#   0  — Data preparation (subsampling + barcode prefixing)
+#   1  — SCOTCH single-sample (5M, 10M, 15M)
+#   2  — SCOTCH multi-sample (3 x 5M)
+#   3  — IsoQuant single-sample (5M, 10M, 15M)
+#   4  — IsoQuant multi-sample (3 x 5M)
+#   5  — Collect metrics + plot (checks all Phase 1-4 outputs exist first)
+#   all — Run phases 0-4 with SLURM dependency chains (old behavior)
+#
+# Examples:
+#   bash run_experiment.sh 0        # Prep data first
+#   bash run_experiment.sh 1        # Then run SCOTCH single whenever ready
+#   bash run_experiment.sh 3        # Run IsoQuant single in parallel with SCOTCH
+#   bash run_experiment.sh 5        # Collect results after everything finishes
+#   bash run_experiment.sh all      # Submit everything with dependency chains
 #
 # All SLURM jobs send email on FAIL and END to the configured address.
 # =============================================================================
@@ -29,11 +37,6 @@ set -euo pipefail
 
 # --- Email for SLURM notifications (FAIL + END) ---
 EMAIL="cyranvvv@hotmail.com"
-
-# --- Start from a specific phase (0-5) ---
-# Set to 0 to run everything. Set to 1 to skip data prep, etc.
-# If START_PHASE > 0, data prep is skipped (assumes BAMs already exist in DATA_DIR).
-START_PHASE=0
 
 # --- Paths ---
 SCOTCH_DIR="/home/xu3/SCOTCH"    # Root of SCOTCH codes
@@ -48,23 +51,23 @@ RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"  
 # --- Resource settings: SCOTCH ---
 SCOTCH_ANNOT_CPUS=10                                # CPUs for annotation step
 SCOTCH_ANNOT_MEM=300G                               # Memory for annotation step
-SCOTCH_ANNOT_TIME=1-00:00:00                          # Time limit for annotation
+SCOTCH_ANNOT_TIME=1-00:00:00                        # Time limit for annotation
 
 SCOTCH_COMPAT_NJOBS=10                              # Number of array jobs for compatible matrix
 SCOTCH_COMPAT_MEM=100G                              # Memory per array task
-SCOTCH_COMPAT_TIME=1-00:00:00                         # Time limit per array task
+SCOTCH_COMPAT_TIME=1-00:00:00                       # Time limit per array task
 
 SCOTCH_SUMMARY_MEM=80G                              # Memory for summary step
 SCOTCH_SUMMARY_TIME=04:00:00                        # Time limit for summary
 
-SCOTCH_COUNT_CPUS=1                                # CPUs for count matrix step
+SCOTCH_COUNT_CPUS=1                                 # CPUs for count matrix step
 SCOTCH_COUNT_MEM=200G                               # Memory for count matrix
-SCOTCH_COUNT_TIME=1-00:00:00                          # Time limit for count matrix
+SCOTCH_COUNT_TIME=1-00:00:00                        # Time limit for count matrix
 
 # --- Resource settings: IsoQuant ---
 ISOQUANT_CPUS=10                                    # Threads for IsoQuant
 ISOQUANT_MEM=300G                                   # Memory for IsoQuant
-ISOQUANT_TIME=5-00:00:00                              # Time limit for IsoQuant
+ISOQUANT_TIME=5-00:00:00                            # Time limit for IsoQuant
 
 # --- Resource settings: Data preparation ---
 PREP_CPUS=4                                         # CPUs for subsampling
@@ -75,6 +78,22 @@ PREP_TIME=06:00:00                                  # Time limit for subsampling
 # END USER CONFIG — Do not edit below unless you know what you're doing
 # =============================================================================
 
+# Parse phase argument
+PHASE="${1:-}"
+if [ -z "${PHASE}" ]; then
+    echo "Usage: bash run_experiment.sh <phase>"
+    echo ""
+    echo "Phases:"
+    echo "  0    Data preparation (subsampling + barcode prefixing)"
+    echo "  1    SCOTCH single-sample (5M, 10M, 15M)"
+    echo "  2    SCOTCH multi-sample (3 x 5M)"
+    echo "  3    IsoQuant single-sample (5M, 10M, 15M)"
+    echo "  4    IsoQuant multi-sample (3 x 5M)"
+    echo "  5    Collect metrics + plot (checks outputs exist first)"
+    echo "  all  Run phases 0-4 with SLURM dependency chains"
+    exit 1
+fi
+
 # Build common sbatch flags
 SBATCH_COMMON="--mail-user=${EMAIL} --mail-type=FAIL,END"
 
@@ -82,7 +101,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p logs "${DATA_DIR}" "${RESULTS_BASE}"
 
 echo "============================================================"
-echo "SCOTCH vs IsoQuant Benchmark — Submitting all experiments"
+echo "SCOTCH vs IsoQuant Benchmark — Phase: ${PHASE}"
 echo "============================================================"
 echo "Email:   ${EMAIL}"
 echo "Data:    ${DATA_DIR}"
@@ -243,11 +262,62 @@ submit_isoquant() {
     ISOQUANT_LAST_JOB=${JOBID}
 }
 
+# -------------------------------------------------------
+# Helper: check if all required time files exist for Phase 5
+# Returns 0 if all exist, 1 if any missing
+# -------------------------------------------------------
+check_phase5_ready() {
+    local MISSING=()
+
+    # SCOTCH single-sample: 5M, 10M, 15M
+    for LABEL in 5M 10M 15M; do
+        local BASE="${RESULTS_BASE}/scotch/single/reads_${LABEL}"
+        for STEP in annotation summary count; do
+            [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/single/${LABEL}/time_${STEP}.txt")
+        done
+        # Check at least one compatible array task
+        ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/single/${LABEL}/time_compatible_*.txt")
+    done
+
+    # SCOTCH multi-sample: 15M
+    local BASE="${RESULTS_BASE}/scotch/multi/reads_15M"
+    for STEP in annotation summary count; do
+        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/multi/15M/time_${STEP}.txt")
+    done
+    ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/multi/15M/time_compatible_*.txt")
+
+    # IsoQuant single-sample: 5M, 10M, 15M
+    for LABEL in 5M 10M 15M; do
+        local BASE="${RESULTS_BASE}/isoquant/single/reads_${LABEL}"
+        for STEP in dedup isoquant; do
+            [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/single/${LABEL}/time_${STEP}.txt")
+        done
+    done
+
+    # IsoQuant multi-sample: 15M
+    local BASE="${RESULTS_BASE}/isoquant/multi/reads_15M"
+    for STEP in dedup isoquant; do
+        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/multi/15M/time_${STEP}.txt")
+    done
+
+    if [ ${#MISSING[@]} -gt 0 ]; then
+        echo ""
+        echo "WARNING: The following time files are missing (${#MISSING[@]} files):"
+        for m in "${MISSING[@]}"; do
+            echo "  - ${m}"
+        done
+        echo ""
+        echo "Run the corresponding phases first before collecting metrics."
+        return 1
+    fi
+    return 0
+}
+
 # =============================================================================
-# PHASE 0: Data Preparation
+# PHASE DISPATCH
 # =============================================================================
-PREFIX_JOB=""
-if [ ${START_PHASE} -le 0 ]; then
+
+run_phase_0() {
     echo "--- Phase 0: Data Preparation ---"
 
     # Step 0a: Subsample BAMs
@@ -268,86 +338,101 @@ if [ ${START_PHASE} -le 0 ]; then
       --output=logs/prefix_%j.out --error=logs/prefix_%j.err \
       --wrap="python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
     echo "    Prefix barcodes: ${PREFIX_JOB}"
-else
-    echo "--- Phase 0: SKIPPED (START_PHASE=${START_PHASE}) ---"
-    echo "  Assuming subsampled + prefixed BAMs already exist in ${DATA_DIR}"
-fi
+}
 
-# =============================================================================
-# PHASE 1: SCOTCH Single-Sample (5M, 10M, 15M) — parallel
-# =============================================================================
-ALL_SCOTCH_JOBS=()
-if [ ${START_PHASE} -le 1 ]; then
-    echo ""
+run_phase_1() {
     echo "--- Phase 1: SCOTCH Single-Sample ---"
-
     for LABEL in 5M 10M 15M; do
         echo "  SCOTCH single ${LABEL}:"
-        submit_scotch "${LABEL}" single "${PREFIX_JOB}"
-        ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
+        submit_scotch "${LABEL}" single
     done
-else
-    echo ""
-    echo "--- Phase 1: SKIPPED (START_PHASE=${START_PHASE}) ---"
-fi
+}
 
-# =============================================================================
-# PHASE 2: SCOTCH Multi-Sample (3 x 5M)
-# =============================================================================
-if [ ${START_PHASE} -le 2 ]; then
+run_phase_2() {
+    echo "--- Phase 2: SCOTCH Multi-Sample ---"
+    echo "  SCOTCH multi 15M:"
+    submit_scotch 15M multi
+}
+
+run_phase_3() {
+    echo "--- Phase 3: IsoQuant Single-Sample ---"
+    for LABEL in 5M 10M 15M; do
+        echo "  IsoQuant single ${LABEL}:"
+        submit_isoquant "${LABEL}" single
+    done
+}
+
+run_phase_4() {
+    echo "--- Phase 4: IsoQuant Multi-Sample ---"
+    echo "  IsoQuant multi 15M:"
+    submit_isoquant 15M multi
+}
+
+run_phase_5() {
+    echo "--- Phase 5: Collect Metrics ---"
+    echo "  Checking if all experiment outputs exist..."
+
+    if ! check_phase5_ready; then
+        echo ""
+        read -p "Continue anyway with partial results? [y/N] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo "Aborted."
+            exit 1
+        fi
+    else
+        echo "  All time files found."
+    fi
+
+    echo "  Collecting metrics..."
+    python3 "${SCRIPT_DIR}/04_collect_metrics.py" "${RESULTS_BASE}" -o "${RESULTS_BASE}/benchmark_metrics.tsv"
+    python3 "${SCRIPT_DIR}/05_plot_results.py" "${RESULTS_BASE}/benchmark_metrics.tsv"
+    echo "  Done. Results in ${RESULTS_BASE}/benchmark_metrics.tsv"
+}
+
+run_all() {
+    echo "--- Running all phases with SLURM dependency chains ---"
+    echo ""
+
+    # Phase 0
+    run_phase_0
+    local LAST_PREP_JOB="${PREFIX_JOB}"
+
+    # Phases 1-4: all depend on Phase 0, run in parallel
+    ALL_FINAL_JOBS=()
+
+    echo ""
+    echo "--- Phase 1: SCOTCH Single-Sample ---"
+    for LABEL in 5M 10M 15M; do
+        echo "  SCOTCH single ${LABEL}:"
+        submit_scotch "${LABEL}" single "${LAST_PREP_JOB}"
+        ALL_FINAL_JOBS+=("${SCOTCH_LAST_JOB}")
+    done
+
     echo ""
     echo "--- Phase 2: SCOTCH Multi-Sample ---"
     echo "  SCOTCH multi 15M:"
-    submit_scotch 15M multi "${PREFIX_JOB}"
-    ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
-else
-    echo ""
-    echo "--- Phase 2: SKIPPED (START_PHASE=${START_PHASE}) ---"
-fi
+    submit_scotch 15M multi "${LAST_PREP_JOB}"
+    ALL_FINAL_JOBS+=("${SCOTCH_LAST_JOB}")
 
-# =============================================================================
-# PHASE 3: IsoQuant Single-Sample (5M, 10M, 15M) — parallel
-# =============================================================================
-ALL_ISOQUANT_JOBS=()
-if [ ${START_PHASE} -le 3 ]; then
     echo ""
     echo "--- Phase 3: IsoQuant Single-Sample ---"
-
     for LABEL in 5M 10M 15M; do
         echo "  IsoQuant single ${LABEL}:"
-        submit_isoquant "${LABEL}" single "${PREFIX_JOB}"
-        ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
+        submit_isoquant "${LABEL}" single "${LAST_PREP_JOB}"
+        ALL_FINAL_JOBS+=("${ISOQUANT_LAST_JOB}")
     done
-else
-    echo ""
-    echo "--- Phase 3: SKIPPED (START_PHASE=${START_PHASE}) ---"
-fi
 
-# =============================================================================
-# PHASE 4: IsoQuant Multi-Sample (3 x 5M)
-# =============================================================================
-if [ ${START_PHASE} -le 4 ]; then
     echo ""
     echo "--- Phase 4: IsoQuant Multi-Sample ---"
     echo "  IsoQuant multi 15M:"
-    submit_isoquant 15M multi "${PREFIX_JOB}"
-    ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
-else
-    echo ""
-    echo "--- Phase 4: SKIPPED (START_PHASE=${START_PHASE}) ---"
-fi
+    submit_isoquant 15M multi "${LAST_PREP_JOB}"
+    ALL_FINAL_JOBS+=("${ISOQUANT_LAST_JOB}")
 
-# =============================================================================
-# PHASE 5: Collect Metrics (after ALL experiments finish)
-# =============================================================================
-if [ ${#ALL_SCOTCH_JOBS[@]} -gt 0 ] || [ ${#ALL_ISOQUANT_JOBS[@]} -gt 0 ]; then
+    # Phase 5: after all experiments
     echo ""
     echo "--- Phase 5: Metrics Collection ---"
-
-    # Build dependency string: afterok:job1:job2:job3:...
-    ALL_JOBS=("${ALL_SCOTCH_JOBS[@]}" "${ALL_ISOQUANT_JOBS[@]}")
-    DEP_STR=$(IFS=:; echo "${ALL_JOBS[*]}")
-
+    DEP_STR=$(IFS=:; echo "${ALL_FINAL_JOBS[*]}")
     COLLECT_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
       --dependency=afterok:${DEP_STR} \
       --job-name=bench_collect \
@@ -357,11 +442,27 @@ if [ ${#ALL_SCOTCH_JOBS[@]} -gt 0 ] || [ ${#ALL_ISOQUANT_JOBS[@]} -gt 0 ]; then
         python3 ${SCRIPT_DIR}/05_plot_results.py ${RESULTS_BASE}/benchmark_metrics.tsv && \
         echo 'Benchmark complete. Results in ${RESULTS_BASE}/benchmark_metrics.tsv'")
     echo "  Collect metrics: ${COLLECT_JOB}"
-fi
+}
+
+# Dispatch
+case "${PHASE}" in
+    0) run_phase_0 ;;
+    1) run_phase_1 ;;
+    2) run_phase_2 ;;
+    3) run_phase_3 ;;
+    4) run_phase_4 ;;
+    5) run_phase_5 ;;
+    all) run_all ;;
+    *)
+        echo "ERROR: Unknown phase '${PHASE}'"
+        echo "Valid phases: 0, 1, 2, 3, 4, 5, all"
+        exit 1
+        ;;
+esac
 
 echo ""
 echo "============================================================"
-echo "All jobs submitted! START_PHASE=${START_PHASE}"
+echo "Phase ${PHASE} submitted."
 echo "Monitor: squeue -u \$(whoami)"
 echo "Email notifications on FAIL/END -> ${EMAIL}"
 echo "============================================================"
