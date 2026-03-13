@@ -52,6 +52,8 @@ BENCHMARK_DIR="/home/xu3/SCOTCH/benchmark"    # This benchmark/ directory
 REF_FASTA="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/fasta/genome.fa"    # Reference genome FASTA
 REF_GTF="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/genes/genes.gtf"           # Gene annotation GTF
 REF_PKL="/home/xu3/SCOTCH/data/geneStructureInformation.pkl"    # SCOTCH annotation pickle
+ISOQUANT_PY="/home/xu3/IsoQuant/isoquant.py"    # Path to isoquant.py script
+ISOQUANT_CONDA_ENV="/mnt/isilon/wang_lab/pengwang/env/isoquant"    # Conda env for IsoQuant
 INPUT_BAM_DIR="/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams"                # Directory with input BAM(s)
 DATA_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/data"                    # Where subsampled BAMs go
 RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"             # Where results go
@@ -276,16 +278,19 @@ submit_isoquant() {
       --cpus-per-task=${ISOQUANT_CPUS} --mem=${ISOQUANT_MEM} --time=${ISOQUANT_TIME} \
       --output=logs/isoquant_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/isoquant_${READ_LABEL}_${MODE}_%j.err \
-      --wrap="${CONDA_INIT} set -euo pipefail; \
+      --wrap="source \$(conda info --base)/etc/profile.d/conda.sh && \
+        conda activate singlecell && \
+        set -euo pipefail; \
         ${PREFIX_CMD} \
         /usr/bin/time -v -o ${OUT_BASE}/time_dedup.txt bash -c '${DEDUP_CMD}' 2>&1 | tee ${OUT_BASE}/dedup.log && \
+        conda activate ${ISOQUANT_CONDA_ENV} && \
         /usr/bin/time -v -o ${OUT_BASE}/time_isoquant.txt \
-          isoquant.py \
+          ${ISOQUANT_PY} \
             --reference ${REF_FASTA} --genedb ${REF_GTF} --complete_genedb \
-            ${INPUT_ARG} --data_type nanopore --barcoded_bam \
-            --barcode_tag CB --umi_tag UB ${LABELS_ARG} \
-            --read_group tag:CB --threads ${ISOQUANT_CPUS} \
-            -o ${OUT_BASE}/output \
+            ${INPUT_ARG} --data_type nanopore ${LABELS_ARG} \
+            --read_group tag:IQ --threads ${ISOQUANT_CPUS} \
+            --bam_tags CB,UB,IQ \
+            --output ${OUT_BASE}/output --prefix IsoQuant_ONT \
           2>&1 | tee ${OUT_BASE}/isoquant.log && \
         du -sh ${OUT_BASE}/ > ${OUT_BASE}/disk_usage.txt")
     echo "    IsoQuant: ${JOBID}"
