@@ -48,7 +48,7 @@ EMAIL="cyranvvv@hotmail.com"
 
 # --- Paths ---
 SCOTCH_DIR="/home/xu3/SCOTCH"    # Root of SCOTCH codes
-BENCHMARK_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation"    # This benchmark/ directory
+BENCHMARK_DIR="/home/xu3/SCOTCH/benchmark"    # This benchmark/ directory
 REF_FASTA="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/fasta/genome.fa"    # Reference genome FASTA
 REF_GTF="/scr1/users/xu3/singlecell/ref/refdata-gex-GRCh38-2020-A/genes/genes.gtf"           # Gene annotation GTF
 REF_PKL="/home/xu3/SCOTCH/data/geneStructureInformation.pkl"    # SCOTCH annotation pickle
