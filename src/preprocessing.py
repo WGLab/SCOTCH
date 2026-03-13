@@ -3,6 +3,7 @@ import pickle
 from itertools import chain
 import numpy as np
 import os
+import sqlite3
 from Bio.Seq import Seq
 import networkx as nx
 import community.community_louvain as community_louvain
@@ -52,6 +53,80 @@ def load_pickle(file):
     else:
         data = None
     return data
+
+
+class SqliteDict:
+    """Read-only or write-once on-disk key-value store backed by sqlite3.
+    Provides dict[key] interface for point lookups without loading into RAM."""
+
+    def __init__(self, path, flag='r'):
+        """Open a SqliteDict.
+        flag='r': read-only (file must exist).
+        flag='c': create/overwrite for writing.
+        """
+        self.path = path
+        if flag == 'c':
+            if os.path.exists(path):
+                os.remove(path)
+            self.conn = sqlite3.connect(path)
+            self.conn.execute("CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT)")
+            self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=OFF")
+            self._writable = True
+        else:
+            self.conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            self._writable = False
+
+    def __getitem__(self, key):
+        row = self.conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        if row is None:
+            raise KeyError(key)
+        return row[0]
+
+    def __contains__(self, key):
+        return self.conn.execute("SELECT 1 FROM kv WHERE key=?", (key,)).fetchone() is not None
+
+    def __setitem__(self, key, value):
+        self.conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, value))
+
+    def batch_insert(self, items):
+        """Insert many (key, value) pairs efficiently."""
+        self.conn.executemany("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", items)
+        self.conn.commit()
+
+    def commit(self):
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+    def get(self, key, default=None):
+        row = self.conn.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+        return row[0] if row is not None else default
+
+
+def convert_pkl_to_sqlite(pkl_path, sqlite_path, logger=None):
+    """Convert a pickle dict file to a SqliteDict file.
+    Does NOT delete the original pkl file."""
+    if os.path.exists(sqlite_path):
+        if logger:
+            logger.info(f"SqliteDict already exists: {sqlite_path}, skipping conversion.")
+        return
+    if not os.path.exists(pkl_path):
+        return
+    if logger:
+        logger.info(f"Converting {pkl_path} -> {sqlite_path}")
+    with open(pkl_path, 'rb') as f:
+        data = pickle.load(f)
+    if data is None:
+        return
+    db = SqliteDict(sqlite_path, flag='c')
+    db.batch_insert(((str(k), str(v)) for k, v in data.items()))
+    db.close()
+    del data
+    if logger:
+        logger.info(f"Conversion complete: {sqlite_path}")
+
 
 def unpack_list(x):
     return list(chain(*x))

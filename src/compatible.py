@@ -187,11 +187,13 @@ def summarise_auxillary(target):
 class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
                  small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
-                 reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None, genenames_subset = None):
+                 reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None, genenames_subset = None,
+                 save_mem = True):
         self.logger = logger
         self.target = target
         self.bam_path = bam_path
         self.barcode_umi = barcode_umi
+        self.save_mem = save_mem
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         self.ref_fasta_path = ref_fasta_path if 'parse' not in platform else None
         self.fasta_handle = pysam.FastaFile(ref_fasta_path) if self.ref_fasta_path is not None else None
@@ -209,6 +211,9 @@ class ReadMapper:
         self.bamInfo_pkl_path_list = [os.path.join(target_, 'bam/bam.Info.pkl') for target_ in target]#bamInfo_pkl_file
         self.bamInfo2_pkl_path_list = [os.path.join(target_, 'bam/bam.Info2.pkl') for target_ in target]#bamInfo2_pkl_file
         self.bamInfo3_pkl_path_list = [os.path.join(target_, 'bam/bam.Info3.pkl') for target_ in target] # bamInfo2_pkl_file
+        self.bamInfo_sqlite_path_list = [os.path.join(target_, 'bam/bam.Info.sqlite') for target_ in target]
+        self.bamInfo2_sqlite_path_list = [os.path.join(target_, 'bam/bam.Info2.sqlite') for target_ in target]
+        self.bamInfo3_sqlite_path_list = [os.path.join(target_, 'bam/bam.Info3.sqlite') for target_ in target]
         self.bamInfo_csv_path_list = [os.path.join(target_, 'bam/bam.Info.csv') for target_ in target]
         # parameters
         self.small_exon_threshold = small_exon_threshold
@@ -225,10 +230,8 @@ class ReadMapper:
             self.nsamples = len(self.target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, "compatible_matrix") for target_ in target] #not for parse
             self.read_mapping_path_list = [os.path.join(target_, "auxillary") for target_ in target] #not for parse
-            self.qname_dict_list = [load_pickle(bamInfo_pkl_path) for bamInfo_pkl_path in self.bamInfo_pkl_path_list]
-            self.qname_cbumi_dict_list = [load_pickle(bamInfo2_pkl_path) for bamInfo2_pkl_path in self.bamInfo2_pkl_path_list]
+            self.qname_dict_list, self.qname_cbumi_dict_list, self.qname_sample_dict_list = self._load_bam_info_dicts()
             self.sorted_bam_path_list = None
-            self.qname_sample_dict_list = [load_pickle(bamInfo3_pkl_path) for bamInfo3_pkl_path in self.bamInfo3_pkl_path_list]
         else:
             self.qname_dict = load_pickle(self.bamInfo_pkl_path_list[0])
             self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path_list[0])
@@ -236,6 +239,56 @@ class ReadMapper:
             self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path_list[0])
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene_list[0])
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
+
+    def _load_bam_info_dicts(self):
+        """Load qname dicts, using sqlite (on-disk) when save_mem=True, falling back to pkl."""
+        qname_dict_list = []
+        qname_cbumi_dict_list = []
+        qname_sample_dict_list = []
+        for i in range(len(self.target)):
+            sqlite_exists = os.path.isfile(self.bamInfo_sqlite_path_list[i])
+            pkl_exists = os.path.isfile(self.bamInfo_pkl_path_list[i])
+            if self.save_mem and sqlite_exists:
+                # Use on-disk sqlite — no RAM for these dicts
+                if self.logger:
+                    self.logger.info(f'Loading bam info from sqlite (memory-efficient): {self.bamInfo_sqlite_path_list[i]}')
+                qname_dict_list.append(SqliteDict(self.bamInfo_sqlite_path_list[i], flag='r'))
+                qname_cbumi_dict_list.append(SqliteDict(self.bamInfo2_sqlite_path_list[i], flag='r'))
+                if os.path.isfile(self.bamInfo3_sqlite_path_list[i]):
+                    qname_sample_dict_list.append(SqliteDict(self.bamInfo3_sqlite_path_list[i], flag='r'))
+                else:
+                    qname_sample_dict_list.append(None)
+            elif self.save_mem and not sqlite_exists and pkl_exists:
+                # Pkl exists but no sqlite — convert on the fly, then use sqlite
+                import warnings
+                warnings.warn(
+                    f"Sqlite files not found but pkl files exist at {self.bamInfo_folder_path_list[i]}. "
+                    f"Converting pkl to sqlite for memory-efficient loading. "
+                    f"To avoid this in the future, re-run the annotation step or use --save_mem_off to load pkl directly.",
+                    UserWarning
+                )
+                if self.logger:
+                    self.logger.warning(
+                        f'Sqlite files not found. Converting pkl -> sqlite at {self.bamInfo_folder_path_list[i]}. '
+                        f'Re-run annotation step to generate sqlite files directly.'
+                    )
+                convert_pkl_to_sqlite(self.bamInfo_pkl_path_list[i], self.bamInfo_sqlite_path_list[i], self.logger)
+                convert_pkl_to_sqlite(self.bamInfo2_pkl_path_list[i], self.bamInfo2_sqlite_path_list[i], self.logger)
+                convert_pkl_to_sqlite(self.bamInfo3_pkl_path_list[i], self.bamInfo3_sqlite_path_list[i], self.logger)
+                qname_dict_list.append(SqliteDict(self.bamInfo_sqlite_path_list[i], flag='r'))
+                qname_cbumi_dict_list.append(SqliteDict(self.bamInfo2_sqlite_path_list[i], flag='r'))
+                if os.path.isfile(self.bamInfo3_sqlite_path_list[i]):
+                    qname_sample_dict_list.append(SqliteDict(self.bamInfo3_sqlite_path_list[i], flag='r'))
+                else:
+                    qname_sample_dict_list.append(None)
+            else:
+                # Fall back to in-memory pkl loading
+                if self.save_mem and self.logger:
+                    self.logger.warning(f'Neither sqlite nor pkl files found at {self.bamInfo_folder_path_list[i]}, attempting pkl load')
+                qname_dict_list.append(load_pickle(self.bamInfo_pkl_path_list[i]))
+                qname_cbumi_dict_list.append(load_pickle(self.bamInfo2_pkl_path_list[i]))
+                qname_sample_dict_list.append(load_pickle(self.bamInfo3_pkl_path_list[i]))
+        return qname_dict_list, qname_cbumi_dict_list, qname_sample_dict_list
     def read_bam(self, chrom = None):
         #if parse: the input length is 1
         # bam_path is a folder
