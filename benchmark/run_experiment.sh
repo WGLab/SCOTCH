@@ -97,6 +97,10 @@ fi
 # Build common sbatch flags
 SBATCH_COMMON="--mail-user=${EMAIL} --mail-type=FAIL,END"
 
+# Conda activation prefix — prepended to every --wrap command
+# Adjust the conda.sh path if your conda is installed elsewhere
+CONDA_INIT="source \$(conda info --base)/etc/profile.d/conda.sh && conda activate singlecell &&"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p logs "${DATA_DIR}" "${RESULTS_BASE}"
 
@@ -143,7 +147,7 @@ submit_scotch() {
       --cpus-per-task=${SCOTCH_ANNOT_CPUS} --mem=${SCOTCH_ANNOT_MEM} --time=${SCOTCH_ANNOT_TIME} \
       --output=logs/scotch_annot_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/scotch_annot_${READ_LABEL}_${MODE}_%j.err \
-      --wrap="set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_annotation.txt \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_annotation.txt \
         python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
           --task annotation --platform 10x-ont \
           ${TARGET_ARGS} ${BAM_ARGS} \
@@ -161,7 +165,7 @@ submit_scotch() {
       --cpus-per-task=1 --mem=${SCOTCH_COMPAT_MEM} --time=${SCOTCH_COMPAT_TIME} \
       --output=logs/scotch_compat_${READ_LABEL}_${MODE}_%A_%a.out \
       --error=logs/scotch_compat_${READ_LABEL}_${MODE}_%A_%a.err \
-      --wrap="set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_compatible_\${SLURM_ARRAY_TASK_ID}.txt \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_compatible_\${SLURM_ARRAY_TASK_ID}.txt \
         python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
           --task 'compatible matrix' --platform 10x-ont \
           ${TARGET_ARGS} ${BAM_ARGS} \
@@ -178,7 +182,7 @@ submit_scotch() {
       --cpus-per-task=1 --mem=${SCOTCH_SUMMARY_MEM} --time=${SCOTCH_SUMMARY_TIME} \
       --output=logs/scotch_summary_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/scotch_summary_${READ_LABEL}_${MODE}_%j.err \
-      --wrap="set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_summary.txt \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_summary.txt \
         python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
           --task summary ${TARGET_ARGS} \
         2>&1 | tee ${OUT_BASE}/summary.log")
@@ -192,7 +196,7 @@ submit_scotch() {
       --cpus-per-task=${SCOTCH_COUNT_CPUS} --mem=${SCOTCH_COUNT_MEM} --time=${SCOTCH_COUNT_TIME} \
       --output=logs/scotch_count_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/scotch_count_${READ_LABEL}_${MODE}_%j.err \
-      --wrap="set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_count.txt \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_count.txt \
         python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
           --task 'count matrix' --platform 10x-ont \
           ${TARGET_ARGS} --workers ${SCOTCH_COUNT_CPUS} --group_novel \
@@ -246,7 +250,7 @@ submit_isoquant() {
       --cpus-per-task=${ISOQUANT_CPUS} --mem=${ISOQUANT_MEM} --time=${ISOQUANT_TIME} \
       --output=logs/isoquant_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/isoquant_${READ_LABEL}_${MODE}_%j.err \
-      --wrap="set -euo pipefail; \
+      --wrap="${CONDA_INIT} set -euo pipefail; \
         /usr/bin/time -v -o ${OUT_BASE}/time_dedup.txt bash -c '${DEDUP_CMD}' 2>&1 | tee ${OUT_BASE}/dedup.log && \
         /usr/bin/time -v -o ${OUT_BASE}/time_isoquant.txt \
           isoquant.py \
@@ -326,7 +330,7 @@ run_phase_0() {
       --job-name=bench_prep \
       --cpus-per-task=${PREP_CPUS} --mem=${PREP_MEM} --time=${PREP_TIME} \
       --output=logs/prep_%j.out --error=logs/prep_%j.err \
-      --wrap="bash ${SCRIPT_DIR}/00_prepare_data.sh ${INPUT_BAM_DIR} ${DATA_DIR}")
+      --wrap="${CONDA_INIT} bash ${SCRIPT_DIR}/00_prepare_data.sh ${INPUT_BAM_DIR} ${DATA_DIR}")
     echo "    Subsample: ${PREP_JOB}"
 
     # Step 0b: Prefix barcodes for multi-sample
@@ -336,7 +340,7 @@ run_phase_0() {
       --job-name=bench_prefix \
       --cpus-per-task=1 --mem=16G --time=04:00:00 \
       --output=logs/prefix_%j.out --error=logs/prefix_%j.err \
-      --wrap="python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
+      --wrap="${CONDA_INIT} python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
     echo "    Prefix barcodes: ${PREFIX_JOB}"
 }
 
@@ -438,7 +442,7 @@ run_all() {
       --job-name=bench_collect \
       --cpus-per-task=1 --mem=8G --time=00:30:00 \
       --output=logs/collect_%j.out --error=logs/collect_%j.err \
-      --wrap="python3 ${SCRIPT_DIR}/04_collect_metrics.py ${RESULTS_BASE} -o ${RESULTS_BASE}/benchmark_metrics.tsv && \
+      --wrap="${CONDA_INIT} python3 ${SCRIPT_DIR}/04_collect_metrics.py ${RESULTS_BASE} -o ${RESULTS_BASE}/benchmark_metrics.tsv && \
         python3 ${SCRIPT_DIR}/05_plot_results.py ${RESULTS_BASE}/benchmark_metrics.tsv && \
         echo 'Benchmark complete. Results in ${RESULTS_BASE}/benchmark_metrics.tsv'")
     echo "  Collect metrics: ${COLLECT_JOB}"
