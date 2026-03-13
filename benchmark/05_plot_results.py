@@ -5,20 +5,29 @@ Usage:
     python3 05_plot_results.py benchmark_metrics.tsv
 """
 
-import sys
 import argparse
+from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-READ_ORDER = {"5M": 5, "10M": 10, "15M": 15}
+READ_ORDER = {"1M": 1, "5M": 5, "10M": 10}
 
 
 def load_data(path):
     df = pd.read_csv(path, sep="\t")
     df["read_millions"] = df["read_label"].map(READ_ORDER)
     return df
+
+
+def highest_single_label(df):
+    single = df[df["bam_mode"] == "single"]
+    if single.empty:
+        return None
+    labels = single["read_label"].dropna().unique().tolist()
+    labels.sort(key=lambda label: READ_ORDER.get(label, -1))
+    return labels[-1] if labels else None
 
 
 def plot_scalability_wall(df, ax):
@@ -39,7 +48,7 @@ def plot_scalability_wall(df, ax):
     ax.set_ylabel("Wall time (minutes)")
     ax.set_title("Runtime Scalability")
     ax.legend()
-    ax.set_xticks([5, 10, 15])
+    ax.set_xticks([1, 5, 10])
 
 
 def plot_scalability_mem(df, ax):
@@ -59,7 +68,7 @@ def plot_scalability_mem(df, ax):
     ax.set_ylabel("Peak memory (GB)")
     ax.set_title("Memory Scalability")
     ax.legend()
-    ax.set_xticks([5, 10, 15])
+    ax.set_xticks([1, 5, 10])
 
 
 def plot_cpu_hours(df, ax):
@@ -78,15 +87,16 @@ def plot_cpu_hours(df, ax):
     ax.set_ylabel("CPU-hours")
     ax.set_title("CPU-Hours Scalability")
     ax.legend()
-    ax.set_xticks([5, 10, 15])
+    ax.set_xticks([1, 5, 10])
 
 
 def plot_scotch_breakdown(df, ax):
-    """SCOTCH per-step breakdown (single BAM, 15M reads)."""
+    """SCOTCH per-step breakdown for the largest single-sample input."""
+    focus_label = highest_single_label(df)
     sub = df[
         (df["tool"] == "scotch") &
         (df["bam_mode"] == "single") &
-        (df["read_label"] == "15M") &
+        (df["read_label"] == focus_label) &
         (~df["step"].isin(["total"]))
     ]
 
@@ -103,22 +113,36 @@ def plot_scotch_breakdown(df, ax):
     ax.set_yticks(range(len(sub)))
     ax.set_yticklabels([s.capitalize() for s in sub.index])
     ax.set_xlabel("Wall time (minutes)")
-    ax.set_title("SCOTCH Step Breakdown (15M reads)")
+    ax.set_title(f"SCOTCH Step Breakdown ({focus_label})" if focus_label else "SCOTCH Step Breakdown")
     ax.invert_yaxis()
 
 
 def plot_multisample(df, ax):
-    """Multi-sample vs single-sample comparison at 15M reads."""
+    """Compare the largest single-sample benchmark with the multi-sample condition."""
     totals = df[df["step"] == "total"]
+    focus_single = highest_single_label(df)
 
-    # Single 15M and multi 15M for both tools
     data = []
     for tool in ["scotch", "isoquant"]:
-        for mode in ["single", "multi"]:
-            sub = totals[(totals["tool"] == tool) & (totals["bam_mode"] == mode) & (totals["read_label"] == "15M")]
-            if not sub.empty:
-                label = f"{'SCOTCH' if tool == 'scotch' else 'IsoQuant'}\n({mode})"
-                data.append({"label": label, "wall_min": sub.iloc[0]["wall_seconds"] / 60})
+        single = totals[
+            (totals["tool"] == tool) &
+            (totals["bam_mode"] == "single") &
+            (totals["read_label"] == focus_single)
+        ]
+        multi = totals[
+            (totals["tool"] == tool) &
+            (totals["bam_mode"] == "multi")
+        ]
+        if not single.empty:
+            data.append({
+                "label": f"{'SCOTCH' if tool == 'scotch' else 'IsoQuant'}\n(single {focus_single})",
+                "wall_min": single.iloc[0]["wall_seconds"] / 60,
+            })
+        if not multi.empty:
+            data.append({
+                "label": f"{'SCOTCH' if tool == 'scotch' else 'IsoQuant'}\n(multi {multi.iloc[0]['read_label']})",
+                "wall_min": multi.iloc[0]["wall_seconds"] / 60,
+            })
 
     if not data:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", transform=ax.transAxes)
@@ -135,14 +159,21 @@ def plot_multisample(df, ax):
     ax.set_xticks(range(len(data)))
     ax.set_xticklabels(labels, fontsize=9)
     ax.set_ylabel("Wall time (minutes)")
-    ax.set_title("Single vs Multi-Sample (15M reads)")
+    ax.set_title("Single vs Multi-Sample")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate benchmark plots")
     parser.add_argument("metrics_tsv", help="Path to benchmark_metrics.tsv")
+    parser.add_argument(
+        "-o",
+        "--output-prefix",
+        default=None,
+        help="Output path prefix (default: <metrics dir>/benchmark_results)",
+    )
     args = parser.parse_args()
     df = load_data(args.metrics_tsv)
+    output_prefix = args.output_prefix or str(Path(args.metrics_tsv).resolve().parent / "benchmark_results")
 
     fig, axes = plt.subplots(2, 3, figsize=(16, 10))
 
@@ -177,9 +208,9 @@ def main():
     ax.set_title("Summary", fontsize=11)
 
     plt.tight_layout()
-    plt.savefig("benchmark_results.pdf", dpi=150, bbox_inches="tight")
-    plt.savefig("benchmark_results.png", dpi=150, bbox_inches="tight")
-    print("Saved benchmark_results.pdf / .png")
+    plt.savefig(f"{output_prefix}.pdf", dpi=150, bbox_inches="tight")
+    plt.savefig(f"{output_prefix}.png", dpi=150, bbox_inches="tight")
+    print(f"Saved {output_prefix}.pdf / .png")
 
 
 if __name__ == "__main__":

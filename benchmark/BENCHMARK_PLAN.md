@@ -7,22 +7,22 @@
 | Axis | Levels | Purpose |
 |------|--------|---------|
 | **Tool** | SCOTCH, IsoQuant | Head-to-head |
-| **Read count** | 5M, 10M, 15M | Scalability curve (cell count reported post hoc) |
-| **Sample mode** | Single (1 sample), Multi (3 samples x 5M = 15M total) | Multi-sample overhead |
+| **Read count** | 1M, 5M, 10M (single-sample) | Scalability curve (cell count reported post hoc) |
+| **Sample mode** | Single (1 sample), Multi (3 samples x 5M) | Multi-sample overhead |
 | **Platform** | 10x-ONT | Single platform |
 
 ### 1.2 Experiment Matrix
 
 | # | Tool | Read level | Mode | Description |
 |---|------|-----------|------|-------------|
-| 1 | SCOTCH | 5M | single | 1 BAM, 5M reads |
-| 2 | SCOTCH | 10M | single | 1 BAM, 10M reads |
-| 3 | SCOTCH | 15M | single | 1 BAM, 15M reads |
-| 4 | SCOTCH | 15M | multi | 3 BAMs x 5M reads |
-| 5 | IsoQuant | 5M | single | 1 BAM, 5M reads |
-| 6 | IsoQuant | 10M | single | 1 BAM, 10M reads |
-| 7 | IsoQuant | 15M | single | 1 BAM, 15M reads |
-| 8 | IsoQuant | 15M | multi | 3 BAMs x 5M reads |
+| 1 | SCOTCH | 1M | single | 1 BAM, 1M reads |
+| 2 | SCOTCH | 5M | single | 1 BAM, 5M reads |
+| 3 | SCOTCH | 10M | single | 1 BAM, 10M reads |
+| 4 | SCOTCH | 3x5M | multi | 3 BAMs x 5M reads |
+| 5 | IsoQuant | 1M | single | 1 BAM, 1M reads |
+| 6 | IsoQuant | 5M | single | 1 BAM, 5M reads |
+| 7 | IsoQuant | 10M | single | 1 BAM, 10M reads |
+| 8 | IsoQuant | 3x5M | multi | 3 BAMs x 5M reads |
 
 **Total: 8 experiments.** No replicates.
 
@@ -42,11 +42,11 @@
 
 | Level | Target reads | Used in |
 |-------|-------------|---------|
+| 1M | 1,000,000 | Single-sample scalability |
 | 5M | 5,000,000 | Single-sample scalability; multi-sample (per sample) |
 | 10M | 10,000,000 | Single-sample scalability |
-| 15M | 15,000,000 | Single-sample scalability |
 
-For multi-sample: 3 independent BAMs subsampled to 5M reads each (different seeds), totaling 15M reads -- directly comparable to the 15M single-sample run.
+For multi-sample: 3 independent BAMs are subsampled to 5M reads each (different seeds). The benchmark records this condition as `3x5M` rather than folding it into the single-sample read-level axis.
 
 ### 1.5 Shared Resources
 
@@ -64,7 +64,7 @@ Both tools use the same:
 - `ACGTACGT-1` in sample 1 becomes `S1_ACGTACGT-1`
 - `ACGTACGT-1` in sample 2 becomes `S2_ACGTACGT-1`
 
-This is done by `00b_prefix_barcodes.py`, which rewrites the CB tag in each BAM. The same prefixed BAMs are also used for SCOTCH multi-sample to keep inputs identical.
+This is done by `00b_prefix_barcodes.py`, which rewrites the CB tag in each BAM. SCOTCH multi-sample uses the original BAM triplet because it already keeps samples separate via distinct `--target` directories.
 
 After prefixing, IsoQuant can safely use `--read_group tag:CB` and each sample's cells are distinct.
 
@@ -145,11 +145,11 @@ IsoQuant total = dedup time + IsoQuant run time.
 
 | Reads | Cells | SCOTCH wall (min) | SCOTCH CPU-hrs | SCOTCH peak mem (GB) | IsoQuant wall (min) | IsoQuant CPU-hrs | IsoQuant peak mem (GB) |
 |------:|------:|-------------------:|---------------:|---------------------:|--------------------:|-----------------:|----------------------:|
+| 1M | | | | | | | |
 | 5M | | | | | | | |
 | 10M | | | | | | | |
-| 15M | | | | | | | |
 
-### Table 2: SCOTCH Per-Step Breakdown (single BAM, 15M reads)
+### Table 2: SCOTCH Per-Step Breakdown (single BAM, 10M reads)
 
 | Step | Wall time (min) | Peak RSS (GB) | CPU time (min) | CPUs |
 |------|----------------:|--------------:|---------------:|-----:|
@@ -159,14 +159,14 @@ IsoQuant total = dedup time + IsoQuant run time.
 | Count matrix | | | | 10 |
 | **Total** | | | | |
 
-### Table 3: Multi-Sample Performance (3 samples x 5M reads = 15M total)
+### Table 3: Multi-Sample Performance (3 samples x 5M reads)
 
 | Tool | Wall time (min) | CPU-hours | Peak mem (GB) |
 |------|----------------:|----------:|--------------:|
 | SCOTCH | | | |
 | IsoQuant | | | |
 
-### Table 4: Output Comparison (single BAM, 15M reads)
+### Table 4: Output Comparison (single BAM, 10M reads)
 
 | Metric | SCOTCH | IsoQuant |
 |--------|-------:|---------:|
@@ -191,9 +191,9 @@ benchmark/
 ├── 04_collect_metrics.py            # Parse time/memory logs -> TSV
 ├── 05_plot_results.py               # Generate figures
 ├── data/                            # Subsampled BAMs
+│   ├── reads_1M.bam
 │   ├── reads_5M.bam
 │   ├── reads_10M.bam
-│   ├── reads_15M.bam
 │   ├── multi_s1_5M.bam              # Multi-sample (original)
 │   ├── multi_s2_5M.bam
 │   ├── multi_s3_5M.bam
@@ -202,15 +202,15 @@ benchmark/
 │   └── multi_s3_5M.prefixed.bam
 ├── results/
 │   ├── scotch/
+│   │   ├── single/reads_1M/
 │   │   ├── single/reads_5M/
 │   │   ├── single/reads_10M/
-│   │   ├── single/reads_15M/
-│   │   └── multi/reads_15M/
+│   │   └── multi/reads_3x5M/
 │   └── isoquant/
+│       ├── single/reads_1M/
 │       ├── single/reads_5M/
 │       ├── single/reads_10M/
-│       ├── single/reads_15M/
-│       └── multi/reads_15M/
+│       └── multi/reads_3x5M/
 ├── logs/                            # SLURM stdout/stderr
 ├── benchmark_metrics.tsv            # Collected metrics
 └── benchmark_results.pdf            # Final figure
@@ -228,10 +228,10 @@ cd benchmark/
 #    - Email is pre-set to cyranvvv@hotmail.com
 
 # 2. Run:
-bash run_experiment.sh
+bash run_experiment.sh all
 
 # This automatically:
-#   Phase 0: Subsamples BAMs + prefixes barcodes for multi-sample
+#   Phase 0: Subsamples BAMs
 #   Phase 1-4: Submits all 8 experiments with afterok dependencies
 #   Phase 5: Collects metrics + generates plots after all experiments finish
 #
@@ -243,6 +243,6 @@ bash run_experiment.sh
 
 - **Timing accuracy**: `/usr/bin/time -v` measures real process time, not SLURM queue wait. This is critical for accurate benchmarking.
 - **Fair CPU allocation**: SCOTCH gets 10 CPUs for annotation/count, 10 x 1 CPU for compatible matrix. IsoQuant gets 10 threads. Both use comparable resources.
-- **Multi-sample barcode prefixing**: Required for IsoQuant to distinguish cells across samples. Applied to all tools for consistency.
+- **Multi-sample barcode prefixing**: Required for IsoQuant to distinguish cells across samples. It is timed inside the IsoQuant multi-sample job.
 - **Summary step**: SCOTCH requires a summary step after compatible matrix to merge per-job outputs before generating count matrices.
 - **Cell count reporting**: After subsampling, count unique CB tags: `samtools view subset.bam | awk '{for(i=12;i<=NF;i++) if($i~/^CB:Z:/) print substr($i,6)}' | sort -u | wc -l`.

@@ -11,10 +11,10 @@
 #   bash run_experiment.sh <phase>
 #
 # Phases:
-#   0  — Data preparation (subsampling + barcode prefixing)
-#   1  — SCOTCH single-sample (5M, 10M, 15M)
+#   0  — Data preparation (subsampling)
+#   1  — SCOTCH single-sample (1M, 5M, 10M)
 #   2  — SCOTCH multi-sample (3 x 5M)
-#   3  — IsoQuant single-sample (5M, 10M, 15M)
+#   3  — IsoQuant single-sample (1M, 5M, 10M)
 #   4  — IsoQuant multi-sample (3 x 5M)
 #   5  — Collect metrics + plot (checks all Phase 1-4 outputs exist first)
 #   all — Run phases 0-4 with SLURM dependency chains (old behavior)
@@ -84,10 +84,10 @@ if [ -z "${PHASE}" ]; then
     echo "Usage: bash run_experiment.sh <phase>"
     echo ""
     echo "Phases:"
-    echo "  0    Data preparation (subsampling + barcode prefixing)"
-    echo "  1    SCOTCH single-sample (5M, 10M, 15M)"
+    echo "  0    Data preparation (subsampling)"
+    echo "  1    SCOTCH single-sample (1M, 5M, 10M)"
     echo "  2    SCOTCH multi-sample (3 x 5M)"
-    echo "  3    IsoQuant single-sample (5M, 10M, 15M)"
+    echo "  3    IsoQuant single-sample (1M, 5M, 10M)"
     echo "  4    IsoQuant multi-sample (3 x 5M)"
     echo "  5    Collect metrics + plot (checks outputs exist first)"
     echo "  all  Run phases 0-4 with SLURM dependency chains"
@@ -285,8 +285,8 @@ submit_isoquant() {
 check_phase5_ready() {
     local MISSING=()
 
-    # SCOTCH single-sample: 5M, 10M, 15M
-    for LABEL in 5M 10M 15M; do
+    # SCOTCH single-sample: 1M, 5M, 10M
+    for LABEL in 1M 5M 10M; do
         local BASE="${RESULTS_BASE}/scotch/single/reads_${LABEL}"
         for STEP in annotation summary count; do
             [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/single/${LABEL}/time_${STEP}.txt")
@@ -295,25 +295,25 @@ check_phase5_ready() {
         ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/single/${LABEL}/time_compatible_*.txt")
     done
 
-    # SCOTCH multi-sample: 15M
-    local BASE="${RESULTS_BASE}/scotch/multi/reads_15M"
+    # SCOTCH multi-sample: 3 x 5M
+    local BASE="${RESULTS_BASE}/scotch/multi/reads_3x5M"
     for STEP in annotation summary count; do
-        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/multi/15M/time_${STEP}.txt")
+        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/multi/3x5M/time_${STEP}.txt")
     done
-    ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/multi/15M/time_compatible_*.txt")
+    ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/multi/3x5M/time_compatible_*.txt")
 
-    # IsoQuant single-sample: 5M, 10M, 15M
-    for LABEL in 5M 10M 15M; do
+    # IsoQuant single-sample: 1M, 5M, 10M
+    for LABEL in 1M 5M 10M; do
         local BASE="${RESULTS_BASE}/isoquant/single/reads_${LABEL}"
         for STEP in dedup isoquant; do
             [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/single/${LABEL}/time_${STEP}.txt")
         done
     done
 
-    # IsoQuant multi-sample: 15M (includes prefix step)
-    local BASE="${RESULTS_BASE}/isoquant/multi/reads_15M"
+    # IsoQuant multi-sample: 3 x 5M (includes prefix step)
+    local BASE="${RESULTS_BASE}/isoquant/multi/reads_3x5M"
     for STEP in prefix dedup isoquant; do
-        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/multi/15M/time_${STEP}.txt")
+        [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/multi/3x5M/time_${STEP}.txt")
     done
 
     if [ ${#MISSING[@]} -gt 0 ]; then
@@ -350,7 +350,7 @@ run_phase_0() {
 
 run_phase_1() {
     echo "--- Phase 1: SCOTCH Single-Sample ---"
-    for LABEL in 5M 10M 15M; do
+    for LABEL in 1M 5M 10M; do
         echo "  SCOTCH single ${LABEL}:"
         submit_scotch "${LABEL}" single
     done
@@ -358,13 +358,13 @@ run_phase_1() {
 
 run_phase_2() {
     echo "--- Phase 2: SCOTCH Multi-Sample ---"
-    echo "  SCOTCH multi 15M:"
-    submit_scotch 15M multi
+    echo "  SCOTCH multi 3x5M:"
+    submit_scotch 3x5M multi
 }
 
 run_phase_3() {
     echo "--- Phase 3: IsoQuant Single-Sample ---"
-    for LABEL in 5M 10M 15M; do
+    for LABEL in 1M 5M 10M; do
         echo "  IsoQuant single ${LABEL}:"
         submit_isoquant "${LABEL}" single
     done
@@ -372,8 +372,8 @@ run_phase_3() {
 
 run_phase_4() {
     echo "--- Phase 4: IsoQuant Multi-Sample ---"
-    echo "  IsoQuant multi 15M:"
-    submit_isoquant 15M multi
+    echo "  IsoQuant multi 3x5M:"
+    submit_isoquant 3x5M multi
 }
 
 run_phase_5() {
@@ -411,7 +411,7 @@ run_all() {
 
     echo ""
     echo "--- Phase 1: SCOTCH Single-Sample ---"
-    for LABEL in 5M 10M 15M; do
+    for LABEL in 1M 5M 10M; do
         echo "  SCOTCH single ${LABEL}:"
         submit_scotch "${LABEL}" single "${LAST_PREP_JOB}"
         ALL_FINAL_JOBS+=("${SCOTCH_LAST_JOB}")
@@ -419,13 +419,13 @@ run_all() {
 
     echo ""
     echo "--- Phase 2: SCOTCH Multi-Sample ---"
-    echo "  SCOTCH multi 15M:"
-    submit_scotch 15M multi "${LAST_PREP_JOB}"
+    echo "  SCOTCH multi 3x5M:"
+    submit_scotch 3x5M multi "${LAST_PREP_JOB}"
     ALL_FINAL_JOBS+=("${SCOTCH_LAST_JOB}")
 
     echo ""
     echo "--- Phase 3: IsoQuant Single-Sample ---"
-    for LABEL in 5M 10M 15M; do
+    for LABEL in 1M 5M 10M; do
         echo "  IsoQuant single ${LABEL}:"
         submit_isoquant "${LABEL}" single "${LAST_PREP_JOB}"
         ALL_FINAL_JOBS+=("${ISOQUANT_LAST_JOB}")
@@ -433,8 +433,8 @@ run_all() {
 
     echo ""
     echo "--- Phase 4: IsoQuant Multi-Sample ---"
-    echo "  IsoQuant multi 15M:"
-    submit_isoquant 15M multi "${LAST_PREP_JOB}"
+    echo "  IsoQuant multi 3x5M:"
+    submit_isoquant 3x5M multi "${LAST_PREP_JOB}"
     ALL_FINAL_JOBS+=("${ISOQUANT_LAST_JOB}")
 
     # Phase 5: after all experiments
