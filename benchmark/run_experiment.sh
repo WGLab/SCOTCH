@@ -30,6 +30,11 @@ set -euo pipefail
 # --- Email for SLURM notifications (FAIL + END) ---
 EMAIL="cyranvvv@hotmail.com"
 
+# --- Start from a specific phase (0-5) ---
+# Set to 0 to run everything. Set to 1 to skip data prep, etc.
+# If START_PHASE > 0, data prep is skipped (assumes BAMs already exist in DATA_DIR).
+START_PHASE=0
+
 # --- Paths ---
 SCOTCH_DIR="/home/xu3/SCOTCH"    # Root of SCOTCH codes
 BENCHMARK_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation"    # This benchmark/ directory
@@ -39,7 +44,6 @@ REF_PKL="/home/xu3/SCOTCH/data/geneStructureInformation.pkl"    # SCOTCH annotat
 INPUT_BAM_DIR="/mnt/isilon/wang_lab/xinya/projects/single_cell_pipeline/CAG_SingleCell/sample7-R10-allpass-v4/wf-single-cell-v1-output-sample7R10-allpass-ed1/reseq/bams"                # Directory with input BAM(s)
 DATA_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/data"                    # Where subsampled BAMs go
 RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"             # Where results go
-
 
 # --- Resource settings: SCOTCH ---
 SCOTCH_ANNOT_CPUS=10                                # CPUs for annotation step
@@ -71,7 +75,8 @@ PREP_TIME=06:00:00                                  # Time limit for subsampling
 # END USER CONFIG — Do not edit below unless you know what you're doing
 # =============================================================================
 
-SBATCH_COMMON="${SBATCH_COMMON} --mail-user=${EMAIL} --mail-type=FAIL,END"
+# Build common sbatch flags
+SBATCH_COMMON="--mail-user=${EMAIL} --mail-type=FAIL,END"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p logs "${DATA_DIR}" "${RESULTS_BASE}"
@@ -241,98 +246,122 @@ submit_isoquant() {
 # =============================================================================
 # PHASE 0: Data Preparation
 # =============================================================================
-echo "--- Phase 0: Data Preparation ---"
+PREFIX_JOB=""
+if [ ${START_PHASE} -le 0 ]; then
+    echo "--- Phase 0: Data Preparation ---"
 
-# Step 0a: Subsample BAMs
-echo "  Submitting: subsample BAMs..."
-PREP_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
-  --job-name=bench_prep \
-  --cpus-per-task=${PREP_CPUS} --mem=${PREP_MEM} --time=${PREP_TIME} \
-  --output=logs/prep_%j.out --error=logs/prep_%j.err \
-  --wrap="bash ${SCRIPT_DIR}/00_prepare_data.sh ${INPUT_BAM_DIR} ${DATA_DIR}")
-echo "    Subsample: ${PREP_JOB}"
+    # Step 0a: Subsample BAMs
+    echo "  Submitting: subsample BAMs..."
+    PREP_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
+      --job-name=bench_prep \
+      --cpus-per-task=${PREP_CPUS} --mem=${PREP_MEM} --time=${PREP_TIME} \
+      --output=logs/prep_%j.out --error=logs/prep_%j.err \
+      --wrap="bash ${SCRIPT_DIR}/00_prepare_data.sh ${INPUT_BAM_DIR} ${DATA_DIR}")
+    echo "    Subsample: ${PREP_JOB}"
 
-# Step 0b: Prefix barcodes for multi-sample
-echo "  Submitting: prefix barcodes..."
-PREFIX_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
-  --dependency=afterok:${PREP_JOB} \
-  --job-name=bench_prefix \
-  --cpus-per-task=1 --mem=16G --time=04:00:00 \
-  --output=logs/prefix_%j.out --error=logs/prefix_%j.err \
-  --wrap="python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
-echo "    Prefix barcodes: ${PREFIX_JOB}"
+    # Step 0b: Prefix barcodes for multi-sample
+    echo "  Submitting: prefix barcodes..."
+    PREFIX_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
+      --dependency=afterok:${PREP_JOB} \
+      --job-name=bench_prefix \
+      --cpus-per-task=1 --mem=16G --time=04:00:00 \
+      --output=logs/prefix_%j.out --error=logs/prefix_%j.err \
+      --wrap="python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
+    echo "    Prefix barcodes: ${PREFIX_JOB}"
+else
+    echo "--- Phase 0: SKIPPED (START_PHASE=${START_PHASE}) ---"
+    echo "  Assuming subsampled + prefixed BAMs already exist in ${DATA_DIR}"
+fi
 
 # =============================================================================
 # PHASE 1: SCOTCH Single-Sample (5M, 10M, 15M) — parallel
 # =============================================================================
-echo ""
-echo "--- Phase 1: SCOTCH Single-Sample ---"
-
 ALL_SCOTCH_JOBS=()
-for LABEL in 5M 10M 15M; do
-    echo "  SCOTCH single ${LABEL}:"
-    submit_scotch "${LABEL}" single "${PREFIX_JOB}"
-    ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
-done
+if [ ${START_PHASE} -le 1 ]; then
+    echo ""
+    echo "--- Phase 1: SCOTCH Single-Sample ---"
+
+    for LABEL in 5M 10M 15M; do
+        echo "  SCOTCH single ${LABEL}:"
+        submit_scotch "${LABEL}" single "${PREFIX_JOB}"
+        ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
+    done
+else
+    echo ""
+    echo "--- Phase 1: SKIPPED (START_PHASE=${START_PHASE}) ---"
+fi
 
 # =============================================================================
 # PHASE 2: SCOTCH Multi-Sample (3 x 5M)
 # =============================================================================
-echo ""
-echo "--- Phase 2: SCOTCH Multi-Sample ---"
-echo "  SCOTCH multi 15M:"
-submit_scotch 15M multi "${PREFIX_JOB}"
-ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
+if [ ${START_PHASE} -le 2 ]; then
+    echo ""
+    echo "--- Phase 2: SCOTCH Multi-Sample ---"
+    echo "  SCOTCH multi 15M:"
+    submit_scotch 15M multi "${PREFIX_JOB}"
+    ALL_SCOTCH_JOBS+=("${SCOTCH_LAST_JOB}")
+else
+    echo ""
+    echo "--- Phase 2: SKIPPED (START_PHASE=${START_PHASE}) ---"
+fi
 
 # =============================================================================
 # PHASE 3: IsoQuant Single-Sample (5M, 10M, 15M) — parallel
 # =============================================================================
-echo ""
-echo "--- Phase 3: IsoQuant Single-Sample ---"
-
 ALL_ISOQUANT_JOBS=()
-for LABEL in 5M 10M 15M; do
-    echo "  IsoQuant single ${LABEL}:"
-    submit_isoquant "${LABEL}" single "${PREFIX_JOB}"
-    ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
-done
+if [ ${START_PHASE} -le 3 ]; then
+    echo ""
+    echo "--- Phase 3: IsoQuant Single-Sample ---"
+
+    for LABEL in 5M 10M 15M; do
+        echo "  IsoQuant single ${LABEL}:"
+        submit_isoquant "${LABEL}" single "${PREFIX_JOB}"
+        ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
+    done
+else
+    echo ""
+    echo "--- Phase 3: SKIPPED (START_PHASE=${START_PHASE}) ---"
+fi
 
 # =============================================================================
 # PHASE 4: IsoQuant Multi-Sample (3 x 5M)
 # =============================================================================
-echo ""
-echo "--- Phase 4: IsoQuant Multi-Sample ---"
-echo "  IsoQuant multi 15M:"
-submit_isoquant 15M multi "${PREFIX_JOB}"
-ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
+if [ ${START_PHASE} -le 4 ]; then
+    echo ""
+    echo "--- Phase 4: IsoQuant Multi-Sample ---"
+    echo "  IsoQuant multi 15M:"
+    submit_isoquant 15M multi "${PREFIX_JOB}"
+    ALL_ISOQUANT_JOBS+=("${ISOQUANT_LAST_JOB}")
+else
+    echo ""
+    echo "--- Phase 4: SKIPPED (START_PHASE=${START_PHASE}) ---"
+fi
 
 # =============================================================================
 # PHASE 5: Collect Metrics (after ALL experiments finish)
 # =============================================================================
-echo ""
-echo "--- Phase 5: Metrics Collection ---"
+if [ ${#ALL_SCOTCH_JOBS[@]} -gt 0 ] || [ ${#ALL_ISOQUANT_JOBS[@]} -gt 0 ]; then
+    echo ""
+    echo "--- Phase 5: Metrics Collection ---"
 
-# Build dependency string: afterok:job1:job2:job3:...
-ALL_JOBS=("${ALL_SCOTCH_JOBS[@]}" "${ALL_ISOQUANT_JOBS[@]}")
-DEP_STR=$(IFS=:; echo "${ALL_JOBS[*]}")
+    # Build dependency string: afterok:job1:job2:job3:...
+    ALL_JOBS=("${ALL_SCOTCH_JOBS[@]}" "${ALL_ISOQUANT_JOBS[@]}")
+    DEP_STR=$(IFS=:; echo "${ALL_JOBS[*]}")
 
-COLLECT_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
-  --dependency=afterok:${DEP_STR} \
-  --job-name=bench_collect \
-  --cpus-per-task=1 --mem=8G --time=00:30:00 \
-  --output=logs/collect_%j.out --error=logs/collect_%j.err \
-  --wrap="python3 ${SCRIPT_DIR}/04_collect_metrics.py ${RESULTS_BASE} -o ${RESULTS_BASE}/benchmark_metrics.tsv && \
-    python3 ${SCRIPT_DIR}/05_plot_results.py ${RESULTS_BASE}/benchmark_metrics.tsv && \
-    echo 'Benchmark complete. Results in ${RESULTS_BASE}/benchmark_metrics.tsv'")
-echo "  Collect metrics: ${COLLECT_JOB}"
+    COLLECT_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
+      --dependency=afterok:${DEP_STR} \
+      --job-name=bench_collect \
+      --cpus-per-task=1 --mem=8G --time=00:30:00 \
+      --output=logs/collect_%j.out --error=logs/collect_%j.err \
+      --wrap="python3 ${SCRIPT_DIR}/04_collect_metrics.py ${RESULTS_BASE} -o ${RESULTS_BASE}/benchmark_metrics.tsv && \
+        python3 ${SCRIPT_DIR}/05_plot_results.py ${RESULTS_BASE}/benchmark_metrics.tsv && \
+        echo 'Benchmark complete. Results in ${RESULTS_BASE}/benchmark_metrics.tsv'")
+    echo "  Collect metrics: ${COLLECT_JOB}"
+fi
 
 echo ""
 echo "============================================================"
-echo "All jobs submitted! Dependency chain:"
-echo "  Prep (${PREP_JOB}) -> Prefix (${PREFIX_JOB})"
-echo "  -> SCOTCH 5M/10M/15M/multi + IsoQuant 5M/10M/15M/multi (parallel)"
-echo "  -> Collect metrics (${COLLECT_JOB})"
-echo ""
+echo "All jobs submitted! START_PHASE=${START_PHASE}"
 echo "Monitor: squeue -u \$(whoami)"
 echo "Email notifications on FAIL/END -> ${EMAIL}"
 echo "============================================================"
