@@ -3,10 +3,10 @@
 # Resource settings (CPU, mem, time) are controlled by run_experiment.sh.
 #
 # Usage:
-#   sbatch 00_prepare_data.sh <input_bam_dir> <output_dir>
+#   bash 00_prepare_data.sh <input_bam_dir> <output_dir>
 #
-# Input: directory containing one or more BAM files (uses the first found).
-# For multi-sample: uses the first 3 BAMs found in the directory.
+# Input: directory containing one or more BAM files.
+#   If multiple BAMs exist (e.g. per-chromosome), they are merged first.
 #
 # Creates:
 #   Single-sample: reads_5M.bam, reads_10M.bam, reads_15M.bam
@@ -27,6 +27,25 @@ if [ ${#BAMS[@]} -eq 0 ]; then
 fi
 echo "Found ${#BAMS[@]} BAM file(s) in ${INPUT_DIR}"
 
+# --- Merge all BAMs if multiple exist (e.g. per-chromosome split) ---
+MERGED_BAM="${OUTDIR}/merged_input.bam"
+if [ ${#BAMS[@]} -eq 1 ]; then
+    echo "Single BAM found, using directly."
+    MERGED_BAM="${BAMS[0]}"
+else
+    if [ -f "${MERGED_BAM}" ]; then
+        echo "Merged BAM already exists: ${MERGED_BAM}"
+    else
+        echo "Merging ${#BAMS[@]} BAM files into ${MERGED_BAM}..."
+        samtools merge --threads 4 "${MERGED_BAM}" "${BAMS[@]}"
+        samtools index "${MERGED_BAM}"
+        echo "Merge complete."
+    fi
+fi
+
+TOTAL_READS=$(samtools view -c -F 0x904 "${MERGED_BAM}")
+echo "Total primary reads in merged BAM: ${TOTAL_READS}"
+
 # Function: subsample a BAM to a target read count
 subsample_bam() {
     local bam=$1
@@ -34,10 +53,8 @@ subsample_bam() {
     local seed=$3
     local outbam=$4
 
-    echo "Counting reads in ${bam}..."
     local total_reads
     total_reads=$(samtools view -c -F 0x904 ${bam})
-    echo "Total primary reads: ${total_reads}"
 
     if [ ${total_reads} -le ${target_reads} ]; then
         echo "WARNING: BAM has fewer reads (${total_reads}) than target (${target_reads}). Copying as-is."
@@ -60,10 +77,9 @@ subsample_bam() {
 
 echo -e "bam_file\tread_count\tcell_count" > ${OUTDIR}/subsample_stats.tsv
 
-# --- Single-sample subsampling (from first BAM) ---
-PRIMARY_BAM=${BAMS[0]}
+# --- Single-sample subsampling (from merged BAM) ---
 echo ""
-echo "=== Single-sample subsampling from ${PRIMARY_BAM} ==="
+echo "=== Single-sample subsampling from merged BAM (${TOTAL_READS} reads) ==="
 
 for TARGET in 5000000 10000000 15000000; do
     LABEL=$((TARGET / 1000000))M
@@ -72,30 +88,22 @@ for TARGET in 5000000 10000000 15000000; do
         echo "Skipping ${OUTBAM} (already exists)"
         continue
     fi
-    subsample_bam ${PRIMARY_BAM} ${TARGET} 42 ${OUTBAM}
+    echo "--- Subsampling ${LABEL} ---"
+    subsample_bam "${MERGED_BAM}" ${TARGET} 42 ${OUTBAM}
 done
 
-# --- Multi-sample subsampling (3 samples x 5M reads) ---
+# --- Multi-sample subsampling (3 samples x 5M reads, different seeds) ---
 echo ""
-echo "=== Multi-sample subsampling (3 x 5M reads) ==="
-
-if [ ${#BAMS[@]} -ge 3 ]; then
-    # Use first 3 BAMs as separate samples
-    SAMPLE_BAMS=("${BAMS[0]}" "${BAMS[1]}" "${BAMS[2]}")
-else
-    # Use the same BAM with different seeds
-    echo "NOTE: Only ${#BAMS[@]} BAM(s) found. Using same BAM with different seeds for multi-sample."
-    SAMPLE_BAMS=("${BAMS[0]}" "${BAMS[0]}" "${BAMS[0]}")
-fi
+echo "=== Multi-sample subsampling (3 x 5M reads from merged BAM, different seeds) ==="
 
 for i in 1 2 3; do
-    idx=$((i - 1))
     OUTBAM=${OUTDIR}/multi_s${i}_5M.bam
     if [ -f "${OUTBAM}" ]; then
         echo "Skipping ${OUTBAM} (already exists)"
         continue
     fi
-    subsample_bam ${SAMPLE_BAMS[$idx]} 5000000 $((42 + i)) ${OUTBAM}
+    echo "--- Multi-sample S${i} ---"
+    subsample_bam "${MERGED_BAM}" 5000000 $((42 + i)) ${OUTBAM}
 done
 
 echo ""
