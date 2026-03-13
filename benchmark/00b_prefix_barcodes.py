@@ -45,7 +45,16 @@ def prefix_barcodes(input_bam, output_bam, prefix):
 
 
 def main():
-    data_dir = sys.argv[1]
+    import argparse
+    parser = argparse.ArgumentParser(description="Prefix CB tags with sample IDs for multi-sample runs")
+    parser.add_argument("data_dir", help="Directory containing multi_s*_5M.bam files")
+    parser.add_argument("--output_dir", default=None, help="Output directory for prefixed BAMs (default: same as data_dir)")
+    args = parser.parse_args()
+
+    data_dir = args.data_dir
+    output_dir = args.output_dir if args.output_dir else data_dir
+
+    os.makedirs(output_dir, exist_ok=True)
 
     samples = [
         ("multi_s1_5M.bam", "S1"),
@@ -55,7 +64,7 @@ def main():
 
     for bam_name, prefix in samples:
         input_bam = os.path.join(data_dir, bam_name)
-        output_bam = os.path.join(data_dir, bam_name.replace(".bam", ".prefixed.bam"))
+        output_bam = os.path.join(output_dir, bam_name.replace(".bam", ".prefixed.bam"))
 
         if not os.path.exists(input_bam):
             print(f"WARNING: {input_bam} not found, skipping")

@@ -122,8 +122,8 @@ def collect_isoquant(rep_path, bam_mode, read_label):
     total_cpu_hours = 0
     peak_mem = 0
 
-    # Per-step metrics: dedup and isoquant
-    for step in ["dedup", "isoquant"]:
+    # Per-step metrics: prefix (multi-sample only), dedup, and isoquant
+    for step in ["prefix", "dedup", "isoquant"]:
         tf = os.path.join(rep_path, f"time_{step}.txt")
         m = parse_time_v(tf)
         if not m:

@@ -129,13 +129,14 @@ submit_scotch() {
     mkdir -p "${OUT_BASE}" logs
 
     # Build BAM and target arguments
+    # SCOTCH handles multi-sample natively via separate --target dirs, no barcode prefixing needed
     local BAM_ARGS TARGET_ARGS
     if [ "${MODE}" == "single" ]; then
         BAM_ARGS="--bam ${DATA_DIR}/reads_${READ_LABEL}.bam"
         TARGET_ARGS="--target ${OUT_BASE}/sample1"
         mkdir -p "${OUT_BASE}/sample1"
     else
-        BAM_ARGS="--bam ${DATA_DIR}/multi_s1_5M.prefixed.bam ${DATA_DIR}/multi_s2_5M.prefixed.bam ${DATA_DIR}/multi_s3_5M.prefixed.bam"
+        BAM_ARGS="--bam ${DATA_DIR}/multi_s1_5M.bam ${DATA_DIR}/multi_s2_5M.bam ${DATA_DIR}/multi_s3_5M.bam"
         TARGET_ARGS="--target ${OUT_BASE}/sample1 ${OUT_BASE}/sample2 ${OUT_BASE}/sample3"
         mkdir -p "${OUT_BASE}/sample1" "${OUT_BASE}/sample2" "${OUT_BASE}/sample3"
     fi
@@ -224,22 +225,32 @@ submit_isoquant() {
 
     local OUT_BASE="${RESULTS_BASE}/isoquant/${MODE}/reads_${READ_LABEL}"
     local DEDUP_DIR="${OUT_BASE}/dedup_bams"
+    local PREFIX_DIR="${OUT_BASE}/prefixed_bams"
     mkdir -p "${OUT_BASE}" "${DEDUP_DIR}" logs
 
-    # Build the full command inline (dedup + isoquant)
-    local DEDUP_CMD ISOQUANT_CMD INPUT_ARG LABELS_ARG
+    # Build preprocessing + isoquant commands
+    # Single: dedup only (no prefixing needed)
+    # Multi:  prefix barcodes (timed) -> dedup (timed) -> isoquant (timed)
+    local PREFIX_CMD DEDUP_CMD INPUT_ARG LABELS_ARG
     if [ "${MODE}" == "single" ]; then
+        PREFIX_CMD=""
         DEDUP_CMD="python3 ${BENCHMARK_DIR}/00c_dedup_longest_read.py \
           ${DATA_DIR}/reads_${READ_LABEL}.bam ${DEDUP_DIR}/reads_${READ_LABEL}.dedup.bam --cb CB --umi UB"
         INPUT_ARG="--bam ${DEDUP_DIR}/reads_${READ_LABEL}.dedup.bam"
         LABELS_ARG="--labels sample1"
     else
+        mkdir -p "${PREFIX_DIR}"
+        # Barcode prefixing: add sample-specific CB prefixes for IsoQuant multi-sample
+        # This is timed separately because it's an IsoQuant-specific preprocessing requirement
+        PREFIX_CMD="/usr/bin/time -v -o ${OUT_BASE}/time_prefix.txt \
+          python3 ${BENCHMARK_DIR}/00b_prefix_barcodes.py ${DATA_DIR} --output_dir ${PREFIX_DIR} \
+          2>&1 | tee ${OUT_BASE}/prefix.log &&"
         DEDUP_CMD="python3 ${BENCHMARK_DIR}/00c_dedup_longest_read.py \
-          ${DATA_DIR}/multi_s1_5M.prefixed.bam ${DEDUP_DIR}/multi_s1_5M.dedup.bam --cb CB --umi UB && \
+          ${PREFIX_DIR}/multi_s1_5M.prefixed.bam ${DEDUP_DIR}/multi_s1_5M.dedup.bam --cb CB --umi UB && \
         python3 ${BENCHMARK_DIR}/00c_dedup_longest_read.py \
-          ${DATA_DIR}/multi_s2_5M.prefixed.bam ${DEDUP_DIR}/multi_s2_5M.dedup.bam --cb CB --umi UB && \
+          ${PREFIX_DIR}/multi_s2_5M.prefixed.bam ${DEDUP_DIR}/multi_s2_5M.dedup.bam --cb CB --umi UB && \
         python3 ${BENCHMARK_DIR}/00c_dedup_longest_read.py \
-          ${DATA_DIR}/multi_s3_5M.prefixed.bam ${DEDUP_DIR}/multi_s3_5M.dedup.bam --cb CB --umi UB"
+          ${PREFIX_DIR}/multi_s3_5M.prefixed.bam ${DEDUP_DIR}/multi_s3_5M.dedup.bam --cb CB --umi UB"
         INPUT_ARG="--bam ${DEDUP_DIR}/multi_s1_5M.dedup.bam ${DEDUP_DIR}/multi_s2_5M.dedup.bam ${DEDUP_DIR}/multi_s3_5M.dedup.bam"
         LABELS_ARG="--labels S1 S2 S3"
     fi
@@ -251,6 +262,7 @@ submit_isoquant() {
       --output=logs/isoquant_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/isoquant_${READ_LABEL}_${MODE}_%j.err \
       --wrap="${CONDA_INIT} set -euo pipefail; \
+        ${PREFIX_CMD} \
         /usr/bin/time -v -o ${OUT_BASE}/time_dedup.txt bash -c '${DEDUP_CMD}' 2>&1 | tee ${OUT_BASE}/dedup.log && \
         /usr/bin/time -v -o ${OUT_BASE}/time_isoquant.txt \
           isoquant.py \
@@ -298,9 +310,9 @@ check_phase5_ready() {
         done
     done
 
-    # IsoQuant multi-sample: 15M
+    # IsoQuant multi-sample: 15M (includes prefix step)
     local BASE="${RESULTS_BASE}/isoquant/multi/reads_15M"
-    for STEP in dedup isoquant; do
+    for STEP in prefix dedup isoquant; do
         [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/multi/15M/time_${STEP}.txt")
     done
 
@@ -322,9 +334,8 @@ check_phase5_ready() {
 # =============================================================================
 
 run_phase_0() {
-    echo "--- Phase 0: Data Preparation ---"
+    echo "--- Phase 0: Data Preparation (subsampling only) ---"
 
-    # Step 0a: Subsample BAMs
     echo "  Submitting: subsample BAMs..."
     PREP_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
       --job-name=bench_prep \
@@ -332,16 +343,9 @@ run_phase_0() {
       --output=logs/prep_%j.out --error=logs/prep_%j.err \
       --wrap="${CONDA_INIT} bash ${SCRIPT_DIR}/00_prepare_data.sh ${INPUT_BAM_DIR} ${DATA_DIR}")
     echo "    Subsample: ${PREP_JOB}"
-
-    # Step 0b: Prefix barcodes for multi-sample
-    echo "  Submitting: prefix barcodes..."
-    PREFIX_JOB=$(sbatch --parsable ${SBATCH_COMMON} \
-      --dependency=afterok:${PREP_JOB} \
-      --job-name=bench_prefix \
-      --cpus-per-task=1 --mem=16G --time=04:00:00 \
-      --output=logs/prefix_%j.out --error=logs/prefix_%j.err \
-      --wrap="${CONDA_INIT} python3 ${SCRIPT_DIR}/00b_prefix_barcodes.py ${DATA_DIR}")
-    echo "    Prefix barcodes: ${PREFIX_JOB}"
+    echo ""
+    echo "  NOTE: Barcode prefixing for IsoQuant multi-sample is now done"
+    echo "  inside the IsoQuant job (Phase 4) and timed as part of IsoQuant's cost."
 }
 
 run_phase_1() {
@@ -398,11 +402,11 @@ run_all() {
     echo "--- Running all phases with SLURM dependency chains ---"
     echo ""
 
-    # Phase 0
+    # Phase 0: subsample only (no barcode prefixing — that's timed inside IsoQuant multi)
     run_phase_0
-    local LAST_PREP_JOB="${PREFIX_JOB}"
+    local LAST_PREP_JOB="${PREP_JOB}"
 
-    # Phases 1-4: all depend on Phase 0, run in parallel
+    # Phases 1-4: all depend on Phase 0 (subsampling), run in parallel
     ALL_FINAL_JOBS=()
 
     echo ""
