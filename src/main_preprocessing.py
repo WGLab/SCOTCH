@@ -240,6 +240,8 @@ def main():
         logger.info('Saving count matrix')
         countmatrix.save_multiple_samples(generate_splicing=args.generate_splicing)
         countmatrix.filter_gtf()
+        logger.info('Filtering read-isoform mapping TSV')
+        countmatrix.finalize_read_isoform_mapping()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
 
