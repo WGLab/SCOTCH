@@ -184,7 +184,7 @@ submit_scotch() {
         python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
           --task 'compatible matrix' --platform 10x-ont \
           ${TARGET_ARGS} ${BAM_ARGS} \
-          --reference ${REF_GTF} \
+          --reference ${REF_GTF} --reference_genome_fasta ${REF_FASTA} \
           --job_index \${SLURM_ARRAY_TASK_ID} --total_jobs ${SCOTCH_COMPAT_NJOBS} \
         2>&1 | tee ${OUT_BASE}/compatible_\${SLURM_ARRAY_TASK_ID}.log")
     echo "    Compatible matrix array: ${JOB2}"
