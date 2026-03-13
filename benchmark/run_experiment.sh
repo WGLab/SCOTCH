@@ -65,6 +65,7 @@ SCOTCH_COMPAT_NJOBS=10                              # Number of array jobs for c
 SCOTCH_COMPAT_MEM=100G                              # Memory per array task
 SCOTCH_COMPAT_TIME=1-00:00:00                       # Time limit per array task
 
+SCOTCH_SUMMARY_CPUS=10                               # CPUs for summary step
 SCOTCH_SUMMARY_MEM=80G                              # Memory for summary step
 SCOTCH_SUMMARY_TIME=04:00:00                        # Time limit for summary
 
@@ -194,7 +195,7 @@ submit_scotch() {
     JOB3=$(sbatch --parsable ${SBATCH_COMMON} \
       --dependency=afterok:${JOB2} \
       --job-name=scotch_summary_${READ_LABEL}_${MODE} \
-      --cpus-per-task=1 --mem=${SCOTCH_SUMMARY_MEM} --time=${SCOTCH_SUMMARY_TIME} \
+      --cpus-per-task=${SCOTCH_SUMMARY_CPUS} --mem=${SCOTCH_SUMMARY_MEM} --time=${SCOTCH_SUMMARY_TIME} \
       --output=logs/scotch_summary_${READ_LABEL}_${MODE}_%j.out \
       --error=logs/scotch_summary_${READ_LABEL}_${MODE}_%j.err \
       --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_summary.txt \
