@@ -13,8 +13,14 @@
 # Phases:
 #   0  — Data preparation (subsampling)
 #   1  — SCOTCH single-sample (1M, 5M, 10M)
+#   1.1 — SCOTCH single-sample (1M only)
+#   1.2 — SCOTCH single-sample (5M only)
+#   1.3 — SCOTCH single-sample (10M only)
 #   2  — SCOTCH multi-sample (3 x 5M)
 #   3  — IsoQuant single-sample (1M, 5M, 10M)
+#   3.1 — IsoQuant single-sample (1M only)
+#   3.2 — IsoQuant single-sample (5M only)
+#   3.3 — IsoQuant single-sample (10M only)
 #   4  — IsoQuant multi-sample (3 x 5M)
 #   5  — Collect metrics + plot (checks all Phase 1-4 outputs exist first)
 #   all — Run phases 0-4 with SLURM dependency chains (old behavior)
@@ -22,7 +28,9 @@
 # Examples:
 #   bash run_experiment.sh 0        # Prep data first
 #   bash run_experiment.sh 1        # Then run SCOTCH single whenever ready
+#   bash run_experiment.sh 1.2      # Re-run only SCOTCH single 5M if needed
 #   bash run_experiment.sh 3        # Run IsoQuant single in parallel with SCOTCH
+#   bash run_experiment.sh 3.3      # Re-run only IsoQuant single 10M if needed
 #   bash run_experiment.sh 5        # Collect results after everything finishes
 #   bash run_experiment.sh all      # Submit everything with dependency chains
 #
@@ -86,8 +94,14 @@ if [ -z "${PHASE}" ]; then
     echo "Phases:"
     echo "  0    Data preparation (subsampling)"
     echo "  1    SCOTCH single-sample (1M, 5M, 10M)"
+    echo "  1.1  SCOTCH single-sample (1M only)"
+    echo "  1.2  SCOTCH single-sample (5M only)"
+    echo "  1.3  SCOTCH single-sample (10M only)"
     echo "  2    SCOTCH multi-sample (3 x 5M)"
     echo "  3    IsoQuant single-sample (1M, 5M, 10M)"
+    echo "  3.1  IsoQuant single-sample (1M only)"
+    echo "  3.2  IsoQuant single-sample (5M only)"
+    echo "  3.3  IsoQuant single-sample (10M only)"
     echo "  4    IsoQuant multi-sample (3 x 5M)"
     echo "  5    Collect metrics + plot (checks outputs exist first)"
     echo "  all  Run phases 0-4 with SLURM dependency chains"
@@ -348,12 +362,23 @@ run_phase_0() {
     echo "  inside the IsoQuant job (Phase 4) and timed as part of IsoQuant's cost."
 }
 
-run_phase_1() {
-    echo "--- Phase 1: SCOTCH Single-Sample ---"
-    for LABEL in 1M 5M 10M; do
+run_scotch_single_levels() {
+    local READ_FILTER="${1:-}"
+    local LABELS=(1M 5M 10M)
+
+    if [ -n "${READ_FILTER}" ]; then
+        LABELS=("${READ_FILTER}")
+    fi
+
+    for LABEL in "${LABELS[@]}"; do
         echo "  SCOTCH single ${LABEL}:"
         submit_scotch "${LABEL}" single
     done
+}
+
+run_phase_1() {
+    echo "--- Phase 1: SCOTCH Single-Sample ---"
+    run_scotch_single_levels "${1:-}"
 }
 
 run_phase_2() {
@@ -362,12 +387,23 @@ run_phase_2() {
     submit_scotch 3x5M multi
 }
 
-run_phase_3() {
-    echo "--- Phase 3: IsoQuant Single-Sample ---"
-    for LABEL in 1M 5M 10M; do
+run_isoquant_single_levels() {
+    local READ_FILTER="${1:-}"
+    local LABELS=(1M 5M 10M)
+
+    if [ -n "${READ_FILTER}" ]; then
+        LABELS=("${READ_FILTER}")
+    fi
+
+    for LABEL in "${LABELS[@]}"; do
         echo "  IsoQuant single ${LABEL}:"
         submit_isoquant "${LABEL}" single
     done
+}
+
+run_phase_3() {
+    echo "--- Phase 3: IsoQuant Single-Sample ---"
+    run_isoquant_single_levels "${1:-}"
 }
 
 run_phase_4() {
@@ -456,14 +492,20 @@ run_all() {
 case "${PHASE}" in
     0) run_phase_0 ;;
     1) run_phase_1 ;;
+    1.1) run_phase_1 1M ;;
+    1.2) run_phase_1 5M ;;
+    1.3) run_phase_1 10M ;;
     2) run_phase_2 ;;
     3) run_phase_3 ;;
+    3.1) run_phase_3 1M ;;
+    3.2) run_phase_3 5M ;;
+    3.3) run_phase_3 10M ;;
     4) run_phase_4 ;;
     5) run_phase_5 ;;
     all) run_all ;;
     *)
         echo "ERROR: Unknown phase '${PHASE}'"
-        echo "Valid phases: 0, 1, 2, 3, 4, 5, all"
+        echo "Valid phases: 0, 1, 1.1, 1.2, 1.3, 2, 3, 3.1, 3.2, 3.3, 4, 5, all"
         exit 1
         ;;
 esac
