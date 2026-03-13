@@ -34,6 +34,8 @@ parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length
 parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
 parser.add_argument('--barcode_umi',type=str,  help="umi barcode tag in bam file")
 parser.add_argument('--save_mem_ann', action='store_true', help="whether to use save memory mode to process in chunks")
+parser.add_argument('--save_mem', action='store_true', default=True, help="use on-disk sqlite lookup for bam info dicts in compatible matrix step to save memory (default: True)")
+parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', help="disable memory-efficient mode: load bam info dicts fully into RAM (legacy behavior)")
 
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
@@ -182,7 +184,8 @@ def main():
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger, barcode_umi=args.barcode_umi,
                                    ref_fasta_path=args.reference_genome_fasta,
-                                   genenames_subset=gene_subset)
+                                   genenames_subset=gene_subset,
+                                   save_mem=args.save_mem)
         readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
                                       total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')

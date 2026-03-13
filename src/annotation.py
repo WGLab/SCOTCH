@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import re
 import pickle
-from preprocessing import load_pickle, merge_exons
+from preprocessing import load_pickle, merge_exons, SqliteDict
 from scipy.ndimage import gaussian_filter1d
 import numpy as np
 import shutil
@@ -849,6 +849,9 @@ class Annotator:
         self.bamInfo_pkl_path = [os.path.join(t, 'bam/bam.Info.pkl') for t in target]
         self.bamInfo2_pkl_path = [os.path.join(t, 'bam/bam.Info2.pkl') for t in target]
         self.bamInfo3_pkl_path = [os.path.join(t, 'bam/bam.Info3.pkl') for t in target]  # only available for parse
+        self.bamInfo_sqlite_path = [os.path.join(t, 'bam/bam.Info.sqlite') for t in target]
+        self.bamInfo2_sqlite_path = [os.path.join(t, 'bam/bam.Info2.sqlite') for t in target]
+        self.bamInfo3_sqlite_path = [os.path.join(t, 'bam/bam.Info3.sqlite') for t in target]
         self.bamInfo_csv_path = [os.path.join(t, 'bam/bam.Info.csv') for t in target]
         # some parameters
         self.coverage_threshold_gene = coverage_threshold_gene
@@ -897,11 +900,35 @@ class Annotator:
                     # Copy the generated files from the first target to the current target
                     self.logger.info(f'Copying generated files from {self.annotation_path_single_gene[0]} to {self.annotation_path_single_gene[i]}')
                     shutil.copy(self.annotation_path_meta_gene[0], self.annotation_path_meta_gene[i])
+    def _save_dicts_as_sqlite(self, i, qname_dict, qname_cbumi_dict, qname_sample_dict):
+        """Save qname dicts as sqlite files for memory-efficient loading in compatible matrix step."""
+        self.logger.info('Saving bam info as sqlite for memory-efficient compatible matrix loading')
+        db = SqliteDict(self.bamInfo_sqlite_path[i], flag='c')
+        db.batch_insert(((str(k), str(v)) for k, v in qname_dict.items()))
+        db.close()
+        db = SqliteDict(self.bamInfo2_sqlite_path[i], flag='c')
+        db.batch_insert(((str(k), str(v)) for k, v in qname_cbumi_dict.items()))
+        db.close()
+        if qname_sample_dict is not None:
+            db = SqliteDict(self.bamInfo3_sqlite_path[i], flag='c')
+            db.batch_insert(((str(k), str(v)) for k, v in qname_sample_dict.items()))
+            db.close()
+        self.logger.info(f'Sqlite files saved at {self.bamInfo_folder_path[i]}')
+
     def annotation_bam(self, barcode_cell, barcode_umi, save_mem = False):
         for i in range(len(self.target)):
             os.makedirs(self.bamInfo_folder_path[i], exist_ok=True)
             if os.path.isfile(self.bamInfo_pkl_path[i]) and os.path.isfile(self.bamInfo_csv_path[i]):
                 self.logger.info(f'bam file information exist at {self.bamInfo_pkl_path[i]} and {self.bamInfo_csv_path[i]}')
+                # Generate sqlite files if they don't exist yet (for existing pkl users)
+                if not os.path.isfile(self.bamInfo_sqlite_path[i]):
+                    self.logger.info('Generating sqlite files from existing pkl files for memory-efficient loading')
+                    qname_dict = load_pickle(self.bamInfo_pkl_path[i])
+                    qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path[i])
+                    qname_sample_dict = load_pickle(self.bamInfo3_pkl_path[i])
+                    self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
+                    del qname_dict, qname_cbumi_dict, qname_sample_dict
+                    gc.collect()
             if (not os.path.isfile(self.bamInfo_pkl_path[i])) and os.path.isfile(self.bamInfo_csv_path[i]):
                 self.logger.info('Extracting bam file pickle information')
                 if save_mem:
@@ -918,6 +945,9 @@ class Annotator:
                 if qname_sample_dict is not None:
                     with open(self.bamInfo3_pkl_path[i], 'wb') as file:
                         pickle.dump(qname_sample_dict, file)
+                self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
+                del qname_dict, qname_cbumi_dict, qname_sample_dict
+                gc.collect()
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 self.logger.info('Extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
@@ -946,6 +976,9 @@ class Annotator:
                 if qname_sample_dict is not None:
                     with open(self.bamInfo3_pkl_path[i], 'wb') as file:
                         pickle.dump(qname_sample_dict, file)
+                self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
+                del qname_dict, qname_cbumi_dict, qname_sample_dict
+                gc.collect()
 
 
 
