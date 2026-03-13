@@ -405,12 +405,12 @@ class CountMatrix:
         with open(self.novel_isoform_del_path, 'wb') as f:
             pickle.dump(self.novel_isoform_del_dict, f)
         with open(self.novel_name_substitution_path, 'wb') as f:
-            pickle.dump(self.novel_name_substitution, f)
+            pickle.dump(self.novel_name_substitution_dict, f)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
                 dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
-                dest_path = os.path.join(additional_target, 'reference/novel_name_substitution.pkl')
+                dest_path = os.path.join(additional_target, 'reference/novel_name_substitutions.pkl')
                 shutil.copyfile(self.novel_name_substitution_path, dest_path)
         #--------overall count mat--------#
         for i, count_path in enumerate(self.count_matrix_folder_path_list):
@@ -620,3 +620,95 @@ class CountMatrix:
                     if gene_name in self.novel_isoform_del_dict and transcript_id in self.novel_isoform_del_dict[gene_name]:
                         continue
                     outfile.write(line)
+
+    def finalize_read_isoform_mapping(self):
+        """Filter and rename novel isoforms in the read-isoform mapping TSV.
+
+        Streams the large all_read_isoform_exon_mapping.tsv line by line to:
+        1. Remove reads mapped to novel isoforms that were filtered out (below threshold)
+        2. Rename novel isoforms using the grouped name convention
+        3. Update exon index and coordinates for renamed isoforms
+        """
+        import csv
+
+        # Build per-gene rename and drop lookups
+        rename_by_gene = {}
+        for gene, substitutions in self.novel_name_substitution_dict.items():
+            if substitutions:
+                rename_by_gene[gene] = dict(substitutions)
+
+        drop_by_gene = {}
+        for gene, del_list in self.novel_isoform_del_dict.items():
+            if del_list:
+                drop_by_gene[gene] = set(del_list)
+
+        for target in self.target:
+            auxillary_dir = os.path.join(target, 'auxillary')
+            tsv_path = os.path.join(auxillary_dir, 'all_read_isoform_exon_mapping.tsv')
+            if not os.path.exists(tsv_path):
+                self.logger.warning(f'Read-isoform mapping TSV not found: {tsv_path}')
+                continue
+
+            output_path = os.path.join(auxillary_dir,
+                f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n}_{self.novel_read_pct}.tsv')
+            tmp_path = output_path + '.tmp'
+
+            self.logger.info(f'Filtering read-isoform mapping: {tsv_path}')
+            n_kept = 0
+            n_dropped = 0
+            n_renamed = 0
+
+            with open(tsv_path, 'r', newline='') as fin, open(tmp_path, 'w', newline='') as fout:
+                reader = csv.DictReader(fin, delimiter='\t')
+                writer = csv.DictWriter(fout, fieldnames=reader.fieldnames, delimiter='\t')
+                writer.writeheader()
+
+                for row in reader:
+                    iso = row['Isoform']
+                    gene_name_raw = row['geneName']
+                    gene = re.sub(r'[\/\\:\*\?"<>|]', '.', gene_name_raw)
+
+                    # Non-novel isoforms: check if in drop set (shouldn't be, but safe)
+                    if not iso.startswith('novelIsoform_'):
+                        writer.writerow(row)
+                        n_kept += 1
+                        continue
+
+                    # Rename using substitution dict
+                    rename_map = rename_by_gene.get(gene, {})
+                    final_iso = rename_map.get(iso, iso)
+
+                    # Check if the final isoform should be dropped
+                    if final_iso in drop_by_gene.get(gene, set()):
+                        n_dropped += 1
+                        continue
+
+                    # Also drop if original name is in drop set (before renaming)
+                    if iso in drop_by_gene.get(gene, set()):
+                        n_dropped += 1
+                        continue
+
+                    # Update row if renamed
+                    if final_iso != iso:
+                        n_renamed += 1
+                        row['Isoform'] = final_iso
+                        # Update exon info from annotation if available
+                        if self.annotation_pkl and gene in self.annotation_pkl:
+                            gene_info = self.annotation_pkl[gene]
+                            exon_info = gene_info[1]
+                            isoform_info = gene_info[2]
+                            if final_iso in isoform_info:
+                                exon_idx = isoform_info[final_iso]
+                                exon_coords = pp.merge_exons(
+                                    [(exon_info[ind][0], exon_info[ind][1]) for ind in exon_idx])
+                                row['Exon Index'] = ','.join(map(str, exon_idx))
+                                row['Exon Coordinates'] = ','.join(
+                                    f"{exon}" for exon in exon_coords)
+
+                    writer.writerow(row)
+                    n_kept += 1
+
+            os.replace(tmp_path, output_path)
+            self.logger.info(
+                f'Read-isoform mapping filtered: {n_kept} kept, {n_dropped} dropped, '
+                f'{n_renamed} renamed -> {output_path}')
