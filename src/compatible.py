@@ -244,20 +244,26 @@ class ReadMapper:
     def _load_bam_info_dicts(self):
         """Load qname dicts, using sqlite (on-disk) when save_mem=True, falling back to pkl."""
         def load_bam_info_resource(sqlite_path, pkl_path, label, optional=False):
-            sqlite_exists = os.path.isfile(sqlite_path)
             pkl_exists = os.path.isfile(pkl_path)
 
+            def sqlite_is_usable():
+                if not os.path.isfile(sqlite_path):
+                    return False
+                if not pkl_exists:
+                    return True
+                return os.path.getmtime(sqlite_path) >= os.path.getmtime(pkl_path)
+
             if self.save_mem:
-                if pkl_exists:
-                    convert_pkl_to_sqlite(pkl_path, sqlite_path, self.logger)
-                    if os.path.isfile(sqlite_path):
-                        if self.logger:
-                            self.logger.info(f'Loading {label} from sqlite (memory-efficient): {sqlite_path}')
-                        return SqliteDict(sqlite_path, flag='r')
-                elif sqlite_exists:
+                if sqlite_is_usable():
                     if self.logger:
                         self.logger.info(f'Loading {label} from sqlite (memory-efficient): {sqlite_path}')
                     return SqliteDict(sqlite_path, flag='r')
+                if pkl_exists:
+                    convert_pkl_to_sqlite(pkl_path, sqlite_path, self.logger)
+                    if sqlite_is_usable():
+                        if self.logger:
+                            self.logger.info(f'Loading {label} from sqlite (memory-efficient): {sqlite_path}')
+                        return SqliteDict(sqlite_path, flag='r')
 
             if pkl_exists:
                 return load_pickle(pkl_path)
