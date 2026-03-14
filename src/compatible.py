@@ -233,62 +233,90 @@ class ReadMapper:
             self.qname_dict_list, self.qname_cbumi_dict_list, self.qname_sample_dict_list = self._load_bam_info_dicts()
             self.sorted_bam_path_list = None
         else:
-            self.qname_dict = load_pickle(self.bamInfo_pkl_path_list[0])
-            self.qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path_list[0])
+            self.qname_dict_list, self.qname_cbumi_dict_list, self.qname_sample_dict_list = self._load_bam_info_dicts()
+            self.qname_dict = self.qname_dict_list[0]
+            self.qname_cbumi_dict = self.qname_cbumi_dict_list[0]
             self.sorted_bam_path = None
-            self.qname_sample_dict = load_pickle(self.bamInfo3_pkl_path_list[0])
+            self.qname_sample_dict = self.qname_sample_dict_list[0]
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene_list[0])
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
 
     def _load_bam_info_dicts(self):
         """Load qname dicts, using sqlite (on-disk) when save_mem=True, falling back to pkl."""
+        def load_bam_info_resource(sqlite_path, pkl_path, label, optional=False):
+            sqlite_exists = os.path.isfile(sqlite_path)
+            pkl_exists = os.path.isfile(pkl_path)
+
+            if self.save_mem:
+                if pkl_exists:
+                    convert_pkl_to_sqlite(pkl_path, sqlite_path, self.logger)
+                    if os.path.isfile(sqlite_path):
+                        if self.logger:
+                            self.logger.info(f'Loading {label} from sqlite (memory-efficient): {sqlite_path}')
+                        return SqliteDict(sqlite_path, flag='r')
+                elif sqlite_exists:
+                    if self.logger:
+                        self.logger.info(f'Loading {label} from sqlite (memory-efficient): {sqlite_path}')
+                    return SqliteDict(sqlite_path, flag='r')
+
+            if pkl_exists:
+                return load_pickle(pkl_path)
+            if optional:
+                return None
+            if self.logger:
+                self.logger.warning(f'Neither sqlite nor pkl files found for {label} at {os.path.dirname(pkl_path)}')
+            return load_pickle(pkl_path)
+
         qname_dict_list = []
         qname_cbumi_dict_list = []
         qname_sample_dict_list = []
         for i in range(len(self.target)):
-            sqlite_exists = os.path.isfile(self.bamInfo_sqlite_path_list[i])
-            pkl_exists = os.path.isfile(self.bamInfo_pkl_path_list[i])
-            if self.save_mem and sqlite_exists:
-                # Use on-disk sqlite — no RAM for these dicts
-                if self.logger:
-                    self.logger.info(f'Loading bam info from sqlite (memory-efficient): {self.bamInfo_sqlite_path_list[i]}')
-                qname_dict_list.append(SqliteDict(self.bamInfo_sqlite_path_list[i], flag='r'))
-                qname_cbumi_dict_list.append(SqliteDict(self.bamInfo2_sqlite_path_list[i], flag='r'))
-                if os.path.isfile(self.bamInfo3_sqlite_path_list[i]):
-                    qname_sample_dict_list.append(SqliteDict(self.bamInfo3_sqlite_path_list[i], flag='r'))
-                else:
-                    qname_sample_dict_list.append(None)
-            elif self.save_mem and not sqlite_exists and pkl_exists:
-                # Pkl exists but no sqlite — convert on the fly, then use sqlite
-                import warnings
-                warnings.warn(
-                    f"Sqlite files not found but pkl files exist at {self.bamInfo_folder_path_list[i]}. "
-                    f"Converting pkl to sqlite for memory-efficient loading. "
-                    f"To avoid this in the future, re-run the annotation step or use --save_mem_off to load pkl directly.",
-                    UserWarning
+            qname_dict_list.append(
+                load_bam_info_resource(
+                    self.bamInfo_sqlite_path_list[i],
+                    self.bamInfo_pkl_path_list[i],
+                    'bam info'
                 )
-                if self.logger:
-                    self.logger.warning(
-                        f'Sqlite files not found. Converting pkl -> sqlite at {self.bamInfo_folder_path_list[i]}. '
-                        f'Re-run annotation step to generate sqlite files directly.'
-                    )
-                convert_pkl_to_sqlite(self.bamInfo_pkl_path_list[i], self.bamInfo_sqlite_path_list[i], self.logger)
-                convert_pkl_to_sqlite(self.bamInfo2_pkl_path_list[i], self.bamInfo2_sqlite_path_list[i], self.logger)
-                convert_pkl_to_sqlite(self.bamInfo3_pkl_path_list[i], self.bamInfo3_sqlite_path_list[i], self.logger)
-                qname_dict_list.append(SqliteDict(self.bamInfo_sqlite_path_list[i], flag='r'))
-                qname_cbumi_dict_list.append(SqliteDict(self.bamInfo2_sqlite_path_list[i], flag='r'))
-                if os.path.isfile(self.bamInfo3_sqlite_path_list[i]):
-                    qname_sample_dict_list.append(SqliteDict(self.bamInfo3_sqlite_path_list[i], flag='r'))
-                else:
-                    qname_sample_dict_list.append(None)
-            else:
-                # Fall back to in-memory pkl loading
-                if self.save_mem and self.logger:
-                    self.logger.warning(f'Neither sqlite nor pkl files found at {self.bamInfo_folder_path_list[i]}, attempting pkl load')
-                qname_dict_list.append(load_pickle(self.bamInfo_pkl_path_list[i]))
-                qname_cbumi_dict_list.append(load_pickle(self.bamInfo2_pkl_path_list[i]))
-                qname_sample_dict_list.append(load_pickle(self.bamInfo3_pkl_path_list[i]))
+            )
+            qname_cbumi_dict_list.append(
+                load_bam_info_resource(
+                    self.bamInfo2_sqlite_path_list[i],
+                    self.bamInfo2_pkl_path_list[i],
+                    'bam info2'
+                )
+            )
+            qname_sample_dict_list.append(
+                load_bam_info_resource(
+                    self.bamInfo3_sqlite_path_list[i],
+                    self.bamInfo3_pkl_path_list[i],
+                    'bam info3',
+                    optional=True
+                )
+            )
         return qname_dict_list, qname_cbumi_dict_list, qname_sample_dict_list
+
+    def close(self):
+        resources = []
+        for attr in (
+            'qname_dict_list',
+            'qname_cbumi_dict_list',
+            'qname_sample_dict_list',
+            'qname_dict',
+            'qname_cbumi_dict',
+            'qname_sample_dict',
+        ):
+            if hasattr(self, attr):
+                value = getattr(self, attr)
+                if isinstance(value, list):
+                    resources.extend(value)
+                else:
+                    resources.append(value)
+        seen = set()
+        for resource in resources:
+            if isinstance(resource, SqliteDict) and id(resource) not in seen:
+                resource.close()
+                seen.add(id(resource))
+
     def read_bam(self, chrom = None):
         #if parse: the input length is 1
         # bam_path is a folder
@@ -659,70 +687,73 @@ class ReadMapper:
             if save == False:
                 return return_samples
     def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
-        if self.parse==False:
-            for compatible_matrix_folder_path in self.compatible_matrix_folder_path_list:
-                if not os.path.exists(compatible_matrix_folder_path):
-                    os.makedirs(compatible_matrix_folder_path, exist_ok=True)
-        MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
-        chunks = np.array_split(MetaGenes, total_jobs)
-        MetaGenes_job = chunks[current_job_index]
-        if self.genenames_subset is not None:
-            gene_names_set = set(self.genenames_subset)
-            MetaGenes_job = [mg for mg in MetaGenes_job
-                             if any(gene_info[0]['geneName'] in gene_names_set
-                                    for gene_info in self.metageneStructureInformation[mg])]
-            self.logger.info(f'Gene subset applied: {len(MetaGenes_job)} metagenes match the {len(gene_names_set)} requested gene names')
-        if cover_existing:
-            print('If there are existing compatible matrix files, SCOTCH will overwrite them')
-            genes_existing = []
-        else:
-            print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
-            if self.parse:
-                self.compatible_matrix_folder_paths = find_subfolder(self.target[0], subfolder='compatible_matrix')
-                self.read_mapping_paths = find_subfolder(self.target[0], subfolder='auxillary')
-                genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
-                                  for file in os.listdir(folder_path) if file.endswith('.csv')]
-                for folder_path in self.compatible_matrix_folder_paths:
-                    log_file_path = os.path.join(folder_path, 'log.txt')
-                    if os.path.isfile(log_file_path):
-                        gene_df = pd.read_csv(log_file_path, header=None)
-                        genes_existing += gene_df.iloc[:, 0].tolist()
+        try:
+            if self.parse==False:
+                for compatible_matrix_folder_path in self.compatible_matrix_folder_path_list:
+                    if not os.path.exists(compatible_matrix_folder_path):
+                        os.makedirs(compatible_matrix_folder_path, exist_ok=True)
+            MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
+            chunks = np.array_split(MetaGenes, total_jobs)
+            MetaGenes_job = chunks[current_job_index]
+            if self.genenames_subset is not None:
+                gene_names_set = set(self.genenames_subset)
+                MetaGenes_job = [mg for mg in MetaGenes_job
+                                 if any(gene_info[0]['geneName'] in gene_names_set
+                                        for gene_info in self.metageneStructureInformation[mg])]
+                self.logger.info(f'Gene subset applied: {len(MetaGenes_job)} metagenes match the {len(gene_names_set)} requested gene names')
+            if cover_existing:
+                print('If there are existing compatible matrix files, SCOTCH will overwrite them')
+                genes_existing = []
             else:
-                genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_path_list
-                                  for file in os.listdir(folder_path) if file.endswith('.csv')]
-                for folder_path in self.compatible_matrix_folder_path_list:
-                    log_file_path = os.path.join(folder_path, 'log.txt')
-                    if os.path.isfile(log_file_path):
-                        gene_df = pd.read_csv(log_file_path, header=None)
-                        genes_existing += gene_df.iloc[:, 0].tolist()
-            print('there exist ' + str(len(set(genes_existing))) + ' genes')
-        MetaGene_Gene_dict = {}
-        for metagene_name, genes_info in self.metageneStructureInformation.items():
-            if metagene_name in MetaGenes_job:
-                genes_ = []
-                for gene_info in genes_info:
-                    gene = str(gene_info[0]['geneName']) + '_' + str(gene_info[0]['geneID'])
-                    if gene not in genes_existing:
-                        genes_.append(gene)
-                if len(genes_) > 0:
-                    MetaGene_Gene_dict[metagene_name] = genes_
-        MetaGenes_job = list(MetaGene_Gene_dict.keys())
-        self.logger.info(f'{str(len(MetaGenes_job))} metagenes for job {current_job_index}')
-        #print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
-        if self.parse:
-            for meta_gene in MetaGenes_job:
-                print(meta_gene)
-                self.map_reads_parse(meta_gene, save=True)
-        else:
-            for meta_gene in MetaGenes_job:
-                print(meta_gene)
-                self.map_reads(meta_gene, save=True)
-        for key in MetaGenes:
-            if key not in MetaGenes_job:
-                del self.metageneStructureInformationwNovel[key]
-        gene_ids = [g_name_id.split('_')[1] for g_name_ids in list(MetaGene_Gene_dict.values()) for g_name_id in g_name_ids]
-        gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
-        self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
+                print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
+                if self.parse:
+                    self.compatible_matrix_folder_paths = find_subfolder(self.target[0], subfolder='compatible_matrix')
+                    self.read_mapping_paths = find_subfolder(self.target[0], subfolder='auxillary')
+                    genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
+                                      for file in os.listdir(folder_path) if file.endswith('.csv')]
+                    for folder_path in self.compatible_matrix_folder_paths:
+                        log_file_path = os.path.join(folder_path, 'log.txt')
+                        if os.path.isfile(log_file_path):
+                            gene_df = pd.read_csv(log_file_path, header=None)
+                            genes_existing += gene_df.iloc[:, 0].tolist()
+                else:
+                    genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_path_list
+                                      for file in os.listdir(folder_path) if file.endswith('.csv')]
+                    for folder_path in self.compatible_matrix_folder_path_list:
+                        log_file_path = os.path.join(folder_path, 'log.txt')
+                        if os.path.isfile(log_file_path):
+                            gene_df = pd.read_csv(log_file_path, header=None)
+                            genes_existing += gene_df.iloc[:, 0].tolist()
+                print('there exist ' + str(len(set(genes_existing))) + ' genes')
+            MetaGene_Gene_dict = {}
+            for metagene_name, genes_info in self.metageneStructureInformation.items():
+                if metagene_name in MetaGenes_job:
+                    genes_ = []
+                    for gene_info in genes_info:
+                        gene = str(gene_info[0]['geneName']) + '_' + str(gene_info[0]['geneID'])
+                        if gene not in genes_existing:
+                            genes_.append(gene)
+                    if len(genes_) > 0:
+                        MetaGene_Gene_dict[metagene_name] = genes_
+            MetaGenes_job = list(MetaGene_Gene_dict.keys())
+            self.logger.info(f'{str(len(MetaGenes_job))} metagenes for job {current_job_index}')
+            #print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
+            if self.parse:
+                for meta_gene in MetaGenes_job:
+                    print(meta_gene)
+                    self.map_reads_parse(meta_gene, save=True)
+            else:
+                for meta_gene in MetaGenes_job:
+                    print(meta_gene)
+                    self.map_reads(meta_gene, save=True)
+            for key in MetaGenes:
+                if key not in MetaGenes_job:
+                    del self.metageneStructureInformationwNovel[key]
+            gene_ids = [g_name_id.split('_')[1] for g_name_ids in list(MetaGene_Gene_dict.values()) for g_name_id in g_name_ids]
+            gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
+            self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
+        finally:
+            self.close()
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
         self.logger.info(f'Saving annotation file...')
         for i in range(len(self.annotation_path_meta_gene_list)):

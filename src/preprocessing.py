@@ -108,12 +108,17 @@ class SqliteDict:
 def convert_pkl_to_sqlite(pkl_path, sqlite_path, logger=None):
     """Convert a pickle dict file to a SqliteDict file.
     Does NOT delete the original pkl file."""
-    if os.path.exists(sqlite_path):
-        if logger:
-            logger.info(f"SqliteDict already exists: {sqlite_path}, skipping conversion.")
-        return
     if not os.path.exists(pkl_path):
         return
+    if os.path.exists(sqlite_path):
+        pkl_mtime = os.path.getmtime(pkl_path)
+        sqlite_mtime = os.path.getmtime(sqlite_path)
+        if pkl_mtime <= sqlite_mtime:
+            if logger:
+                logger.info(f"SqliteDict already exists: {sqlite_path}, skipping conversion.")
+            return
+        if logger:
+            logger.info(f"SqliteDict is stale: {sqlite_path}, rebuilding from {pkl_path}.")
     if logger:
         logger.info(f"Converting {pkl_path} -> {sqlite_path}")
     with open(pkl_path, 'rb') as f:
@@ -1225,7 +1230,6 @@ def get_intron_cover(read, isoform_name, Info_singlegene):
     return intron_covers
 
 #####some functions to delete ########
-
 
 
 
