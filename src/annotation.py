@@ -49,10 +49,15 @@ def _extract_bam_info_contig(bam, contig, barcode_cell='CB', barcode_umi='UB'):
 def extract_bam_info(bam, barcode_cell='CB', barcode_umi='UB', chunk_size=100000, workers=1):
     #extract readname, cb, umi from bam file # bam: path to bam file
     # Parallel path: split by chromosome when workers > 1 and BAM is indexed
-    if workers > 1 and os.path.isfile(bam + '.bai'):
-        bam_fh = pysam.AlignmentFile(bam, "rb")
-        contigs = [stat.contig for stat in bam_fh.get_index_statistics() if stat.mapped > 0]
-        bam_fh.close()
+    # Check both common index naming conventions: foo.bam.bai and foo.bai
+    bam_indexed = os.path.isfile(bam + '.bai') or os.path.isfile(bam[:-4] + '.bai' if bam.endswith('.bam') else '')
+    if workers > 1 and bam_indexed:
+        try:
+            bam_fh = pysam.AlignmentFile(bam, "rb")
+            contigs = [stat.contig for stat in bam_fh.get_index_statistics() if stat.mapped > 0]
+            bam_fh.close()
+        except Exception:
+            contigs = []
         if contigs:
             results = Parallel(n_jobs=min(workers, len(contigs)))(
                 delayed(_extract_bam_info_contig)(bam, contig, barcode_cell, barcode_umi)
@@ -64,7 +69,7 @@ def extract_bam_info(bam, barcode_cell='CB', barcode_umi='UB', chunk_size=100000
                     by=['CB', 'UMI', 'LENGTH'], ascending=[True, True, False]).reset_index(drop=True)
                 ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
                 return ReadTagsDF
-        return None
+        # Fall through to serial path if no contigs found (instead of returning None)
 
     # Serial fallback
     bamFilePysam = pysam.AlignmentFile(bam, "rb")
@@ -959,7 +964,7 @@ class Annotator:
                     self.logger.info('Generating sqlite files from existing pkl files for memory-efficient loading')
                     qname_dict = load_pickle(self.bamInfo_pkl_path[i])
                     qname_cbumi_dict = load_pickle(self.bamInfo2_pkl_path[i])
-                    qname_sample_dict = load_pickle(self.bamInfo3_pkl_path[i])
+                    qname_sample_dict = load_pickle(self.bamInfo3_pkl_path[i]) if os.path.isfile(self.bamInfo3_pkl_path[i]) else None
                     self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                     del qname_dict, qname_cbumi_dict, qname_sample_dict
                     gc.collect()
