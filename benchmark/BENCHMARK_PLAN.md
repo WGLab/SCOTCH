@@ -7,7 +7,7 @@
 | Axis | Levels | Purpose |
 |------|--------|---------|
 | **Tool** | SCOTCH, IsoQuant | Head-to-head |
-| **Read count** | 1M, 5M, 10M (single-sample) | Scalability curve (cell count reported post hoc) |
+| **Read count** | 1M, 5M, 10M, 50M (single-sample) | Scalability curve (cell count reported post hoc) |
 | **Sample mode** | Single (1 sample), Multi (3 samples x 5M) | Multi-sample overhead |
 | **Platform** | 10x-ONT | Single platform |
 
@@ -18,13 +18,15 @@
 | 1 | SCOTCH | 1M | single | 1 BAM, 1M reads |
 | 2 | SCOTCH | 5M | single | 1 BAM, 5M reads |
 | 3 | SCOTCH | 10M | single | 1 BAM, 10M reads |
-| 4 | SCOTCH | 3x5M | multi | 3 BAMs x 5M reads |
-| 5 | IsoQuant | 1M | single | 1 BAM, 1M reads |
-| 6 | IsoQuant | 5M | single | 1 BAM, 5M reads |
-| 7 | IsoQuant | 10M | single | 1 BAM, 10M reads |
-| 8 | IsoQuant | 3x5M | multi | 3 BAMs x 5M reads |
+| 4 | SCOTCH | 50M | single | 1 BAM, 50M reads |
+| 5 | SCOTCH | 3x5M | multi | 3 BAMs x 5M reads |
+| 6 | IsoQuant | 1M | single | 1 BAM, 1M reads |
+| 7 | IsoQuant | 5M | single | 1 BAM, 5M reads |
+| 8 | IsoQuant | 10M | single | 1 BAM, 10M reads |
+| 9 | IsoQuant | 50M | single | 1 BAM, 50M reads |
+| 10 | IsoQuant | 3x5M | multi | 3 BAMs x 5M reads |
 
-**Total: 8 experiments.** No replicates.
+**Total: 10 experiments.** No replicates.
 
 ### 1.3 Parallelism Settings
 
@@ -45,6 +47,7 @@
 | 1M | 1,000,000 | Single-sample scalability |
 | 5M | 5,000,000 | Single-sample scalability; multi-sample (per sample) |
 | 10M | 10,000,000 | Single-sample scalability |
+| 50M | 50,000,000 | Single-sample scalability |
 
 For multi-sample: 3 independent BAMs are subsampled to 5M reads each (different seeds). The benchmark records this condition as `3x5M` rather than folding it into the single-sample read-level axis.
 
@@ -148,8 +151,9 @@ IsoQuant total = dedup time + IsoQuant run time.
 | 1M | | | | | | | |
 | 5M | | | | | | | |
 | 10M | | | | | | | |
+| 50M | | | | | | | |
 
-### Table 2: SCOTCH Per-Step Breakdown (single BAM, 10M reads)
+### Table 2: SCOTCH Per-Step Breakdown (single BAM, 50M reads)
 
 | Step | Wall time (min) | Peak RSS (GB) | CPU time (min) | CPUs |
 |------|----------------:|--------------:|---------------:|-----:|
@@ -166,7 +170,7 @@ IsoQuant total = dedup time + IsoQuant run time.
 | SCOTCH | | | |
 | IsoQuant | | | |
 
-### Table 4: Output Comparison (single BAM, 10M reads)
+### Table 4: Output Comparison (single BAM, 50M reads)
 
 | Metric | SCOTCH | IsoQuant |
 |--------|-------:|---------:|
@@ -194,6 +198,7 @@ benchmark/
 │   ├── reads_1M.bam
 │   ├── reads_5M.bam
 │   ├── reads_10M.bam
+│   ├── reads_50M.bam
 │   ├── multi_s1_5M.bam              # Multi-sample (original)
 │   ├── multi_s2_5M.bam
 │   ├── multi_s3_5M.bam
@@ -205,11 +210,13 @@ benchmark/
 │   │   ├── single/reads_1M/
 │   │   ├── single/reads_5M/
 │   │   ├── single/reads_10M/
+│   │   ├── single/reads_50M/
 │   │   └── multi/reads_3x5M/
 │   └── isoquant/
 │       ├── single/reads_1M/
 │       ├── single/reads_5M/
 │       ├── single/reads_10M/
+│       ├── single/reads_50M/
 │       └── multi/reads_3x5M/
 ├── logs/                            # SLURM stdout/stderr
 ├── benchmark_metrics.tsv            # Collected metrics
@@ -232,7 +239,7 @@ bash run_experiment.sh all
 
 # This automatically:
 #   Phase 0: Subsamples BAMs
-#   Phase 1-4: Submits all 8 experiments with afterok dependencies
+#   Phase 1-4: Submits all 10 experiments with afterok dependencies
 #   Phase 5: Collects metrics + generates plots after all experiments finish
 #
 # Monitor: squeue -u $(whoami)

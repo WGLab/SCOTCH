@@ -11,7 +11,7 @@
 #   subsampled with the same fraction, then concatenated with samtools cat.
 #
 # Creates:
-#   Single-sample: reads_1M.bam, reads_5M.bam, reads_10M.bam
+#   Single-sample: reads_1M.bam, reads_5M.bam, reads_10M.bam, reads_50M.bam
 #   Multi-sample:  multi_s1_5M.bam, multi_s2_5M.bam, multi_s3_5M.bam
 
 set -euo pipefail
@@ -130,7 +130,7 @@ echo -e "bam_file\tread_count\tcell_count" > "${OUTDIR}/subsample_stats.tsv"
 echo ""
 echo "=== Single-sample subsampling from ${TOTAL_PRIMARY_READS} total reads ==="
 
-for TARGET in 1000000 5000000 10000000; do
+for TARGET in 1000000 5000000 10000000 50000000; do
     LABEL=$((TARGET / 1000000))M
     OUTBAM="${OUTDIR}/reads_${LABEL}.bam"
     if [ -f "${OUTBAM}" ]; then

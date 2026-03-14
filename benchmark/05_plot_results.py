@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-READ_ORDER = {"1M": 1, "5M": 5, "10M": 10}
+READ_ORDER = {"1M": 1, "5M": 5, "10M": 10, "50M": 50}
 
 
 def load_data(path):
@@ -28,6 +28,13 @@ def highest_single_label(df):
     labels = single["read_label"].dropna().unique().tolist()
     labels.sort(key=lambda label: READ_ORDER.get(label, -1))
     return labels[-1] if labels else None
+
+
+def single_xticks(df):
+    single = df[df["bam_mode"] == "single"]["read_millions"].dropna()
+    if single.empty:
+        return sorted(READ_ORDER.values())
+    return sorted(single.unique())
 
 
 def plot_scalability_wall(df, ax):
@@ -48,7 +55,7 @@ def plot_scalability_wall(df, ax):
     ax.set_ylabel("Wall time (minutes)")
     ax.set_title("Runtime Scalability")
     ax.legend()
-    ax.set_xticks([1, 5, 10])
+    ax.set_xticks(single_xticks(df))
 
 
 def plot_scalability_mem(df, ax):
@@ -68,7 +75,7 @@ def plot_scalability_mem(df, ax):
     ax.set_ylabel("Peak memory (GB)")
     ax.set_title("Memory Scalability")
     ax.legend()
-    ax.set_xticks([1, 5, 10])
+    ax.set_xticks(single_xticks(df))
 
 
 def plot_cpu_hours(df, ax):
@@ -87,7 +94,7 @@ def plot_cpu_hours(df, ax):
     ax.set_ylabel("CPU-hours")
     ax.set_title("CPU-Hours Scalability")
     ax.legend()
-    ax.set_xticks([1, 5, 10])
+    ax.set_xticks(single_xticks(df))
 
 
 def plot_scotch_breakdown(df, ax):
