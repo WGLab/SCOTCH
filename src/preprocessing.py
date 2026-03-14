@@ -4,6 +4,7 @@ from itertools import chain
 import numpy as np
 import os
 import sqlite3
+import fcntl
 from Bio.Seq import Seq
 import networkx as nx
 import community.community_louvain as community_louvain
@@ -110,27 +111,69 @@ def convert_pkl_to_sqlite(pkl_path, sqlite_path, logger=None):
     Does NOT delete the original pkl file."""
     if not os.path.exists(pkl_path):
         return
-    if os.path.exists(sqlite_path):
-        pkl_mtime = os.path.getmtime(pkl_path)
-        sqlite_mtime = os.path.getmtime(sqlite_path)
-        if pkl_mtime <= sqlite_mtime:
+    def sqlite_is_fresh():
+        if not os.path.exists(sqlite_path):
+            return False
+        return os.path.getmtime(pkl_path) <= os.path.getmtime(sqlite_path)
+
+    if sqlite_is_fresh():
+        if logger:
+            logger.info(f"SqliteDict already exists: {sqlite_path}, skipping conversion.")
+        return
+    if os.path.exists(sqlite_path) and logger:
+        logger.info(f"SqliteDict is stale: {sqlite_path}, rebuilding from {pkl_path}.")
+
+    lock_path = sqlite_path + '.lock'
+    tmp_sqlite_path = sqlite_path + f'.tmp.{os.getpid()}'
+    tmp_sidecar_paths = [tmp_sqlite_path + '-wal', tmp_sqlite_path + '-shm']
+    lock_fd = None
+    try:
+        lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR)
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            if logger:
+                logger.info(f"Another process is converting {pkl_path}; using pickle for this run.")
+            return
+
+        if sqlite_is_fresh():
             if logger:
                 logger.info(f"SqliteDict already exists: {sqlite_path}, skipping conversion.")
             return
+
         if logger:
-            logger.info(f"SqliteDict is stale: {sqlite_path}, rebuilding from {pkl_path}.")
-    if logger:
-        logger.info(f"Converting {pkl_path} -> {sqlite_path}")
-    with open(pkl_path, 'rb') as f:
-        data = pickle.load(f)
-    if data is None:
-        return
-    db = SqliteDict(sqlite_path, flag='c')
-    db.batch_insert(((str(k), str(v)) for k, v in data.items()))
-    db.close()
-    del data
-    if logger:
-        logger.info(f"Conversion complete: {sqlite_path}")
+            logger.info(f"Converting {pkl_path} -> {sqlite_path}")
+        with open(pkl_path, 'rb') as f:
+            data = pickle.load(f)
+        if data is None:
+            return
+
+        db = None
+        try:
+            db = SqliteDict(tmp_sqlite_path, flag='c')
+            db.batch_insert(((str(k), str(v)) for k, v in data.items()))
+            db.conn.execute("PRAGMA wal_checkpoint(FULL)")
+            db.close()
+            db = None
+            os.replace(tmp_sqlite_path, sqlite_path)
+        except Exception:
+            if db is not None:
+                db.close()
+            if os.path.exists(tmp_sqlite_path):
+                os.remove(tmp_sqlite_path)
+            for sidecar_path in tmp_sidecar_paths:
+                if os.path.exists(sidecar_path):
+                    os.remove(sidecar_path)
+            raise
+        finally:
+            del data
+
+        if logger:
+            logger.info(f"Conversion complete: {sqlite_path}")
+    finally:
+        if lock_fd is not None:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
 
 
 def unpack_list(x):
@@ -1230,8 +1273,6 @@ def get_intron_cover(read, isoform_name, Info_singlegene):
     return intron_covers
 
 #####some functions to delete ########
-
-
 
 
 
