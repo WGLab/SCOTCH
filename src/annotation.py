@@ -30,20 +30,54 @@ def extract_bam_info_folder(bam_folder, num_cores, parse=False, pacbio = False,b
     ReadTagsDF = pd.concat(df).reset_index(drop=True)
     return ReadTagsDF
 
-def extract_bam_info(bam, barcode_cell = 'CB', barcode_umi = 'UB', chunk_size = 100000):
+def _extract_bam_info_contig(bam, contig, barcode_cell='CB', barcode_umi='UB'):
+    """Extract read info from a single contig/chromosome. Each worker opens its own file handle."""
+    bam_fh = pysam.AlignmentFile(bam, "rb")
+    rows = []
+    for read in bam_fh.fetch(contig=contig):
+        if barcode_cell is None and barcode_umi is None:
+            rows.append((read.qname, read.qname, 'NA', read.query_alignment_length))
+        else:
+            if not read.has_tag(barcode_cell) or not read.has_tag(barcode_umi):
+                continue
+            rows.append((read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi),
+                         read.query_alignment_length))
+    bam_fh.close()
+    return rows
+
+
+def extract_bam_info(bam, barcode_cell='CB', barcode_umi='UB', chunk_size=100000, workers=1):
     #extract readname, cb, umi from bam file # bam: path to bam file
-    bamFilePysam = pysam.Samfile(bam, "rb")
+    # Parallel path: split by chromosome when workers > 1 and BAM is indexed
+    if workers > 1 and os.path.isfile(bam + '.bai'):
+        bam_fh = pysam.AlignmentFile(bam, "rb")
+        contigs = [stat.contig for stat in bam_fh.get_index_statistics() if stat.mapped > 0]
+        bam_fh.close()
+        if contigs:
+            results = Parallel(n_jobs=min(workers, len(contigs)))(
+                delayed(_extract_bam_info_contig)(bam, contig, barcode_cell, barcode_umi)
+                for contig in contigs)
+            rows = [row for chunk in results for row in chunk]
+            if rows:
+                ReadTagsDF = pd.DataFrame(rows, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
+                ReadTagsDF = ReadTagsDF.sort_values(
+                    by=['CB', 'UMI', 'LENGTH'], ascending=[True, True, False]).reset_index(drop=True)
+                ReadTagsDF['CBUMI'] = ReadTagsDF.CB.astype(str) + '_' + ReadTagsDF.UMI.astype(str)
+                return ReadTagsDF
+        return None
+
+    # Serial fallback
+    bamFilePysam = pysam.AlignmentFile(bam, "rb")
     all_chunks, current_chunk = [], []
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
-        try:
-            if barcode_cell is None and barcode_umi is None:
-                current_chunk.append((read.qname, read.qname, 'NA', read.qend - read.qstart))
-            else:
-                current_chunk.append(
-                    (read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.qend - read.qstart))
-        except KeyError:
-            continue
+        if barcode_cell is None and barcode_umi is None:
+            current_chunk.append((read.qname, read.qname, 'NA', read.query_alignment_length))
+        else:
+            if not read.has_tag(barcode_cell) or not read.has_tag(barcode_umi):
+                continue
+            current_chunk.append(
+                (read.qname, read.get_tag(barcode_cell), read.get_tag(barcode_umi), read.query_alignment_length))
         counter += 1
         if counter % chunk_size == 0:
             df_chunk = pd.DataFrame(current_chunk, columns=['QNAME', 'CB', 'UMI', 'LENGTH'])
@@ -958,7 +992,7 @@ class Annotator:
                     elif self.pacbio:
                         bam_info = extract_bam_info_pacbio(self.bam_path[i],barcode_cell, barcode_umi)
                     else:
-                        bam_info = extract_bam_info(self.bam_path[i],barcode_cell, barcode_umi)
+                        bam_info = extract_bam_info(self.bam_path[i], barcode_cell, barcode_umi, workers=self.workers)
                 bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
                 if save_mem:
