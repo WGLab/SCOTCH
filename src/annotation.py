@@ -428,18 +428,19 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
         # a single object
         bams = [bam_file] #a pysam object
     #--> bams is a list of pysam objects
-    exons, coverage, junctions = [], {}, []
+    exons, junctions = [], []
+    size = gene_end - gene_start
+    diff = np.zeros(size + 1, dtype=np.int32)
     #get read coverage
     for bam in bams:
         for read in bam.fetch(chrom, gene_start, gene_end):
             if read.reference_start >= gene_start and read.reference_end < gene_end:
                 junctions += get_splicejuction_from_read(read)
-                for read_start, read_end in read.get_blocks():
-                    for pos in range(read_start, read_end):
-                        if pos in coverage:
-                            coverage[pos] += 1
-                        else:
-                            coverage[pos] = 1
+                for block_start, block_end in read.get_blocks():
+                    diff[block_start - gene_start] += 1
+                    diff[block_end - gene_start] -= 1
+    coverage_array = np.cumsum(diff[:size])
+    coverage = {pos + gene_start: int(cov) for pos, cov in enumerate(coverage_array) if cov > 0}
     if len(coverage)==0:
         return exons
     coverage_threshold_absolute = max(max(coverage.values())*coverage_threshold,20)
@@ -505,15 +506,19 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 20, min_region_size=
             bams = [pysam.AlignmentFile(bam_file, "rb")]
         else: #list
             bams = [pysam.AlignmentFile(bam, "rb") for bam in bam_file]
-        coverage = defaultdict(lambda: defaultdict(int))
+        coverage = {}
         chromosomes = sorted(set(ref for bam in bams for ref in bam.references))
         for chrom in chromosomes:
+            chrom_length = max(bam.get_reference_length(chrom) for bam in bams if chrom in bam.references)
+            diff = np.zeros(chrom_length + 1, dtype=np.int32)
             for bam in bams:
                 if chrom in bam.references:
                     for read in bam.fetch(chrom):
                         if not read.is_unmapped:
-                            for pos in range(read.reference_start, read.reference_end):
-                                coverage[chrom][pos] += 1
+                            diff[read.reference_start] += 1
+                            diff[read.reference_end] -= 1
+            coverage_array = np.cumsum(diff[:chrom_length])
+            coverage[chrom] = {pos: int(cov) for pos, cov in enumerate(coverage_array) if cov > 0}
         genes = {}
         for chrom, cov_dict in coverage.items():
             cov_dict = {pos: cov for pos, cov in cov_dict.items() if cov > coverage_threshold}
@@ -1095,7 +1100,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
 
 
 
