@@ -316,6 +316,42 @@ class ReadMapper:
             )
         return qname_dict_list, qname_cbumi_dict_list, qname_sample_dict_list
 
+    def _get_checkpoint_path(self, job_index):
+        base_path, ext = os.path.splitext(self.annotation_path_meta_gene_novel_list[0])
+        return f"{base_path}_{job_index}{ext}.temp"
+
+    def _save_checkpoint_atomic(self, checkpoint_data, checkpoint_path):
+        tmp_path = checkpoint_path + '.tmp'
+        with open(tmp_path, 'wb') as f:
+            pickle.dump(checkpoint_data, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_path, checkpoint_path)
+
+    def _load_checkpoint(self, checkpoint_path, job_index, total_jobs):
+        if not os.path.exists(checkpoint_path):
+            return None
+        try:
+            with open(checkpoint_path, 'rb') as f:
+                checkpoint_data = pickle.load(f)
+        except Exception as exc:
+            raise RuntimeError(f'Failed to load checkpoint {checkpoint_path}: {exc}') from exc
+        if checkpoint_data.get('job_index') != job_index:
+            raise RuntimeError(
+                f'Checkpoint job_index mismatch for {checkpoint_path}: '
+                f'expected {job_index}, found {checkpoint_data.get("job_index")}'
+            )
+        if checkpoint_data.get('total_jobs') != total_jobs:
+            raise RuntimeError(
+                f'Checkpoint total_jobs mismatch for {checkpoint_path}: '
+                f'expected {total_jobs}, found {checkpoint_data.get("total_jobs")}'
+            )
+        if not isinstance(checkpoint_data.get('processed_metagenes'), set):
+            raise RuntimeError(f'Checkpoint processed_metagenes is invalid in {checkpoint_path}')
+        if not isinstance(checkpoint_data.get('metagene_data'), dict):
+            raise RuntimeError(f'Checkpoint metagene_data is invalid in {checkpoint_path}')
+        return checkpoint_data
+
     def close(self):
         resources = []
         for attr in (
@@ -776,21 +812,45 @@ class ReadMapper:
                         MetaGene_Gene_dict[metagene_name] = genes_
             MetaGenes_job = list(MetaGene_Gene_dict.keys())
             self.logger.info(f'{str(len(MetaGenes_job))} metagenes for job {current_job_index}')
+            checkpoint_data = None
+            if total_jobs > 1:
+                checkpoint_path = self._get_checkpoint_path(current_job_index)
+                checkpoint_data = self._load_checkpoint(checkpoint_path, current_job_index, total_jobs)
+                if checkpoint_data is None:
+                    checkpoint_data = {
+                        "job_index": current_job_index,
+                        "total_jobs": total_jobs,
+                        "processed_metagenes": set(),
+                        "metagene_data": {}
+                    }
+                else:
+                    processed_count = len(checkpoint_data['processed_metagenes'])
+                    self.logger.info(f'Resuming from checkpoint {checkpoint_path}: {processed_count} metagenes already completed')
+                    for meta_gene, meta_gene_data in checkpoint_data['metagene_data'].items():
+                        self.metageneStructureInformationwNovel[meta_gene] = copy.deepcopy(meta_gene_data)
+                MetaGenes_job = [meta_gene for meta_gene in MetaGenes_job
+                                 if meta_gene not in checkpoint_data['processed_metagenes']]
             #print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
-            if self.parse:
-                for meta_gene in MetaGenes_job:
-                    print(meta_gene)
+            for meta_gene in MetaGenes_job:
+                print(meta_gene)
+                if self.parse:
                     self.map_reads_parse(meta_gene, save=True)
-            else:
-                for meta_gene in MetaGenes_job:
-                    print(meta_gene)
+                else:
                     self.map_reads(meta_gene, save=True)
-            for key in MetaGenes:
-                if key not in MetaGenes_job:
-                    del self.metageneStructureInformationwNovel[key]
+                if checkpoint_data is not None:
+                    checkpoint_data_updated = copy.deepcopy(checkpoint_data)
+                    checkpoint_data_updated['metagene_data'][meta_gene] = copy.deepcopy(self.metageneStructureInformationwNovel[meta_gene])
+                    checkpoint_data_updated['processed_metagenes'].add(meta_gene)
+                    self._save_checkpoint_atomic(checkpoint_data_updated, checkpoint_path)
+                    checkpoint_data = checkpoint_data_updated
+            if checkpoint_data is not None:
+                self.metageneStructureInformationwNovel = copy.deepcopy(checkpoint_data['metagene_data'])
             gene_ids = [g_name_id.split('_')[1] for g_name_ids in list(MetaGene_Gene_dict.values()) for g_name_id in g_name_ids]
-            gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
-            self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
+            if len(gene_ids) > 0:
+                gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
+                self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
+            else:
+                self.gtf_df_job = self.gtf_df.iloc[0:0].copy()
         finally:
             self.close()
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
@@ -812,6 +872,9 @@ class ReadMapper:
                 pickle.dump(self.metageneStructureInformationwNovel, file)
             #save gtf file
             convert_to_gtf(self.metageneStructureInformationwNovel, file_name_gtf, self.gtf_df_job, num_cores=1)
+            checkpoint_path = self._get_checkpoint_path(current_job_index)
+            if os.path.exists(checkpoint_path):
+                os.remove(checkpoint_path)
 
 
 
