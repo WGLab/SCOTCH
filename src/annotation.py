@@ -653,16 +653,17 @@ def annotate_genes(geneStructureInformation, bamfile_path,
             updated_indices = [ii for i in updated_indices for ii in i]
             updated_isoform_info[isoform] = updated_indices
         return updated_isoform_info
-    def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold):
-        chrom, gene_start, gene_end = geneStructureInformation[geneID][0]['geneChr'], \
-        geneStructureInformation[geneID][0]['geneStart'], geneStructureInformation[geneID][0]['geneEnd']
+    def _open_bamfiles_for_chromosome(bamfile_path, chrom):
         bamfiles = None
         # ----from one sample
         if isinstance(bamfile_path, str):
             if os.path.isfile(bamfile_path) == False:  # bamfile is a folder path
                 bamFile_name = [f for f in os.listdir(bamfile_path) if
                                 f.endswith('.bam') and '.' + str(chrom) + '.' in f]
-                bamfiles = [pysam.AlignmentFile(os.path.join(bamfile_path, bamFile_name[0]))]  # bamfile is a file path now
+                if len(bamFile_name) > 0:
+                    bamfiles = [pysam.AlignmentFile(os.path.join(bamfile_path, bamFile_name[0]))]  # bamfile is a file path now
+                else:
+                    bamfiles = []
             else:
                 bamfiles = [pysam.AlignmentFile(bamfile_path, "rb")]  # bamfile is a file path
         # -----from multiple samples
@@ -678,21 +679,52 @@ def annotate_genes(geneStructureInformation, bamfile_path,
                 bamfiles = [pysam.AlignmentFile(bfn, "rb") for bfn in bamfile_path]
         else:
             print('bamfile must be a list or str')
-        chromosomes = sorted(set(ref for bam in bamfiles for ref in bam.references))
-        if chrom not in chromosomes:
+            bamfiles = []
+        return bamfiles
+    def update_annotation(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold, bamfiles=None):
+        chrom, gene_start, gene_end = geneStructureInformation[geneID][0]['geneChr'], \
+        geneStructureInformation[geneID][0]['geneStart'], geneStructureInformation[geneID][0]['geneEnd']
+        close_bamfiles = bamfiles is None
+        if bamfiles is None:
+            bamfiles = _open_bamfiles_for_chromosome(bamfile_path, chrom)
+        if len(bamfiles) == 0:
             return None
-        exons_bam = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
-        original_exons = geneStructureInformation[geneID][1]
-        updated_exons = update_exons(exons_bam, original_exons)
-        geneStructureInformation_copy = geneStructureInformation.copy()
-        # geneInfo
-        geneInfo = geneStructureInformation_copy[geneID][0]
-        geneInfo['numofExons'] = len(updated_exons)
-        # exonInfo
-        exonInfo = updated_exons
-        # isoformInfo
-        isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation_copy[geneID][2])
-        return {geneID:[geneInfo, exonInfo, isoformInfo]}
+        try:
+            chromosomes = sorted(set(ref for bam in bamfiles for ref in bam.references))
+            if chrom not in chromosomes:
+                return None
+            exons_bam = get_non_overlapping_exons(bamfiles, chrom, gene_start, gene_end, coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold)
+            original_exons = geneStructureInformation[geneID][1]
+            updated_exons = update_exons(exons_bam, original_exons)
+            geneStructureInformation_copy = geneStructureInformation.copy()
+            # geneInfo
+            geneInfo = geneStructureInformation_copy[geneID][0]
+            geneInfo['numofExons'] = len(updated_exons)
+            # exonInfo
+            exonInfo = updated_exons
+            # isoformInfo
+            isoformInfo = update_isoform_info(original_exons, updated_exons, geneStructureInformation_copy[geneID][2])
+            return {geneID:[geneInfo, exonInfo, isoformInfo]}
+        finally:
+            if close_bamfiles:
+                for bam in bamfiles:
+                    bam.close()
+    def update_annotations_by_chromosome(geneStructureInformation, chrom, geneIDs, bamfile_path,
+                                         coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold):
+        bamfiles = _open_bamfiles_for_chromosome(bamfile_path, chrom)
+        if len(bamfiles) == 0:
+            return {}
+        try:
+            annotations = {}
+            for geneID in geneIDs:
+                result = update_annotation(geneStructureInformation, geneID, bamfile_path, coverage_threshold_exon,
+                                           coverage_threshold_splicing, z_score_threshold, bamfiles=bamfiles)
+                if result is not None:
+                    annotations.update(result)
+            return annotations
+        finally:
+            for bam in bamfiles:
+                bam.close()
     #generate gene annotation solely based on bam file
     if geneStructureInformation is None:
         logger.info(f'generating gene annotation solely based on bam file-----')
@@ -706,13 +738,58 @@ def annotate_genes(geneStructureInformation, bamfile_path,
     #update existing gene annotation using bam file
     else:
         logger.info(f'updating existing gene annotation using bam file-----')
-        geneIDs = list(geneStructureInformation.keys())
-        results = Parallel(n_jobs=workers)(
-            delayed(update_annotation)(geneStructureInformation, geneID, bamfile_path,coverage_threshold_exon,
-                                       coverage_threshold_splicing, z_score_threshold) for geneID in geneIDs)
-        annotations = {k: v for result in results if result is not None for k, v in result.items()}
+        geneIDs_by_chrom = defaultdict(list)
+        for geneID, gene_info in geneStructureInformation.items():
+            geneIDs_by_chrom[gene_info[0]['geneChr']].append(geneID)
+        chroms = list(geneIDs_by_chrom.keys())
+        if len(chroms) == 0:
+            annotations = {}
+        else:
+            results = Parallel(n_jobs=min(workers, len(chroms)))(
+                delayed(update_annotations_by_chromosome)(
+                    geneStructureInformation, chrom, geneIDs_by_chrom[chrom], bamfile_path,
+                    coverage_threshold_exon, coverage_threshold_splicing, z_score_threshold
+                ) for chrom in chroms
+            )
+            annotations = {k: v for result in results for k, v in result.items()}
         logger.info(f'finished updating')
     return annotations #{geneID:[geneInfo, exonInfo, isoformInfo]}
+
+
+def _build_genes_df_from_structure(geneStructureInformation):
+    rows = []
+    for geneID, gene_info in geneStructureInformation.items():
+        gene_meta = gene_info[0]
+        rows.append([
+            gene_meta['geneChr'],
+            gene_meta['geneStart'],
+            gene_meta['geneEnd'],
+            gene_meta['geneID'],
+            gene_meta['geneName']
+        ])
+    genes = pd.DataFrame(rows, columns=['CHR', 'START', 'END', 'GENE_ID', 'GENE_NAME'])
+    if genes.empty:
+        genes['GENE_TYPE'] = pd.Series(dtype=object)
+        genes['STRAND'] = pd.Series(dtype=object)
+        genes['META_GENE'] = pd.Series(dtype=int)
+        return genes
+    genes = genes.sort_values(by=['CHR', 'START', 'END', 'GENE_ID']).reset_index(drop=True)
+    meta_gene_ids = []
+    current_chr = None
+    current_end = None
+    current_meta_gene = 0
+    for row in genes.itertuples(index=False):
+        if row.CHR != current_chr or row.START > current_end:
+            current_meta_gene += 1
+            current_chr = row.CHR
+            current_end = row.END
+        else:
+            current_end = max(current_end, row.END)
+        meta_gene_ids.append(current_meta_gene)
+    genes['GENE_TYPE'] = '.'
+    genes['STRAND'] = '.'
+    genes['META_GENE'] = meta_gene_ids
+    return genes
 
 
 def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_path, num_cores=8,
@@ -730,7 +807,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
     """
     geneStructureInformation = None
     meta_output = os.path.join(os.path.dirname(output), 'meta' + os.path.basename(output))
-    if refGeneFile_gtf_path is not None:
+    reference_pkl_exists = refGeneFile_pkl_path is not None and os.path.isfile(refGeneFile_pkl_path)
+    if refGeneFile_gtf_path is not None and not reference_pkl_exists:
         logger.info(f'load existing reference gtf file from {refGeneFile_gtf_path}')
         genes, exons = ref.generate_reference_df(gtf_path=refGeneFile_gtf_path)
     else:
@@ -786,7 +864,6 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         refGeneFile_pkl_path = output
     # load pkl
     if refGeneFile_pkl_path is not None: ###use pickle
-        assert refGeneFile_gtf_path is not None, 'gtf reference file is still needed! please input one'
         logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_pkl_path))
         geneStructureInformation = load_pickle(refGeneFile_pkl_path)
         #check if geneStructureInformation contains build
@@ -795,6 +872,8 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
                 geneStructureInformation = add_build(geneStructureInformation, build)
         if os.path.abspath(refGeneFile_pkl_path) != os.path.abspath(output):
             shutil.copy(refGeneFile_pkl_path, output)
+        if genes is None:
+            genes = _build_genes_df_from_structure(geneStructureInformation)
 
         ##############################################################
         #option3: ---------update existing annotation using bam file##
@@ -1018,10 +1097,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
-
-
-
 
 
 
