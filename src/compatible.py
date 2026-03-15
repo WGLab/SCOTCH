@@ -195,12 +195,12 @@ class ReadMapper:
         self.barcode_umi = barcode_umi
         self.save_mem = save_mem
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
+        self._gtf_column_names = column_names
+        self._reference_gtf_path = reference_gtf_path
+        self._gtf_df = None
+        self._bam_cache = {}
         self.ref_fasta_path = ref_fasta_path if 'parse' not in platform else None
         self.fasta_handle = pysam.FastaFile(ref_fasta_path) if self.ref_fasta_path is not None else None
-        if reference_gtf_path is not None or reference_gtf_path=='None':
-            self.gtf_df = pd.read_csv(reference_gtf_path, sep='\t', comment='#', header=None, names=column_names)
-        else:
-            self.gtf_df = pd.DataFrame(columns=column_names)
         # gene annotation information
         self.annotation_folder_path_list = [os.path.join(target_, 'reference') for target_ in target]
         self.annotation_path_single_gene_list = [os.path.join(target_, 'reference/geneStructureInformation.pkl') for target_ in target]
@@ -240,6 +240,21 @@ class ReadMapper:
             self.qname_sample_dict = self.qname_sample_dict_list[0]
         self.metageneStructureInformation = load_pickle(self.annotation_path_meta_gene_list[0])
         self.metageneStructureInformationwNovel = self.metageneStructureInformation.copy()
+
+    @property
+    def gtf_df(self):
+        if self._gtf_df is None:
+            if self._reference_gtf_path is not None and self._reference_gtf_path != 'None':
+                self._gtf_df = pd.read_csv(
+                    self._reference_gtf_path,
+                    sep='\t',
+                    comment='#',
+                    header=None,
+                    names=self._gtf_column_names
+                )
+            else:
+                self._gtf_df = pd.DataFrame(columns=self._gtf_column_names)
+        return self._gtf_df
 
     def _load_bam_info_dicts(self):
         """Load qname dicts, using sqlite (on-disk) when save_mem=True, falling back to pkl."""
@@ -322,26 +337,44 @@ class ReadMapper:
             if isinstance(resource, SqliteDict) and id(resource) not in seen:
                 resource.close()
                 seen.add(id(resource))
+        for bam_handle in self._bam_cache.values():
+            bam_handle.close()
+        self._bam_cache.clear()
+        if self.fasta_handle is not None:
+            self.fasta_handle.close()
+            self.fasta_handle = None
 
     def read_bam(self, chrom = None):
         #if parse: the input length is 1
         # bam_path is a folder
         bamFilePysam_list = []
-        for bam_path in self.bam_path:
+        for sample_index, bam_path in enumerate(self.bam_path):
             if os.path.isfile(bam_path) == False: # If it's a folder, find the BAM file based on chrom
                 if chrom is not None:
                     bamFile_name = [f for f in os.listdir(bam_path) if f.endswith('.bam') and '.' + chrom + '.' in f]
                     if bamFile_name:  # Ensure a matching BAM file is found
                         bamFile = os.path.join(bam_path, bamFile_name[0])  # Not .bai
-                        bamFilePysam = pysam.Samfile(bamFile, "rb")
+                        cache_key = (sample_index, bamFile, chrom)
+                        bamFilePysam = self._bam_cache.get(cache_key)
+                        if bamFilePysam is None:
+                            bamFilePysam = pysam.Samfile(bamFile, "rb")
+                            self._bam_cache[cache_key] = bamFilePysam
                         bamFilePysam_list.append(bamFilePysam)
                 else:
                     #read the merged bam file, has to run merge_bam first
-                    bamFilePysam = pysam.Samfile(self.sorted_bam_path, "rb")
+                    cache_key = self.sorted_bam_path
+                    bamFilePysam = self._bam_cache.get(cache_key)
+                    if bamFilePysam is None:
+                        bamFilePysam = pysam.Samfile(self.sorted_bam_path, "rb")
+                        self._bam_cache[cache_key] = bamFilePysam
                     bamFilePysam_list.append(bamFilePysam)
             else:
                 # If it's a BAM file path, read it directly
-                bamFilePysam = pysam.Samfile(bam_path, "rb")
+                cache_key = bam_path
+                bamFilePysam = self._bam_cache.get(cache_key)
+                if bamFilePysam is None:
+                    bamFilePysam = pysam.Samfile(bam_path, "rb")
+                    self._bam_cache[cache_key] = bamFilePysam
                 bamFilePysam_list.append(bamFilePysam)
         if self.parse:
             bamFilePysam_list = bamFilePysam_list[0] #not a list
