@@ -215,7 +215,7 @@ def bam_info_to_dict(bam_info, parse=False):
     #generate qname_dict
     max_length_df = bam_info.drop_duplicates(subset='CBUMI', keep='first')
     cbumi_to_max_qname = pd.Series(max_length_df.QNAME.values, index=max_length_df.CBUMI).to_dict()
-    qname_dict = {row['QNAME']: cbumi_to_max_qname[row['CBUMI']] for index, row in bam_info.iterrows()}
+    qname_dict = dict(zip(bam_info['QNAME'], bam_info['CBUMI'].map(cbumi_to_max_qname)))
     #generate qname_cbumi_dict
     # Assuming 'bam_info' is your pandas DataFrame
     qname_cbumi_dict = dict(zip(bam_info['QNAME'], bam_info['CBUMI']))
@@ -227,10 +227,8 @@ def bam_info_to_dict(bam_info, parse=False):
 def bam_info_to_dict_mem(bam_info_path, parse=False, chunksize=500000):
     cbumi_to_max_qname = {}
     for chunk in pd.read_csv(bam_info_path, chunksize=chunksize):
-        chunk = chunk.sort_values(by=["CBUMI", "LENGTH"], ascending=[True, False])
-        local_max = chunk.drop_duplicates(subset="CBUMI", keep="first")
-        for _, row in local_max.iterrows():
-            cbumi, length, qname = row["CBUMI"], row["LENGTH"], row["QNAME"]
+        local_max = chunk.loc[chunk.groupby("CBUMI")["LENGTH"].idxmax(), ["CBUMI", "LENGTH", "QNAME"]]
+        for cbumi, length, qname in zip(local_max["CBUMI"], local_max["LENGTH"], local_max["QNAME"]):
             if (cbumi not in cbumi_to_max_qname) or (length > cbumi_to_max_qname[cbumi][1]):
                 cbumi_to_max_qname[cbumi] = (qname, length)
         del chunk, local_max
@@ -240,12 +238,12 @@ def bam_info_to_dict_mem(bam_info_path, parse=False, chunksize=500000):
     qname_cbumi_dict = {}
     qname_sample_dict = {} if parse else None
     for chunk in pd.read_csv(bam_info_path, chunksize=chunksize):
-        for _, row in chunk.iterrows():
-            qname, cbumi = row["QNAME"], row["CBUMI"]
-            qname_dict[qname] = cbumi_to_max_qname.get(cbumi, None)
-            qname_cbumi_dict[qname] = cbumi
-            if parse:
-                qname_sample_dict[qname] = row["SAMPLE"]
+        qnames = chunk["QNAME"]
+        cbumis = chunk["CBUMI"]
+        qname_dict.update(zip(qnames, cbumis.map(cbumi_to_max_qname)))
+        qname_cbumi_dict.update(zip(qnames, cbumis))
+        if parse:
+            qname_sample_dict.update(zip(qnames, chunk["SAMPLE"]))
         del chunk
         gc.collect()
     return qname_dict, qname_cbumi_dict, qname_sample_dict
@@ -1097,7 +1095,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
 
 
 
