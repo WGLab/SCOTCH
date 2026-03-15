@@ -9,6 +9,7 @@ from Bio.Seq import Seq
 import networkx as nx
 import community.community_louvain as community_louvain
 from collections import defaultdict
+from itertools import islice
 
 #bam="/scr1/users/xu3/singlecell/project_singlecell/sample8_R10/bam/sample8_R10.filtered.bam"
 #gene_pkl="/scr1/users/xu3/singlecell/project_singlecell/M4/reference/geneStructureInformation.pkl"
@@ -90,10 +91,22 @@ class SqliteDict:
     def __setitem__(self, key, value):
         self.conn.execute("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", (key, value))
 
-    def batch_insert(self, items):
-        """Insert many (key, value) pairs efficiently."""
-        self.conn.executemany("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", items)
-        self.conn.commit()
+    def batch_insert(self, items, chunk_size=100000):
+        """Insert many (key, value) pairs efficiently in bounded transactions."""
+        total_inserted = 0
+        iterator = iter(items)
+        while True:
+            chunk = list(islice(iterator, chunk_size))
+            if not chunk:
+                break
+            self.conn.executemany("INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)", chunk)
+            self.conn.commit()
+            total_inserted += len(chunk)
+        return total_inserted
+
+    def count(self):
+        row = self.conn.execute("SELECT COUNT(*) FROM kv").fetchone()
+        return row[0] if row is not None else 0
 
     def commit(self):
         self.conn.commit()
@@ -143,15 +156,27 @@ def convert_pkl_to_sqlite(pkl_path, sqlite_path, logger=None):
 
         if logger:
             logger.info(f"Converting {pkl_path} -> {sqlite_path}")
+            logger.info(f"Loading pickle file: {pkl_path}")
         with open(pkl_path, 'rb') as f:
             data = pickle.load(f)
         if data is None:
+            if logger:
+                logger.info(f"Pickle file contains None, skipping: {pkl_path}")
             return
+        if logger:
+            logger.info(f"Pickle loaded ({len(data)} entries), writing sqlite: {tmp_sqlite_path}")
 
         db = None
         try:
             db = SqliteDict(tmp_sqlite_path, flag='c')
-            db.batch_insert(((str(k), str(v)) for k, v in data.items()))
+            expected_rows = len(data)
+            inserted_rows = db.batch_insert(((str(k), str(v)) for k, v in data.items()))
+            actual_rows = db.count()
+            if actual_rows != expected_rows:
+                raise RuntimeError(
+                    f"Sqlite conversion row-count mismatch for {pkl_path}: "
+                    f"expected {expected_rows}, inserted {inserted_rows}, sqlite has {actual_rows}"
+                )
             db.conn.execute("PRAGMA wal_checkpoint(FULL)")
             db.close()
             db = None
@@ -1273,7 +1298,6 @@ def get_intron_cover(read, isoform_name, Info_singlegene):
     return intron_covers
 
 #####some functions to delete ########
-
 
 
 
