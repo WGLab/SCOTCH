@@ -34,8 +34,8 @@ parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length
 parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
 parser.add_argument('--barcode_umi',type=str,  help="umi barcode tag in bam file")
 parser.add_argument('--save_mem_ann', action='store_true', help="whether to use save memory mode to process in chunks")
-parser.add_argument('--save_mem', action='store_true', default=True, help="use on-disk sqlite lookup for bam info dicts in compatible matrix step to save memory (default: True)")
-parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', help="disable memory-efficient mode: load bam info dicts fully into RAM (legacy behavior)")
+parser.add_argument('--save_mem', action='store_true', default=True, help="use on-disk sqlite lookup for bam info dicts in compatible matrix step to save memory (default: True). Trades more disk space (~2-3x larger than pkl) for far less RAM usage. Sqlite files are auto-generated from pkl on first run and reused thereafter.")
+parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', help="disable memory-efficient mode: load bam info dicts fully into RAM (legacy behavior). Uses less disk space but requires enough RAM to hold all bam info dicts in memory.")
 
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
