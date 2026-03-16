@@ -316,9 +316,11 @@ class ReadMapper:
             )
         return qname_dict_list, qname_cbumi_dict_list, qname_sample_dict_list
 
-    def _get_checkpoint_path(self, job_index):
+    def _get_checkpoint_path(self, job_index, total_jobs=1):
         base_path, ext = os.path.splitext(self.annotation_path_meta_gene_novel_list[0])
-        return f"{base_path}_{job_index}{ext}.temp"
+        if total_jobs > 1:
+            return f"{base_path}_{job_index}{ext}.temp"
+        return f"{base_path}{ext}.temp"
 
     def _save_checkpoint_atomic(self, checkpoint_data, checkpoint_path):
         tmp_path = checkpoint_path + '.tmp'
@@ -769,7 +771,7 @@ class ReadMapper:
                         os.makedirs(compatible_matrix_folder_path, exist_ok=True)
             MetaGenes = list(self.metageneStructureInformation.keys()) #all meta genes
             chunks = np.array_split(MetaGenes, total_jobs)
-            MetaGenes_job = chunks[current_job_index]
+            MetaGenes_job = list(chunks[current_job_index])
             if self.genenames_subset is not None:
                 gene_names_set = set(self.genenames_subset)
                 MetaGenes_job = [mg for mg in MetaGenes_job
@@ -778,74 +780,55 @@ class ReadMapper:
                 self.logger.info(f'Gene subset applied: {len(MetaGenes_job)} metagenes match the {len(gene_names_set)} requested gene names')
             if cover_existing:
                 print('If there are existing compatible matrix files, SCOTCH will overwrite them')
-                genes_existing = []
             else:
                 print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
-                if self.parse:
-                    self.compatible_matrix_folder_paths = find_subfolder(self.target[0], subfolder='compatible_matrix')
-                    self.read_mapping_paths = find_subfolder(self.target[0], subfolder='auxillary')
-                    genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_paths
-                                      for file in os.listdir(folder_path) if file.endswith('.csv')]
-                    for folder_path in self.compatible_matrix_folder_paths:
-                        log_file_path = os.path.join(folder_path, 'log.txt')
-                        if os.path.isfile(log_file_path):
-                            gene_df = pd.read_csv(log_file_path, header=None)
-                            genes_existing += gene_df.iloc[:, 0].tolist()
-                else:
-                    genes_existing = [file[:-4] for folder_path in self.compatible_matrix_folder_path_list
-                                      for file in os.listdir(folder_path) if file.endswith('.csv')]
-                    for folder_path in self.compatible_matrix_folder_path_list:
-                        log_file_path = os.path.join(folder_path, 'log.txt')
-                        if os.path.isfile(log_file_path):
-                            gene_df = pd.read_csv(log_file_path, header=None)
-                            genes_existing += gene_df.iloc[:, 0].tolist()
-                print('there exist ' + str(len(set(genes_existing))) + ' genes')
-            MetaGene_Gene_dict = {}
-            for metagene_name, genes_info in self.metageneStructureInformation.items():
-                if metagene_name in MetaGenes_job:
-                    genes_ = []
-                    for gene_info in genes_info:
-                        gene = str(gene_info[0]['geneName']) + '_' + str(gene_info[0]['geneID'])
-                        if gene not in genes_existing:
-                            genes_.append(gene)
-                    if len(genes_) > 0:
-                        MetaGene_Gene_dict[metagene_name] = genes_
-            MetaGenes_job = list(MetaGene_Gene_dict.keys())
-            self.logger.info(f'{str(len(MetaGenes_job))} metagenes for job {current_job_index}')
-            checkpoint_data = None
-            if total_jobs > 1:
-                checkpoint_path = self._get_checkpoint_path(current_job_index)
-                checkpoint_data = self._load_checkpoint(checkpoint_path, current_job_index, total_jobs)
-                if checkpoint_data is None:
-                    checkpoint_data = {
-                        "job_index": current_job_index,
-                        "total_jobs": total_jobs,
-                        "processed_metagenes": set(),
-                        "metagene_data": {}
-                    }
-                else:
-                    processed_count = len(checkpoint_data['processed_metagenes'])
-                    self.logger.info(f'Resuming from checkpoint {checkpoint_path}: {processed_count} metagenes already completed')
-                    for meta_gene, meta_gene_data in checkpoint_data['metagene_data'].items():
-                        self.metageneStructureInformationwNovel[meta_gene] = copy.deepcopy(meta_gene_data)
-                MetaGenes_job = [meta_gene for meta_gene in MetaGenes_job
-                                 if meta_gene not in checkpoint_data['processed_metagenes']]
-            #print('processing ' + str(len(MetaGenes_job)) + ' metagenes for this job')
-            for meta_gene in MetaGenes_job:
+            assigned_metagenes = MetaGenes_job
+            checkpoint_path = self._get_checkpoint_path(current_job_index, total_jobs)
+            checkpoint_data = self._load_checkpoint(checkpoint_path, current_job_index, total_jobs)
+            if checkpoint_data is None:
+                checkpoint_data = {
+                    "job_index": current_job_index,
+                    "total_jobs": total_jobs,
+                    "processed_metagenes": set(),
+                    "metagene_data": {}
+                }
+            else:
+                for meta_gene, meta_gene_data in checkpoint_data['metagene_data'].items():
+                    self.metageneStructureInformationwNovel[meta_gene] = copy.deepcopy(meta_gene_data)
+            restored_metagenes = [
+                meta_gene for meta_gene in assigned_metagenes
+                if meta_gene in checkpoint_data['processed_metagenes']
+            ]
+            remaining_metagenes = [
+                meta_gene for meta_gene in assigned_metagenes
+                if meta_gene not in checkpoint_data['processed_metagenes']
+            ]
+            self.logger.info(
+                f'{len(assigned_metagenes)} assigned, '
+                f'{len(restored_metagenes)} restored from checkpoint, '
+                f'{len(remaining_metagenes)} remaining for job {current_job_index}'
+            )
+            for meta_gene in remaining_metagenes:
                 print(meta_gene)
                 if self.parse:
                     self.map_reads_parse(meta_gene, save=True)
                 else:
                     self.map_reads(meta_gene, save=True)
-                if checkpoint_data is not None:
-                    checkpoint_data_updated = copy.deepcopy(checkpoint_data)
-                    checkpoint_data_updated['metagene_data'][meta_gene] = copy.deepcopy(self.metageneStructureInformationwNovel[meta_gene])
-                    checkpoint_data_updated['processed_metagenes'].add(meta_gene)
-                    self._save_checkpoint_atomic(checkpoint_data_updated, checkpoint_path)
-                    checkpoint_data = checkpoint_data_updated
-            if checkpoint_data is not None:
-                self.metageneStructureInformationwNovel = copy.deepcopy(checkpoint_data['metagene_data'])
-            gene_ids = [g_name_id.split('_')[1] for g_name_ids in list(MetaGene_Gene_dict.values()) for g_name_id in g_name_ids]
+                checkpoint_data_updated = copy.deepcopy(checkpoint_data)
+                checkpoint_data_updated['metagene_data'][meta_gene] = copy.deepcopy(self.metageneStructureInformationwNovel[meta_gene])
+                checkpoint_data_updated['processed_metagenes'].add(meta_gene)
+                self._save_checkpoint_atomic(checkpoint_data_updated, checkpoint_path)
+                checkpoint_data = checkpoint_data_updated
+            self.metageneStructureInformationwNovel = {
+                meta_gene: copy.deepcopy(checkpoint_data['metagene_data'][meta_gene])
+                for meta_gene in assigned_metagenes
+                if meta_gene in checkpoint_data['metagene_data']
+            }
+            gene_ids = [
+                gene_info[0]['geneID']
+                for genes_info in self.metageneStructureInformationwNovel.values()
+                for gene_info in genes_info
+            ]
             if len(gene_ids) > 0:
                 gene_ids_pattern = '|'.join([f'gene_id "{gene_id}"' for gene_id in gene_ids])
                 self.gtf_df_job = self.gtf_df[self.gtf_df['attribute'].str.contains(gene_ids_pattern, regex=True)].reset_index(drop=True)
@@ -855,6 +838,7 @@ class ReadMapper:
             self.close()
     def save_annotation_w_novel_isoform(self, total_jobs = 1, current_job_index = 0):
         self.logger.info(f'Saving annotation file...')
+        checkpoint_path = self._get_checkpoint_path(current_job_index, total_jobs)
         for i in range(len(self.annotation_path_meta_gene_list)):
             if total_jobs>1:
                 base = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index)
@@ -872,9 +856,8 @@ class ReadMapper:
                 pickle.dump(self.metageneStructureInformationwNovel, file)
             #save gtf file
             convert_to_gtf(self.metageneStructureInformationwNovel, file_name_gtf, self.gtf_df_job, num_cores=1)
-            checkpoint_path = self._get_checkpoint_path(current_job_index)
-            if os.path.exists(checkpoint_path):
-                os.remove(checkpoint_path)
+        if os.path.exists(checkpoint_path):
+            os.remove(checkpoint_path)
 
 
 
