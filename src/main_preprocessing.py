@@ -40,8 +40,6 @@ parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', hel
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
 parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork")
-parser.add_argument('--cover_existing',action='store_true')
-parser.add_argument('--cover_existing_false', action='store_false',dest='cover_existing')
 parser.add_argument('--small_exon_threshold',type=int,default=0, help="dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--small_exon_threshold_high',type=int,default=80, help="the upper bound of dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--truncation_match',type =float, default=0.4, help="higher than this threshold at the truncation end will be adjusted to 1")
@@ -186,8 +184,7 @@ def main():
                                    ref_fasta_path=args.reference_genome_fasta,
                                    genenames_subset=gene_subset,
                                    save_mem=args.save_mem)
-        readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
-                                      total_jobs=args.total_jobs,current_job_index=args.job_index)
+        readmapper.map_reads_allgenes(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')

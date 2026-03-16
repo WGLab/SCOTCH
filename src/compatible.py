@@ -763,7 +763,7 @@ class ReadMapper:
                              'isoformInfo': self.metageneStructureInformationwNovel[meta_gene][index][2]})
             if save == False:
                 return return_samples
-    def map_reads_allgenes(self, cover_existing = True, total_jobs = 1, current_job_index = 0):
+    def map_reads_allgenes(self, total_jobs = 1, current_job_index = 0):
         try:
             if self.parse==False:
                 for compatible_matrix_folder_path in self.compatible_matrix_folder_path_list:
@@ -778,10 +778,6 @@ class ReadMapper:
                                  if any(gene_info[0]['geneName'] in gene_names_set
                                         for gene_info in self.metageneStructureInformation[mg])]
                 self.logger.info(f'Gene subset applied: {len(MetaGenes_job)} metagenes match the {len(gene_names_set)} requested gene names')
-            if cover_existing:
-                print('If there are existing compatible matrix files, SCOTCH will overwrite them')
-            else:
-                print('If there are existing compatible matrix files, SCOTCH will not overwrite them')
             assigned_metagenes = MetaGenes_job
             checkpoint_path = self._get_checkpoint_path(current_job_index, total_jobs)
             checkpoint_data = self._load_checkpoint(checkpoint_path, current_job_index, total_jobs)
