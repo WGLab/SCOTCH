@@ -64,11 +64,11 @@ RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"  
 
 # --- Resource settings: SCOTCH ---
 SCOTCH_ANNOT_CPUS=10                                # CPUs for annotation step
-SCOTCH_ANNOT_MEM=300G                               # Memory for annotation step
+SCOTCH_ANNOT_MEM=80G                               # Memory for annotation step
 SCOTCH_ANNOT_TIME=1-00:00:00                        # Time limit for annotation
 
 SCOTCH_COMPAT_NJOBS=10                              # Number of array jobs for compatible matrix
-SCOTCH_COMPAT_MEM=100G                              # Memory per array task
+SCOTCH_COMPAT_MEM=80G                              # Memory per array task
 SCOTCH_COMPAT_TIME=1-00:00:00                       # Time limit per array task
 
 SCOTCH_SUMMARY_CPUS=10                               # CPUs for summary step
@@ -76,7 +76,7 @@ SCOTCH_SUMMARY_MEM=80G                              # Memory for summary step
 SCOTCH_SUMMARY_TIME=04:00:00                        # Time limit for summary
 
 SCOTCH_COUNT_CPUS=1                                 # CPUs for count matrix step
-SCOTCH_COUNT_MEM=200G                               # Memory for count matrix
+SCOTCH_COUNT_MEM=80G                               # Memory for count matrix
 SCOTCH_COUNT_TIME=1-00:00:00                        # Time limit for count matrix
 
 # --- Resource settings: IsoQuant ---
