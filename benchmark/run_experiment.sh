@@ -17,6 +17,8 @@
 #   1.2 — SCOTCH single-sample (5M only)
 #   1.3 — SCOTCH single-sample (15M only)
 #   1.4 — SCOTCH single-sample (50M only)
+#   1.3a — SCOTCH 15M with 25 array jobs (reuses 1.3 annotation)
+#   1.3b — SCOTCH 15M with 40 array jobs (reuses 1.3 annotation)
 #   2  — SCOTCH multi-sample (3 x 5M)
 #   3  — IsoQuant single-sample (1M, 5M, 15M, 50M)
 #   3.1 — IsoQuant single-sample (1M only)
@@ -106,6 +108,8 @@ if [ -z "${PHASE}" ]; then
     echo "  1.2  SCOTCH single-sample (5M only)"
     echo "  1.3  SCOTCH single-sample (15M only)"
     echo "  1.4  SCOTCH single-sample (50M only)"
+    echo "  1.3a SCOTCH 15M with 25 array jobs (reuses 1.3 annotation)"
+    echo "  1.3b SCOTCH 15M with 40 array jobs (reuses 1.3 annotation)"
     echo "  2    SCOTCH multi-sample (3 x 5M)"
     echo "  3    IsoQuant single-sample (1M, 5M, 15M, 50M)"
     echo "  3.1  IsoQuant single-sample (1M only)"
@@ -232,6 +236,101 @@ submit_scotch() {
       > "${OUT_BASE}/slurm_job_ids.txt"
 
     SCOTCH_LAST_JOB=${JOB4}
+}
+
+# -------------------------------------------------------
+# Helper: submit SCOTCH array-scaling experiment
+# Reuses annotation + BAM info from an existing SCOTCH run,
+# only runs compatible + summary + count with a different array size.
+# Usage: submit_scotch_array_scaling <read_label> <njobs> <source_base>
+# Returns: final job ID in SCOTCH_LAST_JOB
+# -------------------------------------------------------
+submit_scotch_array_scaling() {
+    local READ_LABEL=$1
+    local NJOBS=$2
+    local SOURCE_BASE=$3   # e.g., results/scotch/single/reads_15M
+
+    local OUT_BASE="${RESULTS_BASE}/scotch/single/reads_${READ_LABEL}_j${NJOBS}"
+    local SOURCE_SAMPLE="${SOURCE_BASE}/sample1"
+    local TARGET_SAMPLE="${OUT_BASE}/sample1"
+    mkdir -p "${OUT_BASE}" "${TARGET_SAMPLE}/reference" "${TARGET_SAMPLE}/bam" logs
+
+    # Verify source annotation exists
+    if [ ! -f "${SOURCE_SAMPLE}/reference/metageneStructureInformation.pkl" ]; then
+        echo "ERROR: Source annotation not found at ${SOURCE_SAMPLE}/reference/"
+        echo "Run phase 1.3 first to generate annotation for 15M reads."
+        exit 1
+    fi
+
+    # Symlink annotation files from source
+    for f in metageneStructureInformation.pkl geneStructureInformation.pkl geneStructureInformationupdated.pkl; do
+        if [ -f "${SOURCE_SAMPLE}/reference/${f}" ] && [ ! -e "${TARGET_SAMPLE}/reference/${f}" ]; then
+            ln -s "${SOURCE_SAMPLE}/reference/${f}" "${TARGET_SAMPLE}/reference/${f}"
+        fi
+    done
+
+    # Symlink BAM info files from source
+    for f in "${SOURCE_SAMPLE}"/bam/bam.Info*; do
+        [ -f "${f}" ] || continue
+        local base_f=$(basename "${f}")
+        if [ ! -e "${TARGET_SAMPLE}/bam/${base_f}" ]; then
+            ln -s "${f}" "${TARGET_SAMPLE}/bam/${base_f}"
+        fi
+    done
+
+    local BAM_ARGS="--bam ${DATA_DIR}/reads_${READ_LABEL}.bam"
+    local TARGET_ARGS="--target ${TARGET_SAMPLE}"
+
+    # Job 1: Compatible matrix (array) — no annotation needed
+    local JOB1
+    JOB1=$(sbatch --parsable ${SBATCH_COMMON} \
+      --job-name=scotch_compat_${READ_LABEL}_j${NJOBS} \
+      --array=0-$((NJOBS - 1)) \
+      --cpus-per-task=1 --mem=${SCOTCH_COMPAT_MEM} --time=${SCOTCH_COMPAT_TIME} \
+      --output=logs/scotch_compat_${READ_LABEL}_j${NJOBS}_%A_%a.out \
+      --error=logs/scotch_compat_${READ_LABEL}_j${NJOBS}_%A_%a.err \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_compatible_\${SLURM_ARRAY_TASK_ID}.txt \
+        python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
+          --task 'compatible matrix' --platform 10x-ont \
+          ${TARGET_ARGS} ${BAM_ARGS} \
+          --reference ${REF_GTF} --reference_genome_fasta ${REF_FASTA} \
+          --job_index \${SLURM_ARRAY_TASK_ID} --total_jobs ${NJOBS} \
+        2>&1 | tee ${OUT_BASE}/compatible_\${SLURM_ARRAY_TASK_ID}.log")
+    echo "    Compatible matrix array (${NJOBS} jobs): ${JOB1}"
+
+    # Job 2: Summary
+    local JOB2
+    JOB2=$(sbatch --parsable ${SBATCH_COMMON} \
+      --dependency=afterok:${JOB1} \
+      --job-name=scotch_summary_${READ_LABEL}_j${NJOBS} \
+      --cpus-per-task=${SCOTCH_SUMMARY_CPUS} --mem=${SCOTCH_SUMMARY_MEM} --time=${SCOTCH_SUMMARY_TIME} \
+      --output=logs/scotch_summary_${READ_LABEL}_j${NJOBS}_%j.out \
+      --error=logs/scotch_summary_${READ_LABEL}_j${NJOBS}_%j.err \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_summary.txt \
+        python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
+          --task summary ${TARGET_ARGS} \
+        2>&1 | tee ${OUT_BASE}/summary.log")
+    echo "    Summary: ${JOB2}"
+
+    # Job 3: Count matrix
+    local JOB3
+    JOB3=$(sbatch --parsable ${SBATCH_COMMON} \
+      --dependency=afterok:${JOB2} \
+      --job-name=scotch_count_${READ_LABEL}_j${NJOBS} \
+      --cpus-per-task=${SCOTCH_COUNT_CPUS} --mem=${SCOTCH_COUNT_MEM} --time=${SCOTCH_COUNT_TIME} \
+      --output=logs/scotch_count_${READ_LABEL}_j${NJOBS}_%j.out \
+      --error=logs/scotch_count_${READ_LABEL}_j${NJOBS}_%j.err \
+      --wrap="${CONDA_INIT} set -o pipefail; /usr/bin/time -v -o ${OUT_BASE}/time_count.txt \
+        python3 ${SCOTCH_DIR}/src/main_preprocessing.py \
+          --task 'count matrix' --platform 10x-ont \
+          ${TARGET_ARGS} --workers ${SCOTCH_COUNT_CPUS} --group_novel \
+        2>&1 | tee ${OUT_BASE}/count.log && du -sh ${OUT_BASE}/ > ${OUT_BASE}/disk_usage.txt")
+    echo "    Count matrix: ${JOB3}"
+
+    echo -e "compatible\t${JOB1}\nsummary\t${JOB2}\ncount\t${JOB3}" \
+      > "${OUT_BASE}/slurm_job_ids.txt"
+
+    SCOTCH_LAST_JOB=${JOB3}
 }
 
 # -------------------------------------------------------
@@ -508,6 +607,14 @@ case "${PHASE}" in
     1.1) run_phase_1 1M ;;
     1.2) run_phase_1 5M ;;
     1.3) run_phase_1 15M ;;
+    1.3a)
+        echo "--- Phase 1.3a: SCOTCH 15M with 25 array jobs ---"
+        submit_scotch_array_scaling 15M 25 "${RESULTS_BASE}/scotch/single/reads_15M"
+        ;;
+    1.3b)
+        echo "--- Phase 1.3b: SCOTCH 15M with 40 array jobs ---"
+        submit_scotch_array_scaling 15M 40 "${RESULTS_BASE}/scotch/single/reads_15M"
+        ;;
     1.4) run_phase_1 50M ;;
     2) run_phase_2 ;;
     3) run_phase_3 ;;
@@ -520,7 +627,7 @@ case "${PHASE}" in
     all) run_all ;;
     *)
         echo "ERROR: Unknown phase '${PHASE}'"
-        echo "Valid phases: 0, 1, 1.1, 1.2, 1.3, 1.4, 2, 3, 3.1, 3.2, 3.3, 3.4, 4, 5, all"
+        echo "Valid phases: 0, 1, 1.1, 1.2, 1.3, 1.3a, 1.3b, 1.4, 2, 3, 3.1, 3.2, 3.3, 3.4, 4, 5, all"
         exit 1
         ;;
 esac
