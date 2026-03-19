@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
-READ_ORDER = {"1M": 1, "5M": 5, "10M": 10, "50M": 50}
+READ_ORDER = {"1M": 1, "5M": 5, "15M": 15, "50M": 50}
 
 
 def load_data(path):

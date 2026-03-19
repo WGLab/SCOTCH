@@ -12,16 +12,16 @@
 #
 # Phases:
 #   0  — Data preparation (subsampling)
-#   1  — SCOTCH single-sample (1M, 5M, 10M, 50M)
+#   1  — SCOTCH single-sample (1M, 5M, 15M, 50M)
 #   1.1 — SCOTCH single-sample (1M only)
 #   1.2 — SCOTCH single-sample (5M only)
-#   1.3 — SCOTCH single-sample (10M only)
+#   1.3 — SCOTCH single-sample (15M only)
 #   1.4 — SCOTCH single-sample (50M only)
 #   2  — SCOTCH multi-sample (3 x 5M)
-#   3  — IsoQuant single-sample (1M, 5M, 10M, 50M)
+#   3  — IsoQuant single-sample (1M, 5M, 15M, 50M)
 #   3.1 — IsoQuant single-sample (1M only)
 #   3.2 — IsoQuant single-sample (5M only)
-#   3.3 — IsoQuant single-sample (10M only)
+#   3.3 — IsoQuant single-sample (15M only)
 #   3.4 — IsoQuant single-sample (50M only)
 #   4  — IsoQuant multi-sample (3 x 5M)
 #   5  — Collect metrics + plot (checks all Phase 1-4 outputs exist first)
@@ -33,7 +33,7 @@
 #   bash run_experiment.sh 1.2      # Re-run only SCOTCH single 5M if needed
 #   bash run_experiment.sh 1.4      # Re-run only SCOTCH single 50M if needed
 #   bash run_experiment.sh 3        # Run IsoQuant single in parallel with SCOTCH
-#   bash run_experiment.sh 3.3      # Re-run only IsoQuant single 10M if needed
+#   bash run_experiment.sh 3.3      # Re-run only IsoQuant single 15M if needed
 #   bash run_experiment.sh 3.4      # Re-run only IsoQuant single 50M if needed
 #   bash run_experiment.sh 5        # Collect results after everything finishes
 #   bash run_experiment.sh all      # Submit everything with dependency chains
@@ -63,25 +63,26 @@ DATA_DIR="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/data"         
 RESULTS_BASE="/mnt/isilon/wang_lab/karen/scotch/benchmark/computation/results"             # Where results go
 
 # --- Resource settings: SCOTCH ---
+# Memory sized ~2x over 15M estimates (extrapolated from 10M actuals)
 SCOTCH_ANNOT_CPUS=10                                # CPUs for annotation step
-SCOTCH_ANNOT_MEM=80G                               # Memory for annotation step
+SCOTCH_ANNOT_MEM=20G                               # Memory for annotation step (10M actual: 6.2G)
 SCOTCH_ANNOT_TIME=1-00:00:00                        # Time limit for annotation
 
 SCOTCH_COMPAT_NJOBS=10                              # Number of array jobs for compatible matrix
-SCOTCH_COMPAT_MEM=80G                              # Memory per array task
+SCOTCH_COMPAT_MEM=8G                               # Memory per array task (10M actual: 2.0G)
 SCOTCH_COMPAT_TIME=1-00:00:00                       # Time limit per array task
 
 SCOTCH_SUMMARY_CPUS=10                               # CPUs for summary step
-SCOTCH_SUMMARY_MEM=80G                              # Memory for summary step
+SCOTCH_SUMMARY_MEM=36G                              # Memory for summary step (10M actual: 12.1G)
 SCOTCH_SUMMARY_TIME=04:00:00                        # Time limit for summary
 
 SCOTCH_COUNT_CPUS=1                                 # CPUs for count matrix step
-SCOTCH_COUNT_MEM=80G                               # Memory for count matrix
+SCOTCH_COUNT_MEM=12G                               # Memory for count matrix (10M actual: 4.0G)
 SCOTCH_COUNT_TIME=1-00:00:00                        # Time limit for count matrix
 
 # --- Resource settings: IsoQuant ---
 ISOQUANT_CPUS=10                                    # Threads for IsoQuant
-ISOQUANT_MEM=300G                                   # Memory for IsoQuant
+ISOQUANT_MEM=12G                                    # Memory for IsoQuant (10M actual: 3.1G)
 ISOQUANT_TIME=5-00:00:00                            # Time limit for IsoQuant
 
 # --- Resource settings: Data preparation ---
@@ -100,16 +101,16 @@ if [ -z "${PHASE}" ]; then
     echo ""
     echo "Phases:"
     echo "  0    Data preparation (subsampling)"
-    echo "  1    SCOTCH single-sample (1M, 5M, 10M, 50M)"
+    echo "  1    SCOTCH single-sample (1M, 5M, 15M, 50M)"
     echo "  1.1  SCOTCH single-sample (1M only)"
     echo "  1.2  SCOTCH single-sample (5M only)"
-    echo "  1.3  SCOTCH single-sample (10M only)"
+    echo "  1.3  SCOTCH single-sample (15M only)"
     echo "  1.4  SCOTCH single-sample (50M only)"
     echo "  2    SCOTCH multi-sample (3 x 5M)"
-    echo "  3    IsoQuant single-sample (1M, 5M, 10M, 50M)"
+    echo "  3    IsoQuant single-sample (1M, 5M, 15M, 50M)"
     echo "  3.1  IsoQuant single-sample (1M only)"
     echo "  3.2  IsoQuant single-sample (5M only)"
-    echo "  3.3  IsoQuant single-sample (10M only)"
+    echo "  3.3  IsoQuant single-sample (15M only)"
     echo "  3.4  IsoQuant single-sample (50M only)"
     echo "  4    IsoQuant multi-sample (3 x 5M)"
     echo "  5    Collect metrics + plot (checks outputs exist first)"
@@ -311,8 +312,8 @@ submit_isoquant() {
 check_phase5_ready() {
     local MISSING=()
 
-    # SCOTCH single-sample: 1M, 5M, 10M, 50M
-    for LABEL in 1M 5M 10M 50M; do
+    # SCOTCH single-sample: 1M, 5M, 15M, 50M
+    for LABEL in 1M 5M 15M 50M; do
         local BASE="${RESULTS_BASE}/scotch/single/reads_${LABEL}"
         for STEP in annotation summary count; do
             [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("scotch/single/${LABEL}/time_${STEP}.txt")
@@ -328,8 +329,8 @@ check_phase5_ready() {
     done
     ls "${BASE}"/time_compatible_*.txt &>/dev/null || MISSING+=("scotch/multi/3x5M/time_compatible_*.txt")
 
-    # IsoQuant single-sample: 1M, 5M, 10M, 50M
-    for LABEL in 1M 5M 10M 50M; do
+    # IsoQuant single-sample: 1M, 5M, 15M, 50M
+    for LABEL in 1M 5M 15M 50M; do
         local BASE="${RESULTS_BASE}/isoquant/single/reads_${LABEL}"
         for STEP in dedup isoquant; do
             [ -f "${BASE}/time_${STEP}.txt" ] || MISSING+=("isoquant/single/${LABEL}/time_${STEP}.txt")
@@ -376,7 +377,7 @@ run_phase_0() {
 
 run_scotch_single_levels() {
     local READ_FILTER="${1:-}"
-    local LABELS=(1M 5M 10M 50M)
+    local LABELS=(1M 5M 15M 50M)
 
     if [ -n "${READ_FILTER}" ]; then
         LABELS=("${READ_FILTER}")
@@ -401,7 +402,7 @@ run_phase_2() {
 
 run_isoquant_single_levels() {
     local READ_FILTER="${1:-}"
-    local LABELS=(1M 5M 10M 50M)
+    local LABELS=(1M 5M 15M 50M)
 
     if [ -n "${READ_FILTER}" ]; then
         LABELS=("${READ_FILTER}")
@@ -459,7 +460,7 @@ run_all() {
 
     echo ""
     echo "--- Phase 1: SCOTCH Single-Sample ---"
-    for LABEL in 1M 5M 10M 50M; do
+    for LABEL in 1M 5M 15M 50M; do
         echo "  SCOTCH single ${LABEL}:"
         submit_scotch "${LABEL}" single "${LAST_PREP_JOB}"
         ALL_FINAL_JOBS+=("${SCOTCH_LAST_JOB}")
@@ -473,7 +474,7 @@ run_all() {
 
     echo ""
     echo "--- Phase 3: IsoQuant Single-Sample ---"
-    for LABEL in 1M 5M 10M 50M; do
+    for LABEL in 1M 5M 15M 50M; do
         echo "  IsoQuant single ${LABEL}:"
         submit_isoquant "${LABEL}" single "${LAST_PREP_JOB}"
         ALL_FINAL_JOBS+=("${ISOQUANT_LAST_JOB}")
@@ -506,13 +507,13 @@ case "${PHASE}" in
     1) run_phase_1 ;;
     1.1) run_phase_1 1M ;;
     1.2) run_phase_1 5M ;;
-    1.3) run_phase_1 10M ;;
+    1.3) run_phase_1 15M ;;
     1.4) run_phase_1 50M ;;
     2) run_phase_2 ;;
     3) run_phase_3 ;;
     3.1) run_phase_3 1M ;;
     3.2) run_phase_3 5M ;;
-    3.3) run_phase_3 10M ;;
+    3.3) run_phase_3 15M ;;
     3.4) run_phase_3 50M ;;
     4) run_phase_4 ;;
     5) run_phase_5 ;;
