@@ -199,7 +199,7 @@ class ReadMapper:
         self._reference_gtf_path = reference_gtf_path
         self._gtf_df = None
         self._bam_cache = {}
-        self.ref_fasta_path = ref_fasta_path if 'parse' not in platform else None
+        self.ref_fasta_path = ref_fasta_path
         self.fasta_handle = pysam.FastaFile(ref_fasta_path) if self.ref_fasta_path is not None else None
         # gene annotation information
         self.annotation_folder_path_list = [os.path.join(target_, 'reference') for target_ in target]
