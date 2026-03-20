@@ -12,22 +12,22 @@ IsoQuant: 10 threads.
 
 | Tool | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| SCOTCH | 1.14 | 3.94 | — | 26.52 | 14.01 |
-| IsoQuant | 0.80 | 1.16 | — | 11.52 | 2.48 |
+| SCOTCH | 1.14 | 3.94 | 13.85 | 26.52 | 14.01 |
+| IsoQuant | 0.80 | 1.16 | 2.12 | 11.52 | 2.48 |
 
 ### 1b. CPU-Hours
 
 | Tool | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| SCOTCH | 5.95 | 17.15 | — | 92.26 | 52.77 |
-| IsoQuant | 4.07 | 6.06 | — | 63.41 | 12.09 |
+| SCOTCH | 5.95 | 17.15 | 62.56 | 92.26 | 52.77 |
+| IsoQuant | 4.07 | 6.06 | 11.35 | 63.41 | 12.09 |
 
 ### 1c. Peak Memory (GB)
 
 | Tool | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| SCOTCH | 2.15 | 6.50 | — | 38.65 | 6.85 |
-| IsoQuant | 1.43 | 1.60 | — | 10.49 | 4.73 |
+| SCOTCH | 2.15 | 6.50 | 17.06 | 38.65 | 6.85 |
+| IsoQuant | 1.43 | 1.60 | 4.75 | 10.49 | 4.73 |
 
 ---
 
@@ -37,30 +37,30 @@ IsoQuant: 10 threads.
 
 | Step | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| Annotation | 0.02 | 0.24 | — | 3.22 | 0.42 |
-| Compatible | 0.93 | 3.39 | — | 22.26 | 12.43 |
-| Summary | 0.03 | 0.06 | — | 0.27 | 0.29 |
-| Count | 0.15 | 0.25 | — | 0.77 | 0.87 |
-| **Total** | **1.14** | **3.94** | **—** | **26.52** | **14.01** |
+| Annotation | 0.02 | 0.24 | 0.80 | 3.22 | 0.42 |
+| Compatible | 0.93 | 3.39 | 12.40 | 22.26 | 12.43 |
+| Summary | 0.03 | 0.06 | 0.11 | 0.27 | 0.29 |
+| Count | 0.15 | 0.25 | 0.54 | 0.77 | 0.87 |
+| **Total** | **1.14** | **3.94** | **13.85** | **26.52** | **14.01** |
 
 ### 2b. CPU-Hours per Step
 
 | Step | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| Annotation | 0.10 | 0.56 | — | 1.21 | 0.43 |
-| Compatible | 5.71 | 16.33 | — | 89.99 | 51.22 |
-| Summary | 0.02 | 0.05 | — | 0.35 | 0.38 |
-| Count | 0.12 | 0.21 | — | 0.71 | 0.74 |
-| **Total** | **5.95** | **17.15** | **—** | **92.26** | **52.77** |
+| Annotation | 0.10 | 0.56 | 0.50 | 1.21 | 0.43 |
+| Compatible | 5.71 | 16.33 | 61.43 | 89.99 | 51.22 |
+| Summary | 0.02 | 0.05 | 0.14 | 0.35 | 0.38 |
+| Count | 0.12 | 0.21 | 0.48 | 0.71 | 0.74 |
+| **Total** | **5.95** | **17.15** | **62.56** | **92.26** | **52.77** |
 
 ### 2c. Peak Memory per Step (GB)
 
 | Step | 1M | 5M | 15M | 50M | 3x5M |
 |---|---|---|---|---|---|
-| Annotation | 0.85 | 3.34 | — | 25.55 | 3.25 |
-| Compatible | 1.99 | 2.00 | — | 6.00 | 2.07 |
-| Summary | 2.15 | 6.50 | — | 38.65 | 6.85 |
-| Count | 0.86 | 2.39 | — | 10.74 | 4.14 |
+| Annotation | 0.85 | 3.34 | 9.81 | 25.55 | 3.25 |
+| Compatible | 1.99 | 2.00 | 2.04 | 6.00 | 2.07 |
+| Summary | 2.15 | 6.50 | 17.06 | 38.65 | 6.85 |
+| Count | 0.86 | 2.39 | 5.50 | 10.74 | 4.14 |
 
 ---
 
@@ -72,12 +72,12 @@ Based on benchmark results (10 array jobs, 10x-ONT, hg38).
 
 Memory scales primarily with read count. Annotation and summary load full gene structures into memory; compatible matrix per-task memory stays low regardless of input size.
 
-| Step | 1M | 5M | 50M | Rule of Thumb |
-|---|---|---|---|---|
-| Annotation | 1 GB | 4 GB | 26 GB | ~0.5 GB per 1M reads |
-| Compatible (per task) | 2 GB | 2 GB | 6 GB | 2-8 GB flat (depends on gene complexity, not read count) |
-| Summary | 3 GB | 7 GB | 39 GB | ~0.8 GB per 1M reads |
-| Count | 1 GB | 3 GB | 11 GB | ~0.2 GB per 1M reads |
+| Step | 1M | 5M | 15M | 50M | Rule of Thumb |
+|---|---|---|---|---|---|
+| Annotation | 1 GB | 4 GB | 10 GB | 26 GB | ~0.5 GB per 1M reads |
+| Compatible (per task) | 2 GB | 2 GB | 2 GB | 6 GB | 2-8 GB flat (depends on gene complexity, not read count) |
+| Summary | 3 GB | 7 GB | 18 GB | 39 GB | ~1.1 GB per 1M reads |
+| Count | 1 GB | 3 GB | 6 GB | 11 GB | ~0.2 GB per 1M reads |
 
 **Recommended SLURM `--mem` (with ~2x safety margin):**
 
@@ -107,6 +107,7 @@ The compatible matrix step is the bottleneck (82-90% of wall time). All benchmar
 |---|---|---|---|---|
 | 1M | 0.93 | 5.71 | 0.57 | Moderate — tasks already short |
 | 5M | 3.39 | 16.33 | 1.63 | Good |
+| 15M | 12.40 | 61.43 | 6.14 | High |
 | 50M | 22.26 | 89.99 | 9.00 | High — large per-task variance expected |
 
 **Theoretical scaling:** With N array jobs, wall time ~ CPU-hours / N (ideal) but is bounded by the slowest task. Diminishing returns occur when:
@@ -125,26 +126,42 @@ The compatible matrix step is the bottleneck (82-90% of wall time). All benchmar
 
 **Note:** More array jobs consume the same total CPU-hours — the savings are in wall time only. Cluster scheduling overhead may increase with very large arrays (>100 tasks).
 
-### 3d. Proposed Experiment: Array Job Scaling
+### 3d. Array Job Scaling Results (15M reads)
 
-To quantify the actual speedup curve, we propose running the 15M setting with varying array sizes:
+Measured speedup from increasing `--total_jobs` on the 15M dataset. Annotation is shared across all runs (0.80 h); only compatible, summary, and count steps are re-run.
 
-| Experiment | `--total_jobs` | Expected compatible wall (h) | Notes |
+| Array Jobs | Compatible Wall (h) | Compatible CPU-hours | Total Wall (h) | Total CPU-hours | Speedup vs 10 jobs |
+|---|---|---|---|---|---|
+| 10 | 12.40 | 61.43 | 13.85 | 62.56 | 1.0x |
+| 25 | 7.01 | 27.54 | 7.94 | 28.46 | 1.8x |
+| 40 | 2.45 | 26.99 | 2.98 | 27.51 | 4.6x |
+
+**Key findings:**
+- **10→25 jobs (2.5x tasks)**: compatible wall drops 1.8x. CPU-hours drop significantly (61→28), suggesting better load balancing with more tasks.
+- **10→40 jobs (4x tasks)**: compatible wall drops 5.1x (12.40→2.45 h). Total SCOTCH time drops below IsoQuant's 2.12 h at this scale.
+- **CPU-hours decrease** with more jobs (unlike the theoretical constant), because shorter per-task runtimes reduce overhead and tail latency from slow tasks.
+- **Memory is unchanged** (~2 GB per compatible task, ~17 GB for summary) regardless of array size.
+
+**SCOTCH (40 jobs) vs IsoQuant head-to-head at 15M reads:**
+
+| Metric | SCOTCH (40 jobs) | IsoQuant (10 threads) | Ratio |
 |---|---|---|---|
-| baseline | 10 | ~12 | Current default |
-| 2x | 20 | ~6 | Doubling should nearly halve |
-| 3x | 30 | ~4 | Standard HPC sweet spot |
-| 5x | 50 | ~2.5 | Diminishing returns expected |
+| Wall time (h) | 2.98 | 2.12 | 1.4x |
+| CPU-hours | 28.01 | 11.35 | 2.5x |
+| Peak memory (GB) | 17.06 | 4.75 | 3.6x |
 
-This will produce a speedup curve showing where the practical limit is, which informs the recommended default for users.
+SCOTCH with 40 jobs closes the wall-time gap to 1.4x, but still uses 2.5x more CPU-hours and 3.6x more memory. The memory overhead comes from the summary step (17 GB), which loads all gene structures regardless of array count.
+
+**Practical recommendation:** For 15M+ reads, use **30-40 array jobs** to bring SCOTCH wall time on par with IsoQuant, at the cost of higher total CPU and memory usage.
 
 ---
 
 ## 4. Key Observations
 
-- **Compatible matrix dominates SCOTCH runtime**: 82-90% of wall time and 95-98% of CPU-hours across all settings.
-- **SCOTCH wall time scales roughly linearly** with read count (1M->50M ~23x for ~50x reads).
-- **IsoQuant is faster in wall time** due to multi-threaded execution within a single process, but **CPU-hours gap narrows at scale** (50M: 92 vs 63 CPU-hours).
-- **SCOTCH memory is higher** primarily in annotation and summary steps, which load full gene structures. Compatible matrix per-task memory stays low (~2 GB) regardless of input size.
+- **Compatible matrix dominates SCOTCH runtime**: 82-90% of wall time and 95-98% of CPU-hours across all settings (with 10 array jobs).
+- **SCOTCH wall time scales roughly linearly** with read count (1M→50M ~23x for ~50x reads).
+- **IsoQuant is faster in wall time at default settings** (10 array jobs) due to multi-threaded execution within a single process, but **CPU-hours gap narrows at scale** (50M: 92 vs 63 CPU-hours).
+- **With 40 array jobs, SCOTCH approaches IsoQuant wall time**: at 15M reads, SCOTCH total is 2.98 h vs IsoQuant's 2.12 h (1.4x), but at the cost of 2.5x more CPU-hours (28 vs 11.3) and 3.6x more peak memory (17 vs 4.75 GB).
+- **SCOTCH memory is higher** primarily in annotation and summary steps, which load full gene structures. Compatible matrix per-task memory stays low (~2 GB) regardless of input size or array count.
 - **Multi-sample (3x5M)**: SCOTCH wall time is ~3.5x its single 5M run (processes 3 BAMs with shared annotation); IsoQuant is ~2.1x.
-- **Increasing array jobs is the most effective lever** for reducing SCOTCH wall time, with no additional memory cost per task.
+- **Increasing array jobs is the most effective lever** for reducing SCOTCH wall time, with no additional memory cost per task. CPU-hours also decrease with more jobs due to reduced tail latency.

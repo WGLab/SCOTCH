@@ -10,7 +10,7 @@ import subprocess
 
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
-parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")#compatible matrix splicing
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, incremental update, all, or visualization")#compatible matrix splicing
 parser.add_argument('--generate_splicing', action='store_true', default= False, help="do not generate spliced/unspliced count matrix for velocity calculation")
 parser.add_argument('--platform',type=str,default='10x-ont',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
@@ -123,6 +123,8 @@ def main():
                 gene_subset = [line.strip() for line in _f if line.strip()]
         else:
             gene_subset = args.gene_subset
+    if args.task == 'incremental update' and gene_subset is None:
+        raise ValueError("--task 'incremental update' requires --gene_subset.")
 
     def run_annotation():
         logger, log_file = setup_logger(args.target[0], 'annotation')
@@ -181,6 +183,7 @@ def main():
                                    truncation_match = args.truncation_match,
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger, barcode_umi=args.barcode_umi,
+                                   bulk=args.bulk,
                                    ref_fasta_path=args.reference_genome_fasta,
                                    genenames_subset=gene_subset,
                                    save_mem=args.save_mem)
@@ -247,22 +250,46 @@ def main():
         logger.info('Start summarizing read isoform mapping and annotations for all targets.')
         logger.info(f'Target directories: {args.target}')
         for i in range(len(args.target)):
-            logger.info(f'Start summarizing annotation for target: {args.target[i]}')
+            target = args.target[i]
+            logger.info(f'Start summarizing annotation for target: {target}')
             try:
-                cp.summarise_annotation(args.target[i], logger = logger)
-                logger.info(f'Completed summarizing annotation for target: {args.target[i]}')
+                cp.summarise_annotation(target, logger = logger)
+                logger.info(f'Completed summarizing annotation for target: {target}')
             except Exception as e:
-                logger.exception(f"summarise_annotation failed for target: {t}")
+                logger.exception(f"summarise_annotation failed for target: {target}")
 
             #auxillary
-            logger.info(f'Start summarizing read mapping information for target: {args.target[i]}')
+            logger.info(f'Start summarizing read mapping information for target: {target}')
             try:
-                cp.summarise_auxillary(args.target[i])
-                logger.info(f'Completed summarizing read mapping information for target: {args.target[i]}')
+                cp.summarise_auxillary(target)
+                logger.info(f'Completed summarizing read mapping information for target: {target}')
             except Exception as e:
-                logger.exception(f"summarise_auxillary failed for target: {t}")
+                logger.exception(f"summarise_auxillary failed for target: {target}")
 
         logger.info('Completed summarizing annotations and auxiliary information for all targets.')
+        copy_log_to_targets(log_file, args.target)
+
+    def run_incremental_update():
+        logger, log_file = setup_logger(args.target[0], 'incremental_update')
+        logger.info('Start incremental update for all targets.')
+        logger.info(f'Target directories: {args.target}')
+        logger.info(f'Gene subset: {gene_subset}')
+        logger.info(f'Spliced/unspliced count matrix generation is set as {args.generate_splicing}')
+        for target in args.target:
+            logger.info(f'Incrementally summarizing annotation for target: {target}')
+            cp.summarise_annotation(target, logger=logger, gene_subset=gene_subset)
+            logger.info(f'Incrementally summarizing read mapping information for target: {target}')
+            cp.summarise_auxillary(target, gene_subset=gene_subset)
+        countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.novel_read_n, novel_read_pct=args.novel_read_pct,
+                                     platform=args.platform, workers=args.workers, group_novel=args.group_novel,
+                                     logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset)
+        if args.platform == 'parse-ont':
+            assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
+        countmatrix.update_multiple_samples_incremental(generate_splicing=args.generate_splicing)
+        countmatrix.filter_gtf()
+        logger.info('Filtering read-isoform mapping TSV')
+        countmatrix.finalize_read_isoform_mapping()
+        logger.info('Completed incremental update for all targets.')
         copy_log_to_targets(log_file, args.target)
 
     if args.task=='annotation':
@@ -275,6 +302,8 @@ def main():
         run_compatible_splicing()
     if args.task == 'count matrix': # task is to generate count matrix
         run_count()
+    if args.task == 'incremental update':
+        run_incremental_update()
 
     if args.task =='all':
         run_annotation()

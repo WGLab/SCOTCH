@@ -11,6 +11,89 @@ from joblib import Parallel, delayed
 import shutil
 
 
+READ_MAPPING_COLUMNS = [
+    'Read', 'Isoform', 'Exon Index', 'Exon Coordinates', 'Cell', 'Umi', 'CBUMI',
+    'geneName', 'geneID', 'geneChr', 'MappingScore', 'gene', 'priority',
+    'GeneMapping', 'Keep'
+]
+
+
+def process_group(group):
+    highest_priority = group['priority'].max()
+    highest_priority_rows = group[group['priority'] == highest_priority]
+    group = group.copy()
+    group['GeneMapping'] = 'delete'
+    group['Keep'] = 0
+    if len(highest_priority_rows) == 1:
+        group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
+        group.loc[highest_priority_rows.index, 'Keep'] = 1
+    else:
+        group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
+        random_index = highest_priority_rows.sample(n=1).index
+        group.loc[random_index, 'Keep'] = 1
+    return group
+
+
+def prepare_read_selection_df(df):
+    df = df.copy()
+    if df.empty:
+        return pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+    df['gene'] = df['geneName'] + '_' + df['geneID']
+    df['MappingScore'] = df['MappingScore'].fillna(-1)
+    conditions = [
+        df['Isoform'].str.startswith('ENST'),
+        df['Isoform'].str.startswith('novel'),
+        df['Isoform'] == 'uncategorized'
+    ]
+    choices = [1, 2, 3]
+    df['priority'] = np.select(conditions, choices, default=3)
+    df['priority'] *= df['MappingScore']
+    df['GeneMapping'] = 'delete'
+    df['Keep'] = 0
+    return df
+
+
+def build_read_selection_df(df):
+    df = prepare_read_selection_df(df)
+    if df.empty:
+        return df
+    df = df.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False]).reset_index(drop=True)
+    unique_mask = ~df['Read'].duplicated(keep=False)
+    multiple_mask = df['Read'].duplicated(keep=False)
+    df_unique = df[unique_mask].copy()
+    df_unique['GeneMapping'] = 'unique'
+    df_unique['Keep'] = 1
+    df_multiple = df[multiple_mask].copy()
+    if df_multiple.empty:
+        return df_unique.reset_index(drop=True)
+    grouped = df_multiple.groupby(['Read'], group_keys=False)
+    processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
+    df_multiple_processed = pd.concat(processed_groups).reset_index(drop=True)
+    return pd.concat([df_unique, df_multiple_processed], ignore_index=True)
+
+
+def read_auxillary_mapping_file(file_path):
+    df = pd.read_csv(file_path, sep='\t')
+    if 'gene' not in df.columns:
+        df['gene'] = df['geneName'] + '_' + df['geneID']
+    return df
+
+
+def get_gene_name_from_auxillary_filename(file_name):
+    match = re.match(r'^(.*)_ENSG[^_]*_read_isoform_exon_mapping\.tsv$', file_name)
+    if match:
+        return match.group(1)
+    return None
+
+
+def get_gene_ids_from_metagene_dict(metagene_dict):
+    gene_ids = set()
+    for genes_info in metagene_dict.values():
+        for gene_info, _, _ in genes_info:
+            gene_ids.add(gene_info['geneID'])
+    return gene_ids
+
+
 
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
@@ -62,7 +145,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
     gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
 
-def summarise_annotation(target,logger=None):
+def summarise_annotation(target,logger=None, gene_subset=None):
     reference_folders = []
     for root, dirs, files in os.walk(target):
         if 'reference' in dirs:
@@ -80,31 +163,48 @@ def summarise_annotation(target,logger=None):
         if len(file_names_pkl)>0:
             backup_dir = os.path.join(reference_folder, "files_jobs")
             os.makedirs(backup_dir, exist_ok=True)
-            # merge pkl annotation file
             logger.info('Merging new isoform annotations')
             metageneStructureInformationwNovel = {}
             for file_name_pkl in file_names_pkl:
                 metageneStructureInformation = load_pickle(file_name_pkl)
                 metageneStructureInformationwNovel.update(metageneStructureInformation)
+            if gene_subset is not None and os.path.exists(output_pkl):
+                existing_annotation = load_pickle(output_pkl)
+                for meta_gene in metageneStructureInformationwNovel:
+                    existing_annotation.pop(meta_gene, None)
+                existing_annotation.update(metageneStructureInformationwNovel)
+                metageneStructureInformationwNovel = existing_annotation
             metageneStructureInformationwNovel = dict(
                 sorted(metageneStructureInformationwNovel.items(), key=lambda item: get_numeric_key(item[0])))
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
             for file_name_pkl in file_names_pkl:
                 shutil.move(file_name_pkl, backup_dir)
-                #os.remove(file_name_pkl)
             logger.info('mergered new isoform annotation saved at: '+str(output_pkl))
         if len(file_names_gtf) > 0:
             backup_dir = os.path.join(reference_folder, "files_jobs")
             os.makedirs(backup_dir, exist_ok=True)
-            # merge gtf annotation file
             logger.info('Merging new GTF annotations...')
             gtf_lines = []
             for file_name_gtf in file_names_gtf:
                 with open(file_name_gtf, 'r') as gtf_file:
                     for line in gtf_file:
-                        if not line.startswith('#'):  # Skip any header lines
+                        if not line.startswith('#'):
                             gtf_lines.append(line.strip())
+            if gene_subset is not None and os.path.exists(output_gtf) and len(file_names_pkl) > 0:
+                updated_metagenes = {}
+                for file_name_pkl in file_names_pkl:
+                    updated_metagenes.update(load_pickle(file_name_pkl))
+                affected_gene_ids = get_gene_ids_from_metagene_dict(updated_metagenes)
+                retained_lines = []
+                with open(output_gtf, 'r') as existing_gtf_file:
+                    for line in existing_gtf_file:
+                        if line.startswith('#'):
+                            continue
+                        if any(f'gene_id "{gene_id}"' in line for gene_id in affected_gene_ids):
+                            continue
+                        retained_lines.append(line.strip())
+                gtf_lines = retained_lines + gtf_lines
             with open(output_gtf, 'w') as output_gtf_file:
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
@@ -114,24 +214,7 @@ def summarise_annotation(target,logger=None):
         else:
             print('novel isoform annotations does not exist!')
 
-def summarise_auxillary(target):
-    def process_group(group):
-        highest_priority = group['priority'].max()
-        highest_priority_rows = group[group['priority'] == highest_priority]
-        group['GeneMapping'] = 'delete'
-        group['Keep'] = 0
-        if len(highest_priority_rows) == 1:
-            group.loc[highest_priority_rows.index, 'GeneMapping'] = 'unique'
-            group.loc[highest_priority_rows.index, 'Keep'] = 1
-        else:
-            group.loc[highest_priority_rows.index, 'GeneMapping'] = 'ambiguous'
-            random_index = highest_priority_rows.sample(n=1).index
-            group.loc[random_index, 'Keep'] = 1
-        return group
-    def read_file(file_path):
-        df = pd.read_csv(file_path, sep='\t')
-        df['gene'] = df['geneName'] + '_' + df['geneID']
-        return df
+def summarise_auxillary(target, gene_subset=None):
     # Collect all 'auxillary' directories
     auxillary_folders = []
     for root, dirs, files in os.walk(target):
@@ -140,32 +223,49 @@ def summarise_auxillary(target):
     for auxillary_folder in auxillary_folders:
         print('summarising read-isoform mapping files at: ' + str(auxillary_folder))
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder) if 'ENSG' in f]
-        df_list = Parallel(n_jobs=-1)(delayed(read_file)(file_path) for file_path in file_paths)
-        DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
-        DF['MappingScore'] = DF['MappingScore'].fillna(-1)
-        conditions = [
-            DF['Isoform'].str.startswith('ENST'),  # 1 Highest priority
-            DF['Isoform'].str.startswith('novel'),  # 2 Medium priority
-            DF['Isoform'] == 'uncategorized'  # 3 Lowest priority
-        ]
-        choices = [1, 2, 3]
-        DF['priority'] = np.select(conditions, choices, default=3)
-        DF['priority'] *= DF['MappingScore']
-        DF['GeneMapping'] = 'delete'  # Initialize as 'delete'
-        DF = DF.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False])
-        #Split DF into DF_unique and DF_multiple
-        unique_mask = ~DF['Read'].duplicated(keep=False)  # Reads that appear only once
-        multiple_mask = DF['Read'].duplicated(keep=False)  # Reads that appear more than once
-        DF_unique = DF[unique_mask].copy()
-        DF_unique['GeneMapping'] = 'unique'
-        DF_unique['Keep'] = 1
-        DF_multiple = DF[multiple_mask].copy()
-        grouped = DF_multiple.groupby(['Read'], group_keys=False)
-        # Process groups in parallel and concatenate results
-        print('Processing groups for multiple reads...')
-        processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
-        DF_multiple_processed = pd.concat(processed_groups).reset_index(drop=True)
-        DF_final = pd.concat([DF_unique, DF_multiple_processed], ignore_index=True)
+        if gene_subset is None:
+            if len(file_paths) == 0:
+                continue
+            df_list = Parallel(n_jobs=-1)(delayed(read_auxillary_mapping_file)(file_path) for file_path in file_paths)
+            DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
+            print('Processing groups for multiple reads...')
+            DF_final = build_read_selection_df(DF)
+        else:
+            output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+            existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+            existing_df = existing_df.copy()
+            subset_names = set(gene_subset)
+            candidate_file_paths = []
+            for file_path in file_paths:
+                gene_name = get_gene_name_from_auxillary_filename(os.path.basename(file_path))
+                if gene_name is None:
+                    continue
+                if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
+                    candidate_file_paths.append(file_path)
+            new_subset_df = (
+                pd.concat(
+                    Parallel(n_jobs=-1)(delayed(read_auxillary_mapping_file)(file_path) for file_path in candidate_file_paths),
+                    axis=0,
+                    ignore_index=True
+                ).reset_index(drop=True)
+                if len(candidate_file_paths) > 0 else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+            )
+            old_subset_df = existing_df[existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+            affected_reads = set(old_subset_df['Read'].tolist()) | set(new_subset_df['Read'].tolist())
+            unaffected_df = existing_df[~existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+            if affected_reads:
+                unaffected_keep = unaffected_df[~unaffected_df['Read'].isin(affected_reads)].copy()
+                affected_non_subset = unaffected_df[unaffected_df['Read'].isin(affected_reads)].copy()
+                affected_df = pd.concat([affected_non_subset, new_subset_df], ignore_index=True)
+                print('Processing groups for affected reads...')
+                affected_final = build_read_selection_df(affected_df)
+                DF_final = pd.concat([unaffected_keep, affected_final], ignore_index=True)
+            else:
+                DF_final = unaffected_df
+            file_paths = candidate_file_paths
+        if DF_final.empty:
+            DF_final = pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+        DF_final = DF_final.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False]).reset_index(drop=True)
         output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
         print('saving read-isoform mapping file: '+str(output_file_tsv))
         DF_final.to_csv(output_file_tsv, sep='\t', index=False)
@@ -188,11 +288,12 @@ class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
                  small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
                  reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None, genenames_subset = None,
-                 save_mem = True):
+                 save_mem = True, bulk = False):
         self.logger = logger
         self.target = target
         self.bam_path = bam_path
         self.barcode_umi = barcode_umi
+        self.bulk = bulk
         self.save_mem = save_mem
         column_names = ['chromosome', 'source', 'feature', 'start', 'end', 'score', 'strand', 'frame', 'attribute']
         self._gtf_column_names = column_names
@@ -440,7 +541,7 @@ class ReadMapper:
                     result = process_read(read, self.qname_dict_list[i], self.lowest_match, self.lowest_match1,
                                           self.small_exon_threshold,
                                           self.small_exon_threshold1, self.truncation_match, Info_singlegene,
-                                          self.parse, self.pacbio, self.barcode_umi, self.fasta_handle)
+                                          self.parse, self.pacbio, self.barcode_umi, self.fasta_handle, self.bulk)
                     if result is not None:
                         if self.pacbio:
                             readName = readName + '_' + str(readEnd - readStart)
@@ -506,7 +607,7 @@ class ReadMapper:
                     readName, readStart, readEnd = read.qname, read.qstart, read.qend
                     out = process_read_metagene(read,self.qname_dict_list[i], Info_multigenes, self.lowest_match,self.lowest_match1,
                                                 self.small_exon_threshold,self.small_exon_threshold1,
-                                                self.truncation_match, self.parse, self.pacbio, self.barcode_umi,self.fasta_handle)
+                                                self.truncation_match, self.parse, self.pacbio, self.barcode_umi,self.fasta_handle, self.bulk)
                     if out is not None: #may not within this meta gene region
                         results.append(out)
                         if self.pacbio:
@@ -603,9 +704,8 @@ class ReadMapper:
             novel_isoformInfo = {} #{'novelIsoform_1234':[2,3,4]}
             samples_list = []
             for read in reads:
-                poly, _ = detect_poly_parse(read, window=20, n=15)
                 result = process_read(read, self.qname_dict, self.lowest_match,self.lowest_match1, self.small_exon_threshold,self.small_exon_threshold1,
-                                      self.truncation_match, Info_singlegene, self.parse, self.pacbio, self.barcode_umi, None)
+                                      self.truncation_match, Info_singlegene, self.parse, self.pacbio, self.barcode_umi, self.fasta_handle, self.bulk)
                 result_novel, result_known, result_known_scores = result
                 samples_list.append(self.qname_sample_dict[read.qname])
                 if result_novel is not None:
@@ -668,13 +768,11 @@ class ReadMapper:
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
             reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
             # process reads metagene
-            results, samples, polies = [], [], []
+            results, samples = [], []
             for read in reads:
-                poly, _ = detect_poly_parse(read, window=20, n=15)
                 out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.lowest_match1,self.small_exon_threshold,self.small_exon_threshold1,
-                                            self.truncation_match, self.parse, self.pacbio, self.barcode_umi, None)
+                                            self.truncation_match, self.parse, self.pacbio, self.barcode_umi, self.fasta_handle, self.bulk)
                 if out is not None: #may not within this meta gene region
-                    polies.append(poly)
                     results.append(out)
                     samples.append(self.qname_sample_dict[read.qname])
             unique_samples = list(set(samples))
