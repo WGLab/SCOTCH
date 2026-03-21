@@ -285,6 +285,15 @@ class CountMatrix:
             novel_name_substitution = pp.load_pickle(self.novel_name_substitution_path)
         else:
             novel_name_substitution = {}
+        # Normalize legacy formats: older code saved lists instead of dicts
+        if not isinstance(novel_isoform_del, dict):
+            if self.logger:
+                self.logger.warning('Legacy novel_isoform_del format (list); resetting to empty dict')
+            novel_isoform_del = {}
+        if not isinstance(novel_name_substitution, dict):
+            if self.logger:
+                self.logger.warning('Legacy novel_name_substitution format (list); resetting to empty dict')
+            novel_name_substitution = {}
         for gene in self.gene_subset:
             novel_isoform_del.pop(gene, None)
             novel_name_substitution.pop(gene, None)

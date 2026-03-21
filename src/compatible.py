@@ -239,9 +239,6 @@ def summarise_auxillary(target, gene_subset=None):
             print('Processing groups for multiple reads...')
             DF_final = build_read_selection_df(DF)
         else:
-            output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
-            existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-            existing_df = existing_df.copy()
             subset_names = set(gene_subset)
             candidate_file_paths = []
             for file_path in file_paths:
@@ -250,6 +247,12 @@ def summarise_auxillary(target, gene_subset=None):
                     continue
                 if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
                     candidate_file_paths.append(file_path)
+            if len(candidate_file_paths) == 0:
+                print('No new per-gene TSVs found for subset; skipping auxillary merge.')
+                continue
+            output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+            existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+            existing_df = existing_df.copy()
             new_subset_df = (
                 pd.concat(
                     Parallel(n_jobs=-1)(delayed(read_auxillary_mapping_file)(file_path) for file_path in candidate_file_paths),
