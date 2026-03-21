@@ -246,9 +246,12 @@ class CountMatrix:
         if save_mtx:
             with open(paths['pickle'], 'wb') as handle:
                 pickle.dump({'obs': dense_df.index.tolist(), 'var': dense_df.columns.tolist()}, handle)
-            if any(isinstance(dtype, pd.SparseDtype) for dtype in dense_df.dtypes):
+            if all(isinstance(dtype, pd.SparseDtype) for dtype in dense_df.dtypes) and len(dense_df.dtypes) > 0:
                 matrix = dense_df.sparse.to_coo().tocsr()
             else:
+                # Handle dense or mixed sparse/dense DataFrames (e.g. after incremental merge)
+                if any(isinstance(dtype, pd.SparseDtype) for dtype in dense_df.dtypes):
+                    dense_df = dense_df.sparse.to_dense()
                 matrix = csr_matrix(dense_df.to_numpy())
             mmwrite(paths['mtx'], matrix)
 
