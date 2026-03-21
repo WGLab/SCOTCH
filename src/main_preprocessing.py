@@ -174,6 +174,9 @@ def main():
         logger.info(f'Reference GTF Path: {args.reference}. Job: {args.job_index}')
         logger.info(f'Reference genome Path: {args.reference_genome_fasta}. Job: {args.job_index}')
         logger.info(f'Update GTF option: {args.update_gtf}. Job: {args.job_index}')
+        logger.info(f'Cell Barcode: {args.barcode_cell }. Job: {args.job_index}')
+        logger.info(f'UMI Barcode: {args.barcode_umi}. Job: {args.job_index}')
+
         if gene_subset is not None:
             logger.info(f'Gene subset provided: processing {len(gene_subset)} genes: {gene_subset}')
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
