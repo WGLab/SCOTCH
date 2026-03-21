@@ -146,14 +146,16 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
 
 def summarise_annotation(target,logger=None, gene_subset=None):
-    reference_folders = []
-    for root, dirs, files in os.walk(target):
-        if 'reference' in dirs:
-            reference_folders.append(os.path.join(root, 'reference'))
+    reference_folder = os.path.join(target, 'reference')
+    if not os.path.isdir(reference_folder):
+        msg = f'reference folder does not exist, skipping: {reference_folder}'
+        if logger: logger.info(msg)
+        else: print(msg)
+        return
     def get_numeric_key(key):
         match = re.search(r'_(\d+)$', key)
         return int(match.group(1)) if match else 0
-    for reference_folder in reference_folders:
+    for reference_folder in [reference_folder]:
         output_pkl = os.path.join(reference_folder, "metageneStructureInformationwNovel.pkl")
         output_gtf = os.path.join(reference_folder, "SCOTCH_updated_annotation.gtf")
         pkl_pat = re.compile(r'^metageneStructureInformationwNovel_\d+(?:\.\d+)?\.pkl$')
@@ -223,12 +225,11 @@ def summarise_annotation(target,logger=None, gene_subset=None):
             print('novel isoform annotations does not exist!')
 
 def summarise_auxillary(target, gene_subset=None):
-    # Collect all 'auxillary' directories
-    auxillary_folders = []
-    for root, dirs, files in os.walk(target):
-        if 'auxillary' in dirs:
-            auxillary_folders.append(os.path.join(root, 'auxillary'))
-    for auxillary_folder in auxillary_folders:
+    auxillary_folder = os.path.join(target, 'auxillary')
+    if not os.path.isdir(auxillary_folder):
+        print(f'auxillary folder does not exist, skipping: {auxillary_folder}')
+        return
+    for auxillary_folder in [auxillary_folder]:
         print('summarising read-isoform mapping files at: ' + str(auxillary_folder))
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder) if 'ENSG' in f]
         if gene_subset is None:
