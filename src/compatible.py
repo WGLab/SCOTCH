@@ -183,6 +183,9 @@ def summarise_annotation(target,logger=None, gene_subset=None):
             with open(output_pkl, 'wb') as file:
                 pickle.dump(metageneStructureInformationwNovel, file)
             for file_name_pkl in file_names_pkl:
+                dest = os.path.join(backup_dir, os.path.basename(file_name_pkl))
+                if os.path.exists(dest):
+                    os.remove(dest)
                 shutil.move(file_name_pkl, backup_dir)
             logger.info('mergered new isoform annotation saved at: '+str(output_pkl))
         if len(file_names_gtf) > 0:
@@ -211,6 +214,9 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                 for line in gtf_lines:
                     output_gtf_file.write(line + '\n')
             for file_name_gtf in file_names_gtf:
+                dest = os.path.join(backup_dir, os.path.basename(file_name_gtf))
+                if os.path.exists(dest):
+                    os.remove(dest)
                 shutil.move(file_name_gtf, backup_dir)
             print('Merged GTF annotations saved at: ' + output_gtf)
         else:
