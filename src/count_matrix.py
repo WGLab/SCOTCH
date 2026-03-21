@@ -232,8 +232,8 @@ class CountMatrix:
         if os.path.exists(paths['mtx']) and os.path.exists(paths['pickle']):
             with open(paths['pickle'], 'rb') as handle:
                 meta = pickle.load(handle)
-            matrix = mmread(paths['mtx']).tocsr()
-            return pd.DataFrame.sparse.from_spmatrix(matrix, index=meta['obs'], columns=meta['var'])
+            matrix = mmread(paths['mtx']).toarray()
+            return pd.DataFrame(matrix, index=meta['obs'], columns=meta['var'])
         return pd.DataFrame()
 
     def _save_matrix_df(self, df, folder_path, level, splicing=None):
@@ -246,14 +246,7 @@ class CountMatrix:
         if save_mtx:
             with open(paths['pickle'], 'wb') as handle:
                 pickle.dump({'obs': dense_df.index.tolist(), 'var': dense_df.columns.tolist()}, handle)
-            if all(isinstance(dtype, pd.SparseDtype) for dtype in dense_df.dtypes) and len(dense_df.dtypes) > 0:
-                matrix = dense_df.sparse.to_coo().tocsr()
-            else:
-                # Handle dense or mixed sparse/dense DataFrames (e.g. after incremental merge)
-                for col in dense_df.columns:
-                    if isinstance(dense_df[col].dtype, pd.SparseDtype):
-                        dense_df[col] = dense_df[col].sparse.to_dense()
-                matrix = csr_matrix(dense_df.to_numpy())
+            matrix = csr_matrix(dense_df.to_numpy())
             mmwrite(paths['mtx'], matrix)
 
     def _load_subset_pickles_df(self, folder_path, subset_genes):
