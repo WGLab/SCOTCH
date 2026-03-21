@@ -141,6 +141,12 @@ def split_list(lst, n):
         remainder -= 1
     return result
 
+def _fmt(value):
+    """Normalize numeric value for filenames: float 0.0 → '0', 1.5 → '1.5'."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, novel_read_pct: float = 0,
                  group_novel = True, platform = '10x-ont', workers:int = 1,
@@ -150,6 +156,8 @@ class CountMatrix:
         self.workers = workers
         self.novel_read_n = novel_read_n
         self.novel_read_pct = novel_read_pct
+        self.novel_read_n_str = _fmt(novel_read_n)
+        self.novel_read_pct_str = _fmt(novel_read_pct)
         self.platform = platform
         self.parse = self.platform == 'parse-ont'
         self.pacbio = self.platform == '10x-pacbio'
@@ -159,7 +167,7 @@ class CountMatrix:
         self.mtx = mtx
         self.gene_subset = gene_subset
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
-        self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
+        self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
         self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
         if platform=='parse-ont':
             self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
@@ -208,7 +216,7 @@ class CountMatrix:
 
     def _get_count_output_paths(self, folder_path, level, splicing=None):
         if splicing is None:
-            base_name = f'adata_{level}_{self.novel_read_n}_{self.novel_read_pct}'
+            base_name = f'adata_{level}_{self.novel_read_n_str}_{self.novel_read_pct_str}'
         else:
             base_name = f'adata_{level}_unfiltered{self.novel_read_n}'
         return {
@@ -307,7 +315,7 @@ class CountMatrix:
             pickle.dump(self.novel_name_substitution_dict, handle)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
-                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
+                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
                 dest_path = os.path.join(additional_target, 'reference/novel_name_substitutions.pkl')
                 shutil.copyfile(self.novel_name_substitution_path, dest_path)
@@ -565,7 +573,7 @@ class CountMatrix:
             pickle.dump(self.novel_name_substitution_dict, f)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
-                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
+                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
                 dest_path = os.path.join(additional_target, 'reference/novel_name_substitutions.pkl')
                 shutil.copyfile(self.novel_name_substitution_path, dest_path)
@@ -642,9 +650,9 @@ class CountMatrix:
                 gene_meta_unfiltered = {'obs': self.adata_gene_unfiltered_list[i].obs.index.tolist(),
                                         "var": self.adata_gene_unfiltered_list[i].var.index.tolist()}
                 fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
-                             f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                             f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.pickle')
                 fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                                         f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.mtx')
                 with open(fn_pickle,'wb') as f:
                     pickle.dump(gene_meta_unfiltered, f)
                 mmwrite(fn_mtx,self.adata_gene_unfiltered_list[i].X)
@@ -653,9 +661,9 @@ class CountMatrix:
                 transcript_meta_unfiltered = {'obs': self.adata_transcript_unfiltered_list[i].obs.index.tolist(),
                                               "var": self.adata_transcript_unfiltered_list[i].var.index.tolist()}
                 fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                                         f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.pickle')
                 fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
-                                      f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                                      f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.mtx')
                 mmwrite(fn_mtx, self.adata_transcript_unfiltered_list[i].X)
                 with open(fn_pickle,'wb') as f:
                     pickle.dump(transcript_meta_unfiltered, f)
@@ -710,9 +718,9 @@ class CountMatrix:
             self.logger.info('saving count matrix in csv format')
             for i in range(self.n_samples):
                 output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.csv')
+                                         f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.csv')
                 output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.csv')
+                                         f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.csv')
                 # save gene
                 print('saving count matrix on gene level ')
                 adata_gene_unfiltered_df = self.adata_gene_unfiltered_list[i].to_df()
@@ -764,7 +772,7 @@ class CountMatrix:
         self.logger.info('updating gtf annotation file')
         for target in self.target:
             input_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation.gtf')
-            output_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation_filtered_{self.novel_read_n}_{self.novel_read_pct}.gtf')
+            output_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.gtf')
             with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
                 for line in infile:
                     if line.startswith("#"):
@@ -807,7 +815,7 @@ class CountMatrix:
                 continue
 
             output_path = os.path.join(auxillary_dir,
-                f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n}_{self.novel_read_pct}.tsv')
+                f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.tsv')
             tmp_path = output_path + '.tmp'
 
             self.logger.info(f'Filtering read-isoform mapping: {tsv_path}')
