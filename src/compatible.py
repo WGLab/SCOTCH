@@ -168,6 +168,10 @@ def summarise_annotation(target,logger=None, gene_subset=None):
             for file_name_pkl in file_names_pkl:
                 metageneStructureInformation = load_pickle(file_name_pkl)
                 metageneStructureInformationwNovel.update(metageneStructureInformation)
+            # Keep a reference to the per-job subset before merging with existing,
+            # so the GTF incremental update (below) can determine affected gene IDs
+            # even after the per-job pkl files have been moved to backup_dir.
+            updated_metagenes_subset = dict(metageneStructureInformationwNovel)
             if gene_subset is not None and os.path.exists(output_pkl):
                 existing_annotation = load_pickle(output_pkl)
                 for meta_gene in metageneStructureInformationwNovel:
@@ -192,10 +196,8 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                         if not line.startswith('#'):
                             gtf_lines.append(line.strip())
             if gene_subset is not None and os.path.exists(output_gtf) and len(file_names_pkl) > 0:
-                updated_metagenes = {}
-                for file_name_pkl in file_names_pkl:
-                    updated_metagenes.update(load_pickle(file_name_pkl))
-                affected_gene_ids = get_gene_ids_from_metagene_dict(updated_metagenes)
+                # Use the subset metagenes captured before files were moved to backup_dir.
+                affected_gene_ids = get_gene_ids_from_metagene_dict(updated_metagenes_subset)
                 retained_lines = []
                 with open(output_gtf, 'r') as existing_gtf_file:
                     for line in existing_gtf_file:
