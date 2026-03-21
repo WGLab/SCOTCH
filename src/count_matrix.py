@@ -250,8 +250,9 @@ class CountMatrix:
                 matrix = dense_df.sparse.to_coo().tocsr()
             else:
                 # Handle dense or mixed sparse/dense DataFrames (e.g. after incremental merge)
-                if any(isinstance(dtype, pd.SparseDtype) for dtype in dense_df.dtypes):
-                    dense_df = dense_df.sparse.to_dense()
+                for col in dense_df.columns:
+                    if isinstance(dense_df[col].dtype, pd.SparseDtype):
+                        dense_df[col] = dense_df[col].sparse.to_dense()
                 matrix = csr_matrix(dense_df.to_numpy())
             mmwrite(paths['mtx'], matrix)
 
