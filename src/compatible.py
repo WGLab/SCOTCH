@@ -637,6 +637,8 @@ class ReadMapper:
             # logging genes without any reads
             log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
             for index in log_ind:
+                if self.genenames_subset is not None and Info_multigenes[index][0]['geneName'] not in self.genenames_subset:
+                    continue
                 for sample_ind in range(self.nsamples):
                     sample_target = self.target[sample_ind]
                     save_compatibleVector_by_gene(geneName=Info_multigenes[index][0]['geneName'],
@@ -677,6 +679,8 @@ class ReadMapper:
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] + len(list(
                         novel_isoformInfo_polished.keys()))
                 self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
+                if self.genenames_subset is not None and geneName not in self.genenames_subset:
+                    continue
                 for sample_ind in range(self.nsamples):
                     sample_target = self.target[sample_ind]
                     sample = 'sample'+str(sample_ind)
@@ -800,6 +804,8 @@ class ReadMapper:
             # logging genes without any reads
             log_ind = [ind for ind in range(len(Info_multigenes)) if ind not in unique_ind]
             for index in log_ind:
+                if self.genenames_subset is not None and Info_multigenes[index][0]['geneName'] not in self.genenames_subset:
+                    continue
                 for sample in unique_samples:
                     sample_target = os.path.join(self.target[0], 'samples/' + sample)
                     if not os.path.exists(sample_target):
@@ -843,6 +849,8 @@ class ReadMapper:
                     self.metageneStructureInformationwNovel[meta_gene][index][0]['numofIsoforms'] + len(list(
                         novel_isoformInfo_polished.keys()))
                 self.metageneStructureInformationwNovel[meta_gene][index][2].update(novel_isoformInfo_polished)
+                if self.genenames_subset is not None and geneName not in self.genenames_subset:
+                    continue
                 if save:
                     for sample in unique_samples:
                         sample_target = os.path.join(self.target[0], 'samples/' + str(sample))
