@@ -1166,7 +1166,7 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
         qname_dict = {}
         qname_dict[readName] = readName
     if parse:
-        poly_bool, _ = detect_poly_parse(read, window=20, n=15)
+        poly_bool, _ = detect_poly_parse(read, window=15, n=10)
         if poly_bool and fasta_handle is not None:
             poly = poly_tail(read, Info_Singlegenes[0], fasta_handle, window=15, threshold=8)
         elif poly_bool:
@@ -1193,9 +1193,9 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     else: #10x
         if bulk:
-            poly_bool, _ = detect_poly_parse(read, window=20, n=15)
+            poly_bool, _ = detect_poly_parse(read, window=15, n=10)
         else:
-            poly_bool, _ = detect_poly(read, window=20, n=15, barcode_umi=barcode_umi)
+            poly_bool, _ = detect_poly(read, window=15, n=10, barcode_umi=barcode_umi)
         if poly_bool and fasta_handle is not None:
             poly = poly_tail(read, Info_Singlegenes[0], fasta_handle, window=15, threshold=8)
         elif poly_bool:
@@ -1220,7 +1220,7 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
         qname_dict[readName] = readName
     if parse:
         if readName == qname_dict[readName]:
-            poly_bool, _ = detect_poly_parse(read, window=20, n=15)
+            poly_bool, _ = detect_poly_parse(read, window=15, n=10)
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta_parse(read,Info_multigenes,lowest_match,lowest_match1, small_exon_threshold,
                                                                                                             small_exon_threshold1,truncation_match,poly_bool, fasta_handle=fasta_handle, bulk=bulk)
             if ind >= 0:
@@ -1236,9 +1236,9 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
     else:
         if readName == qname_dict[readName]:
             if bulk:
-                poly_bool, _ = detect_poly_parse(read, window=20, n=15)
+                poly_bool, _ = detect_poly_parse(read, window=15, n=10)
             else:
-                poly_bool, _ = detect_poly(read, window=20, n=15, barcode_umi = barcode_umi)
+                poly_bool, _ = detect_poly(read, window=15, n=10, barcode_umi=barcode_umi)
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta(read, Info_multigenes,
                                                                                                       lowest_match,lowest_match1, small_exon_threshold,small_exon_threshold1,
                                                                                                       truncation_match,pacbio=False, poly=poly_bool, fasta_handle=fasta_handle, bulk=bulk)
