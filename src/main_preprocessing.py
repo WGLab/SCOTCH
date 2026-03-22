@@ -243,8 +243,6 @@ def main():
         logger.info('Saving count matrix')
         countmatrix.save_multiple_samples(generate_splicing=args.generate_splicing)
         countmatrix.filter_gtf()
-        logger.info('Filtering read-isoform mapping TSV')
-        countmatrix.finalize_read_isoform_mapping()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
 
@@ -290,8 +288,6 @@ def main():
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.update_multiple_samples_incremental(generate_splicing=args.generate_splicing)
         countmatrix.filter_gtf()
-        logger.info('Filtering read-isoform mapping TSV')
-        countmatrix.finalize_read_isoform_mapping()
         logger.info('Completed incremental update for all targets.')
         copy_log_to_targets(log_file, args.target)
 
