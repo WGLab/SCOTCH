@@ -226,28 +226,32 @@ class CountMatrix:
         }
 
     def _load_saved_matrix_df(self, folder_path, level, splicing=None):
+        """Load saved count matrix as (csr_matrix, obs_list, var_list) or (None, [], [])."""
         paths = self._get_count_output_paths(folder_path, level, splicing=splicing)
-        if os.path.exists(paths['csv']):
-            return pd.read_csv(paths['csv'], index_col=0)
         if os.path.exists(paths['mtx']) and os.path.exists(paths['pickle']):
             with open(paths['pickle'], 'rb') as handle:
                 meta = pickle.load(handle)
-            matrix = mmread(paths['mtx']).toarray()
-            return pd.DataFrame(matrix, index=meta['obs'], columns=meta['var'])
-        return pd.DataFrame()
+            matrix = mmread(paths['mtx']).tocsr()
+            return matrix, meta['obs'], meta['var']
+        if os.path.exists(paths['csv']):
+            df = pd.read_csv(paths['csv'], index_col=0)
+            return csr_matrix(df.to_numpy()), df.index.tolist(), df.columns.tolist()
+        return None, [], []
 
-    def _save_matrix_df(self, df, folder_path, level, splicing=None):
+    def _save_matrix_df(self, matrix, obs, var, folder_path, level, splicing=None):
+        """Save count matrix from (csr_matrix, obs_list, var_list)."""
         paths = self._get_count_output_paths(folder_path, level, splicing=splicing)
         save_csv = self.csv or os.path.exists(paths['csv'])
         save_mtx = self.mtx or os.path.exists(paths['mtx']) or os.path.exists(paths['pickle'])
-        dense_df = df if isinstance(df, pd.DataFrame) else pd.DataFrame(df)
-        if save_csv:
-            dense_df.to_csv(paths['csv'])
         if save_mtx:
             with open(paths['pickle'], 'wb') as handle:
-                pickle.dump({'obs': dense_df.index.tolist(), 'var': dense_df.columns.tolist()}, handle)
-            matrix = csr_matrix(dense_df.to_numpy())
+                pickle.dump({'obs': list(obs), 'var': list(var)}, handle)
+            if not isinstance(matrix, csr_matrix):
+                matrix = csr_matrix(matrix)
             mmwrite(paths['mtx'], matrix)
+        if save_csv:
+            df = pd.DataFrame(matrix.toarray(), index=obs, columns=var)
+            df.to_csv(paths['csv'])
 
     def _load_subset_pickles_df(self, folder_path, subset_genes):
         suffix = '_unfiltered_count.pickle'
@@ -256,30 +260,65 @@ class CountMatrix:
             if f.endswith(suffix) and f[:-len(suffix)] in subset_genes
         ]
         if len(out_paths) == 0:
-            return pd.DataFrame(), pd.DataFrame(), []
+            return None, [], [], None, [], [], []
         out_unfiltered = [pp.load_pickle(path) for path in out_paths]
         triple_gene_list, triple_transcript_list = list(zip(*out_unfiltered))
         triple_gene_list = pp.unpack_list(list(triple_gene_list))
         triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
-        gene_df = generate_adata(triple_gene_list).to_df() if len(triple_gene_list) > 0 else pd.DataFrame()
-        transcript_df = generate_adata(triple_transcript_list).to_df() if len(triple_transcript_list) > 0 else pd.DataFrame()
-        return gene_df, transcript_df, out_paths
+        if len(triple_gene_list) > 0:
+            adata_gene = generate_adata(triple_gene_list)
+            gene_mat, gene_obs, gene_var = csr_matrix(adata_gene.X), adata_gene.obs.index.tolist(), adata_gene.var.index.tolist()
+        else:
+            gene_mat, gene_obs, gene_var = None, [], []
+        if len(triple_transcript_list) > 0:
+            adata_transcript = generate_adata(triple_transcript_list)
+            transcript_mat, transcript_obs, transcript_var = csr_matrix(adata_transcript.X), adata_transcript.obs.index.tolist(), adata_transcript.var.index.tolist()
+        else:
+            transcript_mat, transcript_obs, transcript_var = None, [], []
+        return gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var, out_paths
 
-    def _splice_matrix_df(self, existing_df, subset_df, subset_genes, level):
+    def _splice_matrix_sparse(self, existing_mat, existing_obs, existing_var,
+                               subset_mat, subset_obs, subset_var, subset_genes, level):
+        """Splice subset columns into existing matrix, all in scipy sparse."""
+        from scipy.sparse import hstack as sparse_hstack
+        # Determine which existing columns to keep (drop subset genes)
         if level == 'gene':
-            base_df = existing_df.drop(columns=[col for col in existing_df.columns if col in subset_genes], errors='ignore')
+            subset_gene_set = set(subset_genes)
+            keep_mask = [i for i, col in enumerate(existing_var) if col not in subset_gene_set]
         else:
             subset_prefixes = tuple(f'{gene}_' for gene in subset_genes)
-            base_df = existing_df.loc[:, [col for col in existing_df.columns if not col.startswith(subset_prefixes)]]
-        if base_df.empty and subset_df.empty:
-            return pd.DataFrame()
-        all_index = base_df.index.union(subset_df.index)
-        base_df = base_df.reindex(all_index, fill_value=0)
-        subset_df = subset_df.reindex(all_index, fill_value=0)
-        merged_df = pd.concat([base_df, subset_df], axis=1)
-        if merged_df.shape[1] > 0:
-            merged_df = merged_df.loc[:, ~merged_df.columns.duplicated(keep='last')]
-        return merged_df.sort_index()
+            keep_mask = [i for i, col in enumerate(existing_var) if not col.startswith(subset_prefixes)]
+        base_var = [existing_var[i] for i in keep_mask]
+        base_mat = existing_mat[:, keep_mask] if len(keep_mask) > 0 else csr_matrix((existing_mat.shape[0], 0))
+        if subset_mat is None or subset_mat.shape[1] == 0:
+            if len(base_var) == 0:
+                return None, [], []
+            return base_mat.tocsr(), existing_obs, base_var
+        # Build unified row index
+        all_obs = list(dict.fromkeys(existing_obs + subset_obs))  # union preserving order
+        obs_to_idx = {cell: i for i, cell in enumerate(all_obs)}
+        n_rows = len(all_obs)
+        # Remap base rows
+        base_row_map = [obs_to_idx[cell] for cell in existing_obs]
+        from scipy.sparse import csr_matrix as csr, lil_matrix
+        base_remapped = lil_matrix((n_rows, base_mat.shape[1]))
+        for old_i, new_i in enumerate(base_row_map):
+            base_remapped[new_i] = base_mat[old_i]
+        # Remap subset rows
+        subset_row_map = [obs_to_idx[cell] for cell in subset_obs]
+        subset_remapped = lil_matrix((n_rows, subset_mat.shape[1]))
+        for old_i, new_i in enumerate(subset_row_map):
+            subset_remapped[new_i] = subset_mat[old_i]
+        merged = sparse_hstack([base_remapped.tocsr(), subset_remapped.tocsr()], format='csr')
+        merged_var = base_var + subset_var
+        # Remove duplicate columns (keep last)
+        seen = {}
+        for i, col in enumerate(merged_var):
+            seen[col] = i
+        unique_indices = sorted(seen.values())
+        merged = merged[:, unique_indices]
+        merged_var = [merged_var[i] for i in unique_indices]
+        return merged, all_obs, merged_var
 
     def _merge_novel_metadata(self, subset_novel_isoform_del, subset_novel_name_substitution):
         if os.path.exists(self.novel_isoform_del_path):
@@ -319,19 +358,40 @@ class CountMatrix:
 
     def _update_saved_matrices_for_mode(self, subset_genes, folder_path_list, splicing=None):
         generated_paths = []
-        gene_dfs, transcript_dfs = [], []
+        subset_data = []
         for folder_path in folder_path_list:
-            gene_df, transcript_df, out_paths = self._load_subset_pickles_df(folder_path, subset_genes)
-            gene_dfs.append(gene_df)
-            transcript_dfs.append(transcript_df)
+            gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var, out_paths = \
+                self._load_subset_pickles_df(folder_path, subset_genes)
+            subset_data.append((gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var))
             generated_paths.extend(out_paths)
         for i, folder_path in enumerate(folder_path_list):
-            existing_gene_df = self._load_saved_matrix_df(folder_path, 'gene', splicing=splicing)
-            existing_transcript_df = self._load_saved_matrix_df(folder_path, 'transcript', splicing=splicing)
-            merged_gene_df = self._splice_matrix_df(existing_gene_df, gene_dfs[i], subset_genes, level='gene')
-            merged_transcript_df = self._splice_matrix_df(existing_transcript_df, transcript_dfs[i], subset_genes, level='transcript')
-            self._save_matrix_df(merged_gene_df, folder_path, 'gene', splicing=splicing)
-            self._save_matrix_df(merged_transcript_df, folder_path, 'transcript', splicing=splicing)
+            gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var = subset_data[i]
+            # Process gene matrix
+            existing_mat, existing_obs, existing_var = self._load_saved_matrix_df(folder_path, 'gene', splicing=splicing)
+            if existing_mat is not None:
+                merged_mat, merged_obs, merged_var = self._splice_matrix_sparse(
+                    existing_mat, existing_obs, existing_var,
+                    gene_mat, gene_obs, gene_var, subset_genes, level='gene')
+            elif gene_mat is not None:
+                merged_mat, merged_obs, merged_var = gene_mat, gene_obs, gene_var
+            else:
+                merged_mat, merged_obs, merged_var = None, [], []
+            if merged_mat is not None:
+                self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'gene', splicing=splicing)
+            del existing_mat, merged_mat  # free memory before transcript
+            # Process transcript matrix
+            existing_mat, existing_obs, existing_var = self._load_saved_matrix_df(folder_path, 'transcript', splicing=splicing)
+            if existing_mat is not None:
+                merged_mat, merged_obs, merged_var = self._splice_matrix_sparse(
+                    existing_mat, existing_obs, existing_var,
+                    transcript_mat, transcript_obs, transcript_var, subset_genes, level='transcript')
+            elif transcript_mat is not None:
+                merged_mat, merged_obs, merged_var = transcript_mat, transcript_obs, transcript_var
+            else:
+                merged_mat, merged_obs, merged_var = None, [], []
+            if merged_mat is not None:
+                self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'transcript', splicing=splicing)
+            del existing_mat, merged_mat
         for path in generated_paths:
             os.remove(path)
 
