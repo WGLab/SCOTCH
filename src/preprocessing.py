@@ -579,11 +579,11 @@ def detect_poly_parse(read, window = 20, n = 15):
             window_seq = seq[i:i + window]
             poly_bool = None
             if AorT == 'T':
-                if window_seq.count('T') > n:
+                if window_seq.count('T') >= n:
                     poly_bool = True
                     break
             else:
-                if window_seq.count('A') > n:
+                if window_seq.count('A') >= n:
                     poly_bool = True
                     break
         return poly_bool
@@ -603,6 +603,14 @@ def detect_poly_parse(read, window = 20, n = 15):
     return poly_bool, poly
 
 def poly_tail(read, geneInfo, fasta_handle, window=15, threshold=8):
+    """Check if read's 3' alignment boundary overlaps a genomic homopolymer run
+    that could cause internal priming artifacts. Returns True (real poly tail)
+    or False (likely internal priming artifact).
+
+    Uses longest consecutive run of A/T in the reference genome rather than
+    total count, to avoid false rejections at coding regions with scattered
+    T's (e.g., Lysine codons CTT CTT CTT).
+    """
     if geneInfo['geneStrand'] == "+":
         pos = read.reference_end
         base = "A"
@@ -614,8 +622,17 @@ def poly_tail(read, geneInfo, fasta_handle, window=15, threshold=8):
     start = max(0, pos - window)
     end = min(chrom_len, pos + window)
     seq = fasta_handle.fetch(chrom, start, end).upper()
-    n = seq.count(base)
-    tail = False if n >= threshold else True
+    # Check longest consecutive run of target base
+    max_run = 0
+    current_run = 0
+    for b in seq:
+        if b == base:
+            current_run += 1
+            max_run = max(max_run, current_run)
+        else:
+            current_run = 0
+    # A long homopolymer run suggests genomic polyA/T → internal priming artifact
+    tail = False if max_run >= threshold else True
     return tail
 
 def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.2,lowest_match1=0.8,  small_exon_threshold = 20, small_exon_threshold1=100, truncation_match=0.5, pacbio = False, poly = False, fasta_handle = None, bulk = False):
