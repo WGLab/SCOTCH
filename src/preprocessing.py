@@ -561,6 +561,10 @@ def detect_poly(read, window = 20, n = 15, barcode_umi = 'UB'):
     if pos2>=0:
         nA = seq[pos2-window:pos2].count('A')
         poly = 'A'
+    # Fallback: UMI was trimmed from read by upstream pipeline (e.g. STARsolo),
+    # check soft-clipped edges for polyT (head) / polyA (tail)
+    if pos1 < 0 and pos2 < 0:
+        return detect_poly_parse(read, window, n)
     if nT>=n or nA>=n:
         res = True
     return res, poly
