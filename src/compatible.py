@@ -532,6 +532,9 @@ class ReadMapper:
         return bamFilePysam_list
     def map_reads(self, meta_gene, save = True):
         Info_multigenes = copy.deepcopy(self.metageneStructureInformation[meta_gene])
+        if not Info_multigenes:
+            self.logger.warning(f"Metagene '{meta_gene}' has no gene entries, skipping")
+            return
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysams = self.read_bam(chrom=Info_multigenes[0][0]['geneChr'])
         if len(Info_multigenes)==1:
@@ -705,6 +708,9 @@ class ReadMapper:
                 return return_list
     def map_reads_parse(self, meta_gene, save = True):
         Info_multigenes = copy.deepcopy(self.metageneStructureInformation[meta_gene])
+        if not Info_multigenes:
+            self.logger.warning(f"Metagene '{meta_gene}' has no gene entries, skipping")
+            return
         Info_multigenes = sort_multigeneInfo(Info_multigenes)
         bamFilePysam = self.read_bam()
         if len(Info_multigenes)==1:

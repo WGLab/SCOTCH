@@ -918,9 +918,17 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             meta_gene = 'meta_gene_' + str(i+1)
             gene_ids = grouped_dict[i+1]
             meta_gene_info = []
+            missing_ids = []
             for id in gene_ids:
                 if id in geneStructureInformation:
                     meta_gene_info.append(geneStructureInformation[id])
+                else:
+                    missing_ids.append(id)
+            if missing_ids:
+                logger.warning(f"Metagene {meta_gene}: gene IDs {missing_ids} not found in geneStructureInformation, skipping")
+            if not meta_gene_info:
+                logger.warning(f"Metagene {meta_gene} has no valid gene entries, skipping")
+                continue
             metageneStructureInformation[meta_gene] = meta_gene_info
         # save to output, meta gene
         with open(meta_output, 'wb') as file:
@@ -1100,7 +1108,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
 
 
 
