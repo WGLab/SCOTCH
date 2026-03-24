@@ -58,18 +58,28 @@ def build_read_selection_df(df):
     if df.empty:
         return df
     df = df.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False]).reset_index(drop=True)
-    unique_mask = ~df['Read'].duplicated(keep=False)
-    multiple_mask = df['Read'].duplicated(keep=False)
-    df_unique = df[unique_mask].copy()
-    df_unique['GeneMapping'] = 'unique'
-    df_unique['Keep'] = 1
-    df_multiple = df[multiple_mask].copy()
-    if df_multiple.empty:
-        return df_unique.reset_index(drop=True)
-    grouped = df_multiple.groupby(['Read'], group_keys=False)
-    processed_groups = Parallel(n_jobs=-1)(delayed(process_group)(group) for _, group in grouped)
-    df_multiple_processed = pd.concat(processed_groups).reset_index(drop=True)
-    return pd.concat([df_unique, df_multiple_processed], ignore_index=True)
+    group_size = df.groupby('Read')['Read'].transform('size')
+    unique_mask = group_size.eq(1)
+    max_priority = df.groupby('Read')['priority'].transform('max')
+    highest_priority_mask = df['priority'].eq(max_priority) & group_size.gt(1)
+    highest_priority_count = highest_priority_mask.groupby(df['Read']).transform('sum')
+    unique_highest_mask = highest_priority_mask & highest_priority_count.eq(1)
+    ambiguous_mask = highest_priority_mask & highest_priority_count.gt(1)
+
+    df.loc[unique_mask | unique_highest_mask, 'GeneMapping'] = 'unique'
+    df.loc[unique_mask | unique_highest_mask, 'Keep'] = 1
+    df.loc[ambiguous_mask, 'GeneMapping'] = 'ambiguous'
+
+    if ambiguous_mask.any():
+        ambiguous_df = df.loc[ambiguous_mask, ['Read']].copy()
+        ambiguous_df['tie_rank'] = ambiguous_df.groupby('Read').cumcount()
+        ambiguous_df['keep_rank'] = ambiguous_df.groupby('Read')['Read'].transform(
+            lambda group: np.random.randint(len(group))
+        )
+        keep_mask = ambiguous_df['tie_rank'].eq(ambiguous_df['keep_rank'])
+        df.loc[ambiguous_df.index[keep_mask], 'Keep'] = 1
+
+    return df.reset_index(drop=True)
 
 
 def read_auxillary_mapping_file(file_path):
@@ -224,21 +234,32 @@ def summarise_annotation(target,logger=None, gene_subset=None):
         else:
             print('novel isoform annotations does not exist!')
 
-def summarise_auxillary(target, gene_subset=None):
+def summarise_auxillary(target, gene_subset=None, logger=None):
+    def log_info(message):
+        if logger is not None:
+            logger.info(message)
+        else:
+            print(message)
+
     auxillary_folder = os.path.join(target, 'auxillary')
     if not os.path.isdir(auxillary_folder):
-        print(f'auxillary folder does not exist, skipping: {auxillary_folder}')
+        log_info(f'auxillary folder does not exist, skipping: {auxillary_folder}')
         return
     for auxillary_folder in [auxillary_folder]:
-        print('summarising read-isoform mapping files at: ' + str(auxillary_folder))
+        log_info('summarising read-isoform mapping files at: ' + str(auxillary_folder))
         file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder) if 'ENSG' in f]
+        log_info(f'Found {len(file_paths)} input mapping files in {auxillary_folder}')
         if gene_subset is None:
             if len(file_paths) == 0:
                 continue
-            df_list = Parallel(n_jobs=-1)(delayed(read_auxillary_mapping_file)(file_path) for file_path in file_paths)
+            df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxillary_mapping_file)(file_path) for file_path in file_paths)
             DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
-            print('Processing groups for multiple reads...')
+            duplicated_reads = DF.loc[DF['Read'].duplicated(keep=False), 'Read'].nunique()
+            log_info(f'Loaded {len(DF)} rows from auxillary mapping files')
+            log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
+            log_info('Starting read-selection build')
             DF_final = build_read_selection_df(DF)
+            log_info('Completed read-selection build')
         else:
             subset_names = set(gene_subset)
             candidate_file_paths = []
@@ -249,19 +270,20 @@ def summarise_auxillary(target, gene_subset=None):
                 if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
                     candidate_file_paths.append(file_path)
             if len(candidate_file_paths) == 0:
-                print('No new per-gene TSVs found for subset; skipping auxillary merge.')
+                log_info('No new per-gene TSVs found for subset; skipping auxillary merge.')
                 continue
             output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
             existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
             existing_df = existing_df.copy()
             new_subset_df = (
                 pd.concat(
-                    Parallel(n_jobs=-1)(delayed(read_auxillary_mapping_file)(file_path) for file_path in candidate_file_paths),
+                    Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxillary_mapping_file)(file_path) for file_path in candidate_file_paths),
                     axis=0,
                     ignore_index=True
                 ).reset_index(drop=True)
                 if len(candidate_file_paths) > 0 else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
             )
+            log_info(f'Loaded {len(new_subset_df)} rows from {len(candidate_file_paths)} subset mapping files')
             old_subset_df = existing_df[existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
             affected_reads = set(old_subset_df['Read'].tolist()) | set(new_subset_df['Read'].tolist())
             unaffected_df = existing_df[~existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
@@ -269,8 +291,11 @@ def summarise_auxillary(target, gene_subset=None):
                 unaffected_keep = unaffected_df[~unaffected_df['Read'].isin(affected_reads)].copy()
                 affected_non_subset = unaffected_df[unaffected_df['Read'].isin(affected_reads)].copy()
                 affected_df = pd.concat([affected_non_subset, new_subset_df], ignore_index=True)
-                print('Processing groups for affected reads...')
+                duplicated_reads = affected_df.loc[affected_df['Read'].duplicated(keep=False), 'Read'].nunique()
+                log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
+                log_info('Starting read-selection build')
                 affected_final = build_read_selection_df(affected_df)
+                log_info('Completed read-selection build')
                 DF_final = pd.concat([unaffected_keep, affected_final], ignore_index=True)
             else:
                 DF_final = unaffected_df
@@ -279,14 +304,14 @@ def summarise_auxillary(target, gene_subset=None):
             DF_final = pd.DataFrame(columns=READ_MAPPING_COLUMNS)
         DF_final = DF_final.sort_values(by=['geneChr', 'Read', 'priority'], ascending=[True, True, False]).reset_index(drop=True)
         output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
-        print('saving read-isoform mapping file: '+str(output_file_tsv))
+        log_info('saving read-isoform mapping file: '+str(output_file_tsv))
         DF_final.to_csv(output_file_tsv, sep='\t', index=False)
-        print('removing temporary files in: '+ str(auxillary_folder))
+        log_info('removing temporary files in: '+ str(auxillary_folder))
         for file in file_paths:
             os.remove(file)
         output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
         cbumi_keep_dict = DF_final.set_index('CBUMI')['Keep'].to_dict()
-        print('saving read filtering file: ' + str(output_file_pkl))
+        log_info('saving read filtering file: ' + str(output_file_pkl))
         with open(output_file_pkl, 'wb') as pickle_file:
             pickle.dump(cbumi_keep_dict, pickle_file)
 

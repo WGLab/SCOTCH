@@ -83,7 +83,7 @@ def setup_logger(target, task_name):
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.ERROR)
+    console_handler.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
@@ -262,7 +262,7 @@ def main():
             #auxillary
             logger.info(f'Start summarizing read mapping information for target: {target}')
             try:
-                cp.summarise_auxillary(target)
+                cp.summarise_auxillary(target, logger=logger)
                 logger.info(f'Completed summarizing read mapping information for target: {target}')
             except Exception as e:
                 logger.exception(f"summarise_auxillary failed for target: {target}")
