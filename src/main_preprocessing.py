@@ -66,13 +66,22 @@ parser.add_argument('--gene_subset',type=str,nargs='+',default=None,help="Option
 
 #task is visualization
 parser.add_argument('--gene',type=str, help="gene name to visualize")
-parser.add_argument('--target_vis',type=str, help="target path for visualization")
+parser.add_argument('--target_vis',type=str, help="(deprecated, ignored) visualization output goes under --target")
 parser.add_argument('--sample_names',type=str,nargs='+', help="sample names for visualization")#a list
 parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel isoform annotation if expression in count matrix surpass the threshold")
-parser.add_argument('--junction_num',type=int,default=10, help="only keep junctions over this number")
 parser.add_argument('--width',type=int,default=12)
-parser.add_argument('--height',type=float,default=1)
-parser.add_argument("--annotation_scale", type=float, default=0.25, help="annotation plot scale")
+parser.add_argument('--height',type=float,default=10)
+parser.add_argument("--annotation_scale", type=float, default=0.25, help="relative height of gene model panel")
+parser.add_argument('--cell_type_file',type=str, default=None, help="CSV/TSV file with columns: barcode, cell_type")
+parser.add_argument('--cell_type',type=str, nargs='+', default=['bulk'], help="'bulk' (no cell type split), 'all' (all cell types), or specific cell type name(s)")
+parser.add_argument('--separate_known_novel', action='store_true', default=False, help="display known and novel isoform reads in separate tracks")
+parser.add_argument('--overlay_known_novel', action='store_true', default=False, help="overlay known and novel reads in same track with different colors")
+parser.add_argument('--save_bam_vis', action='store_true', default=False, help="save intermediate sub-BAM files for visualization")
+parser.add_argument('--save_gtf_vis', action='store_true', default=False, help="save intermediate sub-GTF file for visualization")
+parser.add_argument('--junction_min_reads',type=int, default=5, help="minimum reads to display a splice junction")
+parser.add_argument('--junction_annotated_only', action='store_true', default=False, help="only show junctions matching known GTF splice sites")
+parser.add_argument('--bin_size',type=int, default=50, help="genomic position bin size for coverage track")
+parser.add_argument('--output_format',type=str, default='pdf', choices=['pdf','png'], help="output plot format")
 
 def setup_logger(target, task_name):
     logger = logging.getLogger()
@@ -280,7 +289,7 @@ def main():
             logger.info(f'Incrementally summarizing annotation for target: {target}')
             cp.summarise_annotation(target, logger=logger, gene_subset=gene_subset)
             logger.info(f'Incrementally summarizing read mapping information for target: {target}')
-            cp.summarise_auxillary(target, gene_subset=gene_subset)
+            cp.summarise_auxillary(target, gene_subset=gene_subset, logger=logger)
         countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.novel_read_n, novel_read_pct=args.novel_read_pct,
                                      platform=args.platform, workers=args.workers, group_novel=args.group_novel,
                                      logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset)
@@ -310,9 +319,33 @@ def main():
         run_summary()
         run_count()
 
-    if args.task =='visualization': #currently only support 10X file structure
-        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.junction_num, args.target_vis,
-                          args.sample_names, args.width, args.height, args.annotation_scale)
+    if args.task =='visualization':
+        if args.separate_known_novel and args.overlay_known_novel:
+            parser.error("--separate_known_novel and --overlay_known_novel are mutually exclusive")
+        vis.visualization(
+            gene=args.gene,
+            bam_files=args.bam,
+            targets=args.target,
+            sample_names=args.sample_names,
+            novel_pct=args.novel_pct,
+            output_dir=args.target[0],
+            cell_type_file=args.cell_type_file,
+            cell_types=args.cell_type,
+            separate_known_novel=args.separate_known_novel,
+            overlay_known_novel=args.overlay_known_novel,
+            save_bam=args.save_bam_vis,
+            save_gtf=args.save_gtf_vis,
+            junction_min_reads=args.junction_min_reads,
+            junction_annotated_only=args.junction_annotated_only,
+            bin_size=args.bin_size,
+            output_format=args.output_format,
+            width=args.width,
+            height=args.height,
+            annotation_scale=args.annotation_scale,
+            barcode_cell=args.barcode_cell,
+            barcode_umi=args.barcode_umi,
+            platform=args.platform,
+        )
 
 if __name__ == '__main__':
     main()

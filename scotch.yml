@@ -20,6 +20,10 @@ dependencies:
   - pip=22.3.1
   - pysam=0.21.0
   - python=3.10.12
+  - r-ggplot2>=3.4
+  - r-cowplot>=1.1
+  - r-data.table>=1.14
+  - r-optparse>=1.7
   - scipy=1.10.1
   - tqdm=4.65.0
   - pip:
