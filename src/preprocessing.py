@@ -542,6 +542,8 @@ def exon_hit(mapPositions, exonInfo):
 
 ##TODO: this function is for 3' kit, should consider 5'kit
 def detect_poly(read, window = 20, n = 15, barcode_umi = 'UB'):
+    if read.query_sequence is None:
+        return False, None
     query_sequence = read.query_sequence
     tag_names = [tag for tag, _ in read.get_tags()]
     if 'UR' in tag_names:
@@ -570,6 +572,8 @@ def detect_poly(read, window = 20, n = 15, barcode_umi = 'UB'):
     return res, poly
 
 def detect_poly_parse(read, window = 20, n = 15):
+    if read.query_sequence is None:
+        return False, None
     def detect_poly_parse_(query_sequence, window, n, AorT):
         if len(query_sequence) == 0:
             return False
@@ -1165,6 +1169,9 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
     if qname_dict is None: #for bulk
         qname_dict = {}
         qname_dict[readName] = readName
+    mapped_read_name = qname_dict.get(readName)
+    if mapped_read_name is None:
+        return novelIsoformResults, isoformCompatibleVectorResults, mapping_scores
     if parse:
         poly_bool, _ = detect_poly_parse(read, window=15, n=10)
         if poly_bool and fasta_handle is not None:
@@ -1174,7 +1181,7 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
         else:
             poly = False
         #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
-        if (readName == qname_dict[readName]):
+        if (readName == mapped_read_name):
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes, lowest_match, lowest_match1, small_exon_threshold, small_exon_threshold1, truncation_match,
                                                                                                             False, poly, fasta_handle = fasta_handle)
             if read_novelisoform_tuple is not None:
@@ -1183,7 +1190,7 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
                 isoformCompatibleVectorResults = read_isoform_compatibleVector_tuple
     elif pacbio:
         #if (readStart >= geneInfo['geneStart'] and readEnd < geneInfo['geneEnd'] and readName == qname_dict[readName]):
-        if (readName ==qname_dict[readName]):
+        if (readName == mapped_read_name):
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes,
                                                                                             lowest_match, lowest_match1, small_exon_threshold, small_exon_threshold1, truncation_match ,
                                                                                                             True, True, fasta_handle = fasta_handle)
@@ -1202,7 +1209,7 @@ def process_read(read, qname_dict, lowest_match, lowest_match1,small_exon_thresh
             poly = True
         else:
             poly = False
-        if (readName == qname_dict[readName]):
+        if (readName == mapped_read_name):
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read, Info_Singlegenes, lowest_match, lowest_match1, small_exon_threshold, small_exon_threshold1,truncation_match,
                                                                                                             False, poly, fasta_handle = fasta_handle)
             if read_novelisoform_tuple is not None:
@@ -1218,15 +1225,18 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
     if qname_dict is None: #for bulk
         qname_dict = {}
         qname_dict[readName] = readName
+    mapped_read_name = qname_dict.get(readName)
+    if mapped_read_name is None:
+        return
     if parse:
-        if readName == qname_dict[readName]:
+        if readName == mapped_read_name:
             poly_bool, _ = detect_poly_parse(read, window=15, n=10)
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta_parse(read,Info_multigenes,lowest_match,lowest_match1, small_exon_threshold,
                                                                                                             small_exon_threshold1,truncation_match,poly_bool, fasta_handle=fasta_handle, bulk=bulk)
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     elif pacbio:
-        if readName == qname_dict[readName]:
+        if readName == mapped_read_name:
             ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = choose_gene_from_meta(read,
                                                                                                       Info_multigenes,
                                                                                                       lowest_match, lowest_match1, small_exon_threshold,small_exon_threshold1,
@@ -1234,7 +1244,7 @@ def process_read_metagene(read, qname_dict, Info_multigenes, lowest_match,lowest
             if ind >= 0:
                 return ind, read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores
     else:
-        if readName == qname_dict[readName]:
+        if readName == mapped_read_name:
             if bulk:
                 poly_bool, _ = detect_poly_parse(read, window=15, n=10)
             else:
@@ -1346,6 +1356,5 @@ def get_intron_cover(read, isoform_name, Info_singlegene):
     return intron_covers
 
 #####some functions to delete ########
-
 
 

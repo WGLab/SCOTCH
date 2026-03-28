@@ -870,7 +870,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_pkl_path))
         geneStructureInformation = load_pickle(refGeneFile_pkl_path)
         #check if geneStructureInformation contains build
-        if build is not None:
+        if build is not None and geneStructureInformation:
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
         if os.path.abspath(refGeneFile_pkl_path) != os.path.abspath(output):
@@ -1088,6 +1088,9 @@ class Annotator:
                         bam_info = extract_bam_info_pacbio(self.bam_path[i],barcode_cell, barcode_umi)
                     else:
                         bam_info = extract_bam_info(self.bam_path[i], barcode_cell, barcode_umi, workers=self.workers)
+                if bam_info is None:
+                    self.logger.warning(f'No bam info extracted for {self.bam_path[i]}, skipping')
+                    continue
                 bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
                 if save_mem:
@@ -1108,7 +1111,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
 
 
 

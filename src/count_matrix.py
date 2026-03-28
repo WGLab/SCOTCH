@@ -121,6 +121,8 @@ def generate_adata(triple_list):
             features_dict[feature] = len(features_dict)
             features.append(feature)
         data.append((x, cells_dict[cell], features_dict[feature]))
+    if not data:
+        return None
     x, cells_ind, features_ind = zip(*data)
     sparse_matrix = csr_matrix((x, (cells_ind, features_ind)))
     adata = ad.AnnData(sparse_matrix)
@@ -491,7 +493,7 @@ class CountMatrix:
                                 np.random.multinomial(1, isoforms_mapping_prob) == 1].tolist()
                         for iso in list(isoforms_mapping):
                             if iso not in isoforms_mapping_max:
-                                df_multiple.iloc[ii, :][iso] = 0
+                                df_multiple.loc[df_multiple.index[ii], iso] = 0
                     df = pd.concat([df_multiple, df_unique])
                 if df_uncategorized.shape[1] > 0:
                     df_uncategorized = df_uncategorized.iloc[multiple_index + unique_index, :]
@@ -545,6 +547,8 @@ class CountMatrix:
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
+            if read_selection_pkl_ is None:
+                read_selection_pkl_ = {}
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
         return read_selection_pkl
@@ -641,6 +645,10 @@ class CountMatrix:
             Out_unfiltered = []
             for op in out_paths_unfiltered:
                 Out_unfiltered.append(pp.load_pickle(op))
+            if not Out_unfiltered:
+                adata_gene_unfiltered_list.append(None)
+                adata_transcript_unfiltered_list.append(None)
+                continue
             self.logger.info('generating count matrix')
             triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
             triple_gene_list = pp.unpack_list(list(triple_gene_list))
@@ -664,6 +672,10 @@ class CountMatrix:
                 Out_unfiltered = []
                 for op in out_paths_unfiltered:
                     Out_unfiltered.append(pp.load_pickle(op))
+                if not Out_unfiltered:
+                    adata_gene_unfiltered_list_spliced.append(None)
+                    adata_transcript_unfiltered_list_spliced.append(None)
+                    continue
                 self.logger.info('generating spliced count matrix')
                 triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
                 triple_gene_list = pp.unpack_list(list(triple_gene_list))
@@ -685,6 +697,10 @@ class CountMatrix:
                 Out_unfiltered = []
                 for op in out_paths_unfiltered:
                     Out_unfiltered.append(pp.load_pickle(op))
+                if not Out_unfiltered:
+                    adata_gene_unfiltered_list_unspliced.append(None)
+                    adata_transcript_unfiltered_list_unspliced.append(None)
+                    continue
                 self.logger.info('generating unspliced count matrix')
                 triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
                 triple_gene_list = pp.unpack_list(list(triple_gene_list))

@@ -152,6 +152,8 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
     if gtf_df is None:
         gtf_df = pd.DataFrame(columns=column_names)
     gtf_df_gene_list = Parallel(n_jobs=num_cores)(delayed(update_annotation_gene)(geneID, gtf_df, geneStructureInformationwNovel) for geneID in geneIDs)
+    if not gtf_df_gene_list:
+        return pd.DataFrame()
     gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
 
@@ -754,7 +756,10 @@ class ReadMapper:
                 result = process_read(read, self.qname_dict, self.lowest_match,self.lowest_match1, self.small_exon_threshold,self.small_exon_threshold1,
                                       self.truncation_match, Info_singlegene, self.parse, self.pacbio, self.barcode_umi, self.fasta_handle, self.bulk)
                 result_novel, result_known, result_known_scores = result
-                samples_list.append(self.qname_sample_dict[read.qname])
+                sample = self.qname_sample_dict.get(read.qname)
+                if sample is None:
+                    continue
+                samples_list.append(sample)
                 if result_novel is not None:
                     Read_novelIsoform.append(result_novel)
                 if result_known is not None:
@@ -790,7 +795,10 @@ class ReadMapper:
                     os.makedirs(sample_target)
                 Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                 for readname in list(Read_Isoform_compatibleVector.keys()):
-                    if self.qname_sample_dict[readname]==sample:
+                    read_sample = self.qname_sample_dict.get(readname)
+                    if read_sample is None:
+                        continue
+                    if read_sample==sample:
                         Read_Isoform_compatibleVector_sample[readname] = Read_Isoform_compatibleVector[readname]
                         if readname in Read_knownIsoform_scores.keys():
                             Read_knownIsoform_scores_sample[readname] = Read_knownIsoform_scores[readname]
@@ -820,8 +828,11 @@ class ReadMapper:
                 out = process_read_metagene(read, self.qname_dict, Info_multigenes, self.lowest_match, self.lowest_match1,self.small_exon_threshold,self.small_exon_threshold1,
                                             self.truncation_match, self.parse, self.pacbio, self.barcode_umi, self.fasta_handle, self.bulk)
                 if out is not None: #may not within this meta gene region
+                    sample = self.qname_sample_dict.get(read.qname)
+                    if sample is None:
+                        continue
                     results.append(out)
-                    samples.append(self.qname_sample_dict[read.qname])
+                    samples.append(sample)
             unique_samples = list(set(samples))
             Ind, Read_novelIsoform_metagene, Read_knownIsoform_metagene, Read_knownIsoform_metagene_scores = [], [], [], []
             for result in results:
@@ -889,7 +900,10 @@ class ReadMapper:
                             os.makedirs(sample_target)
                         Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                         for readname in list(Read_Isoform_compatibleVector.keys()):
-                            if self.qname_sample_dict[readname] == sample:
+                            read_sample = self.qname_sample_dict.get(readname)
+                            if read_sample is None:
+                                continue
+                            if read_sample == sample:
                                 Read_Isoform_compatibleVector_sample[readname] = Read_Isoform_compatibleVector[readname]
                                 if readname in Read_knownIsoform_scores.keys():
                                     Read_knownIsoform_scores_sample[readname] = Read_knownIsoform_scores[readname]
@@ -902,7 +916,10 @@ class ReadMapper:
                     for sample in unique_samples:
                         Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                         for readname in list(Read_Isoform_compatibleVector.keys()):
-                            if self.qname_sample_dict[readname] == sample:
+                            read_sample = self.qname_sample_dict.get(readname)
+                            if read_sample is None:
+                                continue
+                            if read_sample == sample:
                                 Read_Isoform_compatibleVector_sample[readname] = Read_Isoform_compatibleVector[readname]
                                 if readname in Read_knownIsoform_scores.keys():
                                     Read_knownIsoform_scores_sample[readname] = Read_knownIsoform_scores[readname]
