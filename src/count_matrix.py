@@ -172,7 +172,7 @@ class CountMatrix:
         self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
         self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
         if platform=='parse-ont':
-            self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
+            self.sample_names = sorted(os.listdir(os.path.join(self.target[0], 'samples')))
             self.n_samples = len(self.sample_names)
             self.samples_folder_path = os.path.join(self.target[0], 'samples')
             self.compatible_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'compatible_matrix') for
@@ -449,17 +449,84 @@ class CountMatrix:
             novel_isoform_del += [delete for delete, keep in novel_isoform_name_mapping.items() if delete != keep] #{isoform0 (delete): isoform1}
             #record name subsitution
             novel_name_substitution += [(delete, keep) for delete, keep in novel_isoform_name_mapping.items() if delete != keep]
-        # split df into samples
-        df['sample_id'] = df.index.str.split(':').str[1]
-        df.index = df.index.str.split(':').str[0]
-        df_list = [group.drop(columns='sample_id') for _, group in df.groupby('sample_id')]
+        # split df into samples — key group by sample_id so we preserve true index,
+        # otherwise samples with no reads for this gene shift later samples into wrong folders.
+        # rsplit so a barcode containing ':' doesn't corrupt the sample tag.
+        parts = df.index.str.rsplit(':', n=1)
+        df['sample_id'] = parts.str[1]
+        df.index = parts.str[0]
+        df_by_sample = {sid: group.drop(columns='sample_id') for sid, group in df.groupby('sample_id')}
+        # ---- pooled novel-isoform drop decisions (global across samples) ----
+        # Decide which novel isoforms to drop using pooled reads across all samples,
+        # so a well-supported novel in one sample isn't lost because another sample's
+        # per-sample support is below threshold. Two categories:
+        #   - "threshold"  → below pooled read-n/pct thresholds; their reads must
+        #                    be aggregated into uncategorized_novel per-sample.
+        #   - "other"      → pooled-empty or pooled-dedup duplicates; drop without
+        #                    aggregation (empty had no reads; dup reads preserved
+        #                    via the kept duplicate column).
+        novel_read_n_thr = 0 if splicing is not None else self.novel_read_n
+        novel_read_pct_thr = 0 if splicing is not None else self.novel_read_pct
+        global_novel_drop_threshold = set()
+        global_novel_drop_other = set()
+        if df_by_sample:
+            pooled = pd.concat(df_by_sample.values(), axis=0).fillna(0).astype(int)
+            pooled_col_sum = pooled.sum(axis=0)
+            # (a) novel isoforms with zero pooled reads
+            global_novel_drop_other.update(
+                c for c in pooled_col_sum[pooled_col_sum == 0].index.tolist()
+                if c.startswith('novelIsoform_')
+            )
+            pooled_main = pooled.loc[:, pooled_col_sum > 0]
+            if 'uncategorized' in pooled_main.columns:
+                pooled_main = pooled_main.drop(columns=['uncategorized'])
+            # (b) duplicate-column novel isoforms in pooled space
+            if pooled_main.shape[1] > 1:
+                pooled_main, dup_iso_name_novel = deduplicate_col(pooled_main)
+                global_novel_drop_other.update(
+                    c for c in dup_iso_name_novel if c.startswith('novelIsoform_')
+                )
+            # (c) novel isoforms below pooled read-support thresholds
+            if pooled_main.shape[1] > 0:
+                novel_cols = [c for c in pooled_main.columns if c.startswith('novelIsoform_')]
+                if novel_cols:
+                    df_novel_pool = pooled_main[novel_cols]
+                    abs_bool = df_novel_pool.sum(axis=0) < novel_read_n_thr
+                    global_novel_drop_threshold.update(abs_bool[abs_bool].index.tolist())
+                    total_pool = pooled_main.sum(axis=0).sum()
+                    if total_pool > 0:
+                        pct = pooled_main.sum(axis=0) / total_pool
+                        global_novel_drop_threshold.update(
+                            n for n in pct[pct < novel_read_pct_thr].index.tolist()
+                            if n.startswith('novelIsoform_')
+                        )
+        novel_isoform_del = list(dict.fromkeys(
+            novel_isoform_del + list(global_novel_drop_other) + list(global_novel_drop_threshold)
+        ))
         # deal each sample separately
-        for i, df in enumerate(df_list):
-            # --------delete isoforms without reads
+        for i in range(len(compatible_matrix_folder_path_list)):
+            df = df_by_sample.get(f'sample{i}')
+            if df is None or df.shape[0] == 0:
+                continue
+            # Remove pooled-"other" drops up front (no reads to salvage: empty cols
+            # had no reads; dup-cols' reads are preserved via the pooled-kept col).
+            if global_novel_drop_other:
+                other_cols = [c for c in df.columns if c in global_novel_drop_other]
+                if other_cols:
+                    df = df.drop(columns=other_cols)
+            # --------delete isoforms without reads in this sample (cleanup only)
             df_isoform = df.sum(axis=0) > 0  # cols have read
-            novel_isoform_del += [isoname for isoname in df_isoform[df_isoform==False].index.tolist() if isoname.startswith('novelIsoform_')]
             isoformNames = df_isoform[df_isoform].index.tolist()
             df = df.loc[:, isoformNames]
+            # Reorder columns so threshold-doomed novels come LAST — deduplicate_col
+            # drops later duplicates, so any column identical to a pooled-kept
+            # isoform in this sample is preferentially removed from the doomed set,
+            # not from the kept set.
+            if global_novel_drop_threshold and df.shape[1] > 0:
+                thr_here = [c for c in df.columns if c in global_novel_drop_threshold]
+                if thr_here:
+                    keep_here = [c for c in df.columns if c not in global_novel_drop_threshold]
+                    df = df[keep_here + thr_here]
             # filter uncategorized reads
             df_uncategorized = pd.DataFrame()
             if df.shape[1] > 0:
@@ -468,8 +535,9 @@ class CountMatrix:
                     df = df.drop(columns=df_uncategorized.columns.tolist())
             if df.shape[1] > 0:
                 # --------deal with multiple mappings
-                df, dup_iso_name_novel = deduplicate_col(df)  # delete same mapping isoforms
-                novel_isoform_del += dup_iso_name_novel
+                # per-sample dedup for this sample's count matrix only; global
+                # novel-dup decisions already captured via pooled deduplicate_col above.
+                df, _ = deduplicate_col(df)
                 # use unique mappings to decide multiple mappings
                 multiple_bool = df.sum(axis=1) > 1
                 multiple_index = [i for i, k in enumerate(multiple_bool.tolist()) if k]
@@ -500,26 +568,17 @@ class CountMatrix:
                     df = pd.concat([df, df_uncategorized], axis=1)
             else:
                 df = df_uncategorized
-            # filter novel isoform by supporting reads
-            if df.shape[1] > 0:
-                df_novel = df.filter(like='novel')
-                if df_novel.shape[1] > 0:
-                    novel_read_n = 0 if splicing is not None else self.novel_read_n
-                    novel_read_pct = 0 if splicing is not None else self.novel_read_pct
-                    #drop based on absolute read support
-                    novel_isoform_drop0 = df_novel.sum(axis=0) < novel_read_n
-                    novel_isoform_drop0 = novel_isoform_drop0[novel_isoform_drop0].index.tolist()
-                    # drop based on read pct
-                    novel_isoform_drop1 = df.sum(axis=0)/df.sum(axis=0).sum() < novel_read_pct
-                    novel_isoform_drop1 = [n_iso for n_iso in novel_isoform_drop1[novel_isoform_drop1].index.tolist() if n_iso.startswith('novel')]
-                    novel_isoform_drop = list(set(novel_isoform_drop0 + novel_isoform_drop1))
-                    novel_isoform_del += novel_isoform_drop
-                    if novel_isoform_drop:  # only proceed if there are columns to drop
-                        df_drop = df.loc[:, novel_isoform_drop].sum(axis=1).tolist()
-                        df = df.drop(columns=novel_isoform_drop)
-                        df['uncategorized_novel'] = df_drop
+            # Apply pooled threshold drops AFTER multi-mapping resolution so a
+            # read's uncategorized_novel contribution is 1 iff resolution assigned
+            # it to a dropped novel (matches legacy post-resolution semantics).
+            if df.shape[1] > 0 and global_novel_drop_threshold:
+                thr_cols = [c for c in df.columns if c in global_novel_drop_threshold]
+                if thr_cols:
+                    df_drop = df.loc[:, thr_cols].sum(axis=1).tolist()
+                    df = df.drop(columns=thr_cols)
+                    df['uncategorized_novel'] = df_drop
             if df.shape[1] == 0:
-                return {gene: novel_isoform_del}, {gene: novel_name_substitution}
+                continue
             df_all, df_filtered = df.copy(), df.copy()
             df_all.columns = [gene + '_' + iso for iso in df_all.columns.tolist()]
             df_filtered = df_filtered[df_filtered.columns[~df_filtered.columns.str.contains('uncategorized')]]
