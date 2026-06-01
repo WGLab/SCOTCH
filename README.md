@@ -1,6 +1,6 @@
 # SCOTCH 
 
-Single-Cell Omics for Transcriptome CHaracterization (SCOTCH): isoform-level characterization of gene expression through long-read single-cell RNA sequencing. SCOTCH is published [here]([https://www.biorxiv.org/content/10.1101/2024.04.29.590597v3](https://www.nature.com/articles/s41467-026-72665-5)).
+Single-Cell Omics for Transcriptome CHaracterization (SCOTCH): isoform-level characterization of gene expression through long-read single-cell RNA sequencing. SCOTCH is published [here](https://www.nature.com/articles/s41467-026-72665-5).
 
 ## Background
 Recent development involving long-read single-cell transcriptome sequencing (lr-scRNA-Seq) represents a significant leap forward in single-cell genomics. With the recent introduction of R10 flowcells by Oxford Nanopore, computational methods should now shift focus on harnessing the unique benefits of long reads to analyze transcriptome complexity. In this context, we introduce a comprehensive suite of computational methods named Single-Cell Omics for Transcriptome CHaracterization (SCOTCH). Our method is compatible with the single-cell library preparation platform from 10X Genomics, Pacbio Biosciences, and Parse Biosciences, facilitating the analysis of special cell populations, such as neurons, hepatocytes and developing cardiomyocytes. 
@@ -264,5 +264,5 @@ p_DTU_gene_adj: adjusted p value for differential transcript usage analysis for 
 
 ## Citation
 
-Xu Z, Qu HQ, Chan J, Mu S, Kao C, Hakonarson H, Wang K. SCOTCH: isoform-level characterization of gene expression through long-read single-cell RNA sequencing. Nat Commun. 2026 May 7. doi: 10.1038/s41467-026-72665-5. PMID: 42098110.
+Xu Z, Qu HQ, Chan J, Mu S, Kao C, Hakonarson H, Wang K. [SCOTCH: isoform-level characterization of gene expression through long-read single-cell RNA sequencing](https://www.nature.com/articles/s41467-026-72665-5). Nat Commun. 2026 May 7. doi: 10.1038/s41467-026-72665-5. PMID: 42098110.
 
