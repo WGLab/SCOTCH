@@ -10,7 +10,7 @@ import subprocess
 
 parser = argparse.ArgumentParser(description='SCOTCH preprocessing pipeline')
 #mandatory options
-parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, or all; or visualization")#compatible matrix splicing
+parser.add_argument('--task',type=str,help="choose task from annotation, compatible matrix, count matrix, summary, incremental update, all, or visualization")#compatible matrix splicing
 parser.add_argument('--generate_splicing', action='store_true', default= False, help="do not generate spliced/unspliced count matrix for velocity calculation")
 parser.add_argument('--platform',type=str,default='10x-ont',help="platform: 10x-ont, parse-ont, or 10x-pacbio")
 parser.add_argument('--target',type=str,nargs='+', help="path to target root folders for output files")#a list
@@ -40,8 +40,6 @@ parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', hel
 #task is compatible matrix
 parser.add_argument('--job_index',type=int, default=0, help="work array index")
 parser.add_argument('--total_jobs',type=int, default=1, help="number of subwork")
-parser.add_argument('--cover_existing',action='store_true')
-parser.add_argument('--cover_existing_false', action='store_false',dest='cover_existing')
 parser.add_argument('--small_exon_threshold',type=int,default=0, help="dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--small_exon_threshold_high',type=int,default=80, help="the upper bound of dynamic exon length threshold to ignore for includsion and exclusion")
 parser.add_argument('--truncation_match',type =float, default=0.4, help="higher than this threshold at the truncation end will be adjusted to 1")
@@ -68,13 +66,22 @@ parser.add_argument('--gene_subset',type=str,nargs='+',default=None,help="Option
 
 #task is visualization
 parser.add_argument('--gene',type=str, help="gene name to visualize")
-parser.add_argument('--target_vis',type=str, help="target path for visualization")
+parser.add_argument('--target_vis',type=str, help="(deprecated, ignored) visualization output goes under --target")
 parser.add_argument('--sample_names',type=str,nargs='+', help="sample names for visualization")#a list
 parser.add_argument('--novel_pct',type=float,default=0.1, help="only keep novel isoform annotation if expression in count matrix surpass the threshold")
-parser.add_argument('--junction_num',type=int,default=10, help="only keep junctions over this number")
 parser.add_argument('--width',type=int,default=12)
-parser.add_argument('--height',type=float,default=1)
-parser.add_argument("--annotation_scale", type=float, default=0.25, help="annotation plot scale")
+parser.add_argument('--height',type=float,default=10)
+parser.add_argument("--annotation_scale", type=float, default=0.25, help="relative height of gene model panel")
+parser.add_argument('--cell_type_file',type=str, default=None, help="CSV/TSV file with columns: barcode, cell_type")
+parser.add_argument('--cell_type',type=str, nargs='+', default=['bulk'], help="'bulk' (no cell type split), 'all' (all cell types), or specific cell type name(s)")
+parser.add_argument('--separate_known_novel', action='store_true', default=False, help="display known and novel isoform reads in separate tracks")
+parser.add_argument('--overlay_known_novel', action='store_true', default=False, help="overlay known and novel reads in same track with different colors")
+parser.add_argument('--save_bam_vis', action='store_true', default=False, help="save intermediate sub-BAM files for visualization")
+parser.add_argument('--save_gtf_vis', action='store_true', default=False, help="save intermediate sub-GTF file for visualization")
+parser.add_argument('--junction_min_reads',type=int, default=5, help="minimum reads to display a splice junction")
+parser.add_argument('--junction_annotated_only', action='store_true', default=False, help="only show junctions matching known GTF splice sites")
+parser.add_argument('--bin_size',type=int, default=50, help="genomic position bin size for coverage track")
+parser.add_argument('--output_format',type=str, default='pdf', choices=['pdf','png'], help="output plot format")
 
 def setup_logger(target, task_name):
     logger = logging.getLogger()
@@ -85,7 +92,7 @@ def setup_logger(target, task_name):
     file_handler = logging.FileHandler(log_file)
     file_handler.setLevel(logging.INFO)
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.ERROR)
+    console_handler.setLevel(logging.INFO)
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
@@ -125,6 +132,8 @@ def main():
                 gene_subset = [line.strip() for line in _f if line.strip()]
         else:
             gene_subset = args.gene_subset
+    if args.task == 'incremental update' and gene_subset is None:
+        raise ValueError("--task 'incremental update' requires --gene_subset.")
 
     def run_annotation():
         logger, log_file = setup_logger(args.target[0], 'annotation')
@@ -174,6 +183,9 @@ def main():
         logger.info(f'Reference GTF Path: {args.reference}. Job: {args.job_index}')
         logger.info(f'Reference genome Path: {args.reference_genome_fasta}. Job: {args.job_index}')
         logger.info(f'Update GTF option: {args.update_gtf}. Job: {args.job_index}')
+        logger.info(f'Cell Barcode: {args.barcode_cell }. Job: {args.job_index}')
+        logger.info(f'UMI Barcode: {args.barcode_umi}. Job: {args.job_index}')
+
         if gene_subset is not None:
             logger.info(f'Gene subset provided: processing {len(gene_subset)} genes: {gene_subset}')
         readmapper = cp.ReadMapper(target=args.target, bam_path = args.bam,
@@ -183,11 +195,11 @@ def main():
                                    truncation_match = args.truncation_match,
                                    platform = args.platform, reference_gtf_path=args.reference,
                                    logger = logger, barcode_umi=args.barcode_umi,
+                                   bulk=args.bulk,
                                    ref_fasta_path=args.reference_genome_fasta,
                                    genenames_subset=gene_subset,
                                    save_mem=args.save_mem)
-        readmapper.map_reads_allgenes(cover_existing=args.cover_existing,
-                                      total_jobs=args.total_jobs,current_job_index=args.job_index)
+        readmapper.map_reads_allgenes(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'Completed generating compatible matrix for all targets.  Job: {args.job_index}')
@@ -240,8 +252,6 @@ def main():
         logger.info('Saving count matrix')
         countmatrix.save_multiple_samples(generate_splicing=args.generate_splicing)
         countmatrix.filter_gtf()
-        logger.info('Filtering read-isoform mapping TSV')
-        countmatrix.finalize_read_isoform_mapping()
         logger.info('Completed generating count matrix for all targets.')
         copy_log_to_targets(log_file, args.target)
 
@@ -250,22 +260,44 @@ def main():
         logger.info('Start summarizing read isoform mapping and annotations for all targets.')
         logger.info(f'Target directories: {args.target}')
         for i in range(len(args.target)):
-            logger.info(f'Start summarizing annotation for target: {args.target[i]}')
+            target = args.target[i]
+            logger.info(f'Start summarizing annotation for target: {target}')
             try:
-                cp.summarise_annotation(args.target[i], logger = logger)
-                logger.info(f'Completed summarizing annotation for target: {args.target[i]}')
+                cp.summarise_annotation(target, logger = logger)
+                logger.info(f'Completed summarizing annotation for target: {target}')
             except Exception as e:
-                logger.exception(f"summarise_annotation failed for target: {t}")
+                logger.exception(f"summarise_annotation failed for target: {target}")
 
             #auxillary
-            logger.info(f'Start summarizing read mapping information for target: {args.target[i]}')
+            logger.info(f'Start summarizing read mapping information for target: {target}')
             try:
-                cp.summarise_auxillary(args.target[i])
-                logger.info(f'Completed summarizing read mapping information for target: {args.target[i]}')
+                cp.summarise_auxillary(target, logger=logger)
+                logger.info(f'Completed summarizing read mapping information for target: {target}')
             except Exception as e:
-                logger.exception(f"summarise_auxillary failed for target: {t}")
+                logger.exception(f"summarise_auxillary failed for target: {target}")
 
         logger.info('Completed summarizing annotations and auxiliary information for all targets.')
+        copy_log_to_targets(log_file, args.target)
+
+    def run_incremental_update():
+        logger, log_file = setup_logger(args.target[0], 'incremental_update')
+        logger.info('Start incremental update for all targets.')
+        logger.info(f'Target directories: {args.target}')
+        logger.info(f'Gene subset: {gene_subset}')
+        logger.info(f'Spliced/unspliced count matrix generation is set as {args.generate_splicing}')
+        for target in args.target:
+            logger.info(f'Incrementally summarizing annotation for target: {target}')
+            cp.summarise_annotation(target, logger=logger, gene_subset=gene_subset)
+            logger.info(f'Incrementally summarizing read mapping information for target: {target}')
+            cp.summarise_auxillary(target, gene_subset=gene_subset, logger=logger)
+        countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.novel_read_n, novel_read_pct=args.novel_read_pct,
+                                     platform=args.platform, workers=args.workers, group_novel=args.group_novel,
+                                     logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset)
+        if args.platform == 'parse-ont':
+            assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
+        countmatrix.update_multiple_samples_incremental(generate_splicing=args.generate_splicing)
+        countmatrix.filter_gtf()
+        logger.info('Completed incremental update for all targets.')
         copy_log_to_targets(log_file, args.target)
 
     if args.task=='annotation':
@@ -278,6 +310,8 @@ def main():
         run_compatible_splicing()
     if args.task == 'count matrix': # task is to generate count matrix
         run_count()
+    if args.task == 'incremental update':
+        run_incremental_update()
 
     if args.task =='all':
         run_annotation()
@@ -285,9 +319,33 @@ def main():
         run_summary()
         run_count()
 
-    if args.task =='visualization': #currently only support 10X file structure
-        vis.visualization(args.gene, args.bam, args.target, args.novel_pct, args.junction_num, args.target_vis,
-                          args.sample_names, args.width, args.height, args.annotation_scale)
+    if args.task =='visualization':
+        if args.separate_known_novel and args.overlay_known_novel:
+            parser.error("--separate_known_novel and --overlay_known_novel are mutually exclusive")
+        vis.visualization(
+            gene=args.gene,
+            bam_files=args.bam,
+            targets=args.target,
+            sample_names=args.sample_names,
+            novel_pct=args.novel_pct,
+            output_dir=args.target[0],
+            cell_type_file=args.cell_type_file,
+            cell_types=args.cell_type,
+            separate_known_novel=args.separate_known_novel,
+            overlay_known_novel=args.overlay_known_novel,
+            save_bam=args.save_bam_vis,
+            save_gtf=args.save_gtf_vis,
+            junction_min_reads=args.junction_min_reads,
+            junction_annotated_only=args.junction_annotated_only,
+            bin_size=args.bin_size,
+            output_format=args.output_format,
+            width=args.width,
+            height=args.height,
+            annotation_scale=args.annotation_scale,
+            barcode_cell=args.barcode_cell,
+            barcode_umi=args.barcode_umi,
+            platform=args.platform,
+        )
 
 if __name__ == '__main__':
     main()

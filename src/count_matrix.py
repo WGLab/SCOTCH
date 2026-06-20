@@ -8,7 +8,7 @@ from joblib import Parallel, delayed, Memory
 from tqdm import tqdm
 import pickle
 import re
-from scipy.io import mmwrite
+from scipy.io import mmwrite, mmread
 from preprocessing import load_pickle
 import shutil
 
@@ -121,6 +121,8 @@ def generate_adata(triple_list):
             features_dict[feature] = len(features_dict)
             features.append(feature)
         data.append((x, cells_dict[cell], features_dict[feature]))
+    if not data:
+        return None
     x, cells_ind, features_ind = zip(*data)
     sparse_matrix = csr_matrix((x, (cells_ind, features_ind)))
     adata = ad.AnnData(sparse_matrix)
@@ -141,6 +143,12 @@ def split_list(lst, n):
         remainder -= 1
     return result
 
+def _fmt(value):
+    """Normalize numeric value for filenames: float 0.0 → '0', 1.5 → '1.5'."""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, novel_read_pct: float = 0,
                  group_novel = True, platform = '10x-ont', workers:int = 1,
@@ -150,6 +158,8 @@ class CountMatrix:
         self.workers = workers
         self.novel_read_n = novel_read_n
         self.novel_read_pct = novel_read_pct
+        self.novel_read_n_str = _fmt(novel_read_n)
+        self.novel_read_pct_str = _fmt(novel_read_pct)
         self.platform = platform
         self.parse = self.platform == 'parse-ont'
         self.pacbio = self.platform == '10x-pacbio'
@@ -159,10 +169,10 @@ class CountMatrix:
         self.mtx = mtx
         self.gene_subset = gene_subset
         self.annotation_path_meta_gene_novel = os.path.join(target[0],"reference/metageneStructureInformationwNovel.pkl")
-        self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
+        self.novel_isoform_del_path = os.path.join(target[0],f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
         self.novel_name_substitution_path = os.path.join(target[0],'reference/novel_name_substitutions.pkl')
         if platform=='parse-ont':
-            self.sample_names = os.listdir(os.path.join(self.target[0], 'samples'))
+            self.sample_names = sorted(os.listdir(os.path.join(self.target[0], 'samples')))
             self.n_samples = len(self.sample_names)
             self.samples_folder_path = os.path.join(self.target[0], 'samples')
             self.compatible_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'compatible_matrix') for
@@ -192,6 +202,200 @@ class CountMatrix:
             self.unspliced_compatible_matrix_folder_path_list = [os.path.join(target_, 'unspliced_compatible_matrix') for target_ in target]
             self.count_matrix_spliced_folder_path_list = [os.path.join(target_, 'count_matrix', 'spliced') for target_ in target]
             self.count_matrix_unspliced_folder_path_list = [os.path.join(target_, 'count_matrix', 'unspliced') for target_ in target]
+
+    def _load_annotation_pkl(self):
+        annotation_pkl = None
+        if self.group_novel:
+            annotation_pkl = {}
+            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
+            metagenes = list(annotation_pkl_meta.keys())
+            for metagene in metagenes:
+                multi_gene_info = annotation_pkl_meta[metagene]
+                for gene_info in multi_gene_info:
+                    genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
+                    annotation_pkl[genename] = gene_info
+        self.annotation_pkl = annotation_pkl
+
+    def _get_count_output_paths(self, folder_path, level, splicing=None):
+        if splicing is None:
+            base_name = f'adata_{level}_{self.novel_read_n_str}_{self.novel_read_pct_str}'
+        else:
+            base_name = f'adata_{level}_unfiltered{self.novel_read_n}'
+        return {
+            'csv': os.path.join(folder_path, base_name + '.csv'),
+            'mtx': os.path.join(folder_path, base_name + '.mtx'),
+            'pickle': os.path.join(folder_path, base_name + '.pickle')
+        }
+
+    def _load_saved_matrix_df(self, folder_path, level, splicing=None):
+        """Load saved count matrix as (csr_matrix, obs_list, var_list) or (None, [], [])."""
+        paths = self._get_count_output_paths(folder_path, level, splicing=splicing)
+        if os.path.exists(paths['mtx']) and os.path.exists(paths['pickle']):
+            with open(paths['pickle'], 'rb') as handle:
+                meta = pickle.load(handle)
+            matrix = mmread(paths['mtx']).tocsr()
+            return matrix, meta['obs'], meta['var']
+        if os.path.exists(paths['csv']):
+            df = pd.read_csv(paths['csv'], index_col=0)
+            return csr_matrix(df.to_numpy()), df.index.tolist(), df.columns.tolist()
+        return None, [], []
+
+    def _save_matrix_df(self, matrix, obs, var, folder_path, level, splicing=None):
+        """Save count matrix from (csr_matrix, obs_list, var_list)."""
+        paths = self._get_count_output_paths(folder_path, level, splicing=splicing)
+        save_csv = self.csv or os.path.exists(paths['csv'])
+        save_mtx = self.mtx or os.path.exists(paths['mtx']) or os.path.exists(paths['pickle'])
+        if save_mtx:
+            with open(paths['pickle'], 'wb') as handle:
+                pickle.dump({'obs': list(obs), 'var': list(var)}, handle)
+            if not isinstance(matrix, csr_matrix):
+                matrix = csr_matrix(matrix)
+            mmwrite(paths['mtx'], matrix)
+        if save_csv:
+            df = pd.DataFrame(matrix.toarray(), index=obs, columns=var)
+            df.to_csv(paths['csv'])
+
+    def _load_subset_pickles_df(self, folder_path, subset_genes):
+        suffix = '_unfiltered_count.pickle'
+        out_paths = [
+            os.path.join(folder_path, f) for f in os.listdir(folder_path)
+            if f.endswith(suffix) and f[:-len(suffix)] in subset_genes
+        ]
+        if len(out_paths) == 0:
+            return None, [], [], None, [], [], []
+        out_unfiltered = [pp.load_pickle(path) for path in out_paths]
+        triple_gene_list, triple_transcript_list = list(zip(*out_unfiltered))
+        triple_gene_list = pp.unpack_list(list(triple_gene_list))
+        triple_transcript_list = pp.unpack_list(list(triple_transcript_list))
+        if len(triple_gene_list) > 0:
+            adata_gene = generate_adata(triple_gene_list)
+            gene_mat, gene_obs, gene_var = csr_matrix(adata_gene.X), adata_gene.obs.index.tolist(), adata_gene.var.index.tolist()
+        else:
+            gene_mat, gene_obs, gene_var = None, [], []
+        if len(triple_transcript_list) > 0:
+            adata_transcript = generate_adata(triple_transcript_list)
+            transcript_mat, transcript_obs, transcript_var = csr_matrix(adata_transcript.X), adata_transcript.obs.index.tolist(), adata_transcript.var.index.tolist()
+        else:
+            transcript_mat, transcript_obs, transcript_var = None, [], []
+        return gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var, out_paths
+
+    def _splice_matrix_sparse(self, existing_mat, existing_obs, existing_var,
+                               subset_mat, subset_obs, subset_var, subset_genes, level):
+        """Splice subset columns into existing matrix, all in scipy sparse."""
+        from scipy.sparse import hstack as sparse_hstack
+        # Determine which existing columns to keep (drop subset genes)
+        if level == 'gene':
+            subset_gene_set = set(subset_genes)
+            keep_mask = [i for i, col in enumerate(existing_var) if col not in subset_gene_set]
+        else:
+            subset_prefixes = tuple(f'{gene}_' for gene in subset_genes)
+            keep_mask = [i for i, col in enumerate(existing_var) if not col.startswith(subset_prefixes)]
+        base_var = [existing_var[i] for i in keep_mask]
+        base_mat = existing_mat[:, keep_mask] if len(keep_mask) > 0 else csr_matrix((existing_mat.shape[0], 0))
+        if subset_mat is None or subset_mat.shape[1] == 0:
+            if len(base_var) == 0:
+                return None, [], []
+            return base_mat.tocsr(), existing_obs, base_var
+        # Build unified row index
+        all_obs = list(dict.fromkeys(existing_obs + subset_obs))  # union preserving order
+        obs_to_idx = {cell: i for i, cell in enumerate(all_obs)}
+        n_rows = len(all_obs)
+        # Remap base rows
+        base_row_map = [obs_to_idx[cell] for cell in existing_obs]
+        from scipy.sparse import csr_matrix as csr, lil_matrix
+        base_remapped = lil_matrix((n_rows, base_mat.shape[1]))
+        for old_i, new_i in enumerate(base_row_map):
+            base_remapped[new_i] = base_mat[old_i]
+        # Remap subset rows
+        subset_row_map = [obs_to_idx[cell] for cell in subset_obs]
+        subset_remapped = lil_matrix((n_rows, subset_mat.shape[1]))
+        for old_i, new_i in enumerate(subset_row_map):
+            subset_remapped[new_i] = subset_mat[old_i]
+        merged = sparse_hstack([base_remapped.tocsr(), subset_remapped.tocsr()], format='csr')
+        merged_var = base_var + subset_var
+        # Remove duplicate columns (keep last)
+        seen = {}
+        for i, col in enumerate(merged_var):
+            seen[col] = i
+        unique_indices = sorted(seen.values())
+        merged = merged[:, unique_indices]
+        merged_var = [merged_var[i] for i in unique_indices]
+        return merged, all_obs, merged_var
+
+    def _merge_novel_metadata(self, subset_novel_isoform_del, subset_novel_name_substitution):
+        if os.path.exists(self.novel_isoform_del_path):
+            novel_isoform_del = pp.load_pickle(self.novel_isoform_del_path)
+        else:
+            novel_isoform_del = {}
+        if os.path.exists(self.novel_name_substitution_path):
+            novel_name_substitution = pp.load_pickle(self.novel_name_substitution_path)
+        else:
+            novel_name_substitution = {}
+        # Normalize legacy formats: older code saved lists instead of dicts
+        if not isinstance(novel_isoform_del, dict):
+            if self.logger:
+                self.logger.warning('Legacy novel_isoform_del format (list); resetting to empty dict')
+            novel_isoform_del = {}
+        if not isinstance(novel_name_substitution, dict):
+            if self.logger:
+                self.logger.warning('Legacy novel_name_substitution format (list); resetting to empty dict')
+            novel_name_substitution = {}
+        for gene in self.gene_subset:
+            novel_isoform_del.pop(gene, None)
+            novel_name_substitution.pop(gene, None)
+        novel_isoform_del.update(subset_novel_isoform_del)
+        novel_name_substitution.update(subset_novel_name_substitution)
+        self.novel_isoform_del_dict = novel_isoform_del
+        self.novel_name_substitution_dict = novel_name_substitution
+        with open(self.novel_isoform_del_path, 'wb') as handle:
+            pickle.dump(self.novel_isoform_del_dict, handle)
+        with open(self.novel_name_substitution_path, 'wb') as handle:
+            pickle.dump(self.novel_name_substitution_dict, handle)
+        if len(self.target)>1:
+            for additional_target in self.target[1:]:
+                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
+                shutil.copyfile(self.novel_isoform_del_path, dest_path)
+                dest_path = os.path.join(additional_target, 'reference/novel_name_substitutions.pkl')
+                shutil.copyfile(self.novel_name_substitution_path, dest_path)
+
+    def _update_saved_matrices_for_mode(self, subset_genes, folder_path_list, splicing=None):
+        generated_paths = []
+        subset_data = []
+        for folder_path in folder_path_list:
+            gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var, out_paths = \
+                self._load_subset_pickles_df(folder_path, subset_genes)
+            subset_data.append((gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var))
+            generated_paths.extend(out_paths)
+        for i, folder_path in enumerate(folder_path_list):
+            gene_mat, gene_obs, gene_var, transcript_mat, transcript_obs, transcript_var = subset_data[i]
+            # Process gene matrix
+            existing_mat, existing_obs, existing_var = self._load_saved_matrix_df(folder_path, 'gene', splicing=splicing)
+            if existing_mat is not None:
+                merged_mat, merged_obs, merged_var = self._splice_matrix_sparse(
+                    existing_mat, existing_obs, existing_var,
+                    gene_mat, gene_obs, gene_var, subset_genes, level='gene')
+            elif gene_mat is not None:
+                merged_mat, merged_obs, merged_var = gene_mat, gene_obs, gene_var
+            else:
+                merged_mat, merged_obs, merged_var = None, [], []
+            if merged_mat is not None:
+                self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'gene', splicing=splicing)
+            del existing_mat, merged_mat  # free memory before transcript
+            # Process transcript matrix
+            existing_mat, existing_obs, existing_var = self._load_saved_matrix_df(folder_path, 'transcript', splicing=splicing)
+            if existing_mat is not None:
+                merged_mat, merged_obs, merged_var = self._splice_matrix_sparse(
+                    existing_mat, existing_obs, existing_var,
+                    transcript_mat, transcript_obs, transcript_var, subset_genes, level='transcript')
+            elif transcript_mat is not None:
+                merged_mat, merged_obs, merged_var = transcript_mat, transcript_obs, transcript_var
+            else:
+                merged_mat, merged_obs, merged_var = None, [], []
+            if merged_mat is not None:
+                self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'transcript', splicing=splicing)
+            del existing_mat, merged_mat
+        for path in generated_paths:
+            os.remove(path)
 
 
     def generate_count_matrix_by_gene(self, gene, read_selection_pkl, splicing = None):
@@ -245,17 +449,84 @@ class CountMatrix:
             novel_isoform_del += [delete for delete, keep in novel_isoform_name_mapping.items() if delete != keep] #{isoform0 (delete): isoform1}
             #record name subsitution
             novel_name_substitution += [(delete, keep) for delete, keep in novel_isoform_name_mapping.items() if delete != keep]
-        # split df into samples
-        df['sample_id'] = df.index.str.split(':').str[1]
-        df.index = df.index.str.split(':').str[0]
-        df_list = [group.drop(columns='sample_id') for _, group in df.groupby('sample_id')]
+        # split df into samples — key group by sample_id so we preserve true index,
+        # otherwise samples with no reads for this gene shift later samples into wrong folders.
+        # rsplit so a barcode containing ':' doesn't corrupt the sample tag.
+        parts = df.index.str.rsplit(':', n=1)
+        df['sample_id'] = parts.str[1]
+        df.index = parts.str[0]
+        df_by_sample = {sid: group.drop(columns='sample_id') for sid, group in df.groupby('sample_id')}
+        # ---- pooled novel-isoform drop decisions (global across samples) ----
+        # Decide which novel isoforms to drop using pooled reads across all samples,
+        # so a well-supported novel in one sample isn't lost because another sample's
+        # per-sample support is below threshold. Two categories:
+        #   - "threshold"  → below pooled read-n/pct thresholds; their reads must
+        #                    be aggregated into uncategorized_novel per-sample.
+        #   - "other"      → pooled-empty or pooled-dedup duplicates; drop without
+        #                    aggregation (empty had no reads; dup reads preserved
+        #                    via the kept duplicate column).
+        novel_read_n_thr = 0 if splicing is not None else self.novel_read_n
+        novel_read_pct_thr = 0 if splicing is not None else self.novel_read_pct
+        global_novel_drop_threshold = set()
+        global_novel_drop_other = set()
+        if df_by_sample:
+            pooled = pd.concat(df_by_sample.values(), axis=0).fillna(0).astype(int)
+            pooled_col_sum = pooled.sum(axis=0)
+            # (a) novel isoforms with zero pooled reads
+            global_novel_drop_other.update(
+                c for c in pooled_col_sum[pooled_col_sum == 0].index.tolist()
+                if c.startswith('novelIsoform_')
+            )
+            pooled_main = pooled.loc[:, pooled_col_sum > 0]
+            if 'uncategorized' in pooled_main.columns:
+                pooled_main = pooled_main.drop(columns=['uncategorized'])
+            # (b) duplicate-column novel isoforms in pooled space
+            if pooled_main.shape[1] > 1:
+                pooled_main, dup_iso_name_novel = deduplicate_col(pooled_main)
+                global_novel_drop_other.update(
+                    c for c in dup_iso_name_novel if c.startswith('novelIsoform_')
+                )
+            # (c) novel isoforms below pooled read-support thresholds
+            if pooled_main.shape[1] > 0:
+                novel_cols = [c for c in pooled_main.columns if c.startswith('novelIsoform_')]
+                if novel_cols:
+                    df_novel_pool = pooled_main[novel_cols]
+                    abs_bool = df_novel_pool.sum(axis=0) < novel_read_n_thr
+                    global_novel_drop_threshold.update(abs_bool[abs_bool].index.tolist())
+                    total_pool = pooled_main.sum(axis=0).sum()
+                    if total_pool > 0:
+                        pct = pooled_main.sum(axis=0) / total_pool
+                        global_novel_drop_threshold.update(
+                            n for n in pct[pct < novel_read_pct_thr].index.tolist()
+                            if n.startswith('novelIsoform_')
+                        )
+        novel_isoform_del = list(dict.fromkeys(
+            novel_isoform_del + list(global_novel_drop_other) + list(global_novel_drop_threshold)
+        ))
         # deal each sample separately
-        for i, df in enumerate(df_list):
-            # --------delete isoforms without reads
+        for i in range(len(compatible_matrix_folder_path_list)):
+            df = df_by_sample.get(f'sample{i}')
+            if df is None or df.shape[0] == 0:
+                continue
+            # Remove pooled-"other" drops up front (no reads to salvage: empty cols
+            # had no reads; dup-cols' reads are preserved via the pooled-kept col).
+            if global_novel_drop_other:
+                other_cols = [c for c in df.columns if c in global_novel_drop_other]
+                if other_cols:
+                    df = df.drop(columns=other_cols)
+            # --------delete isoforms without reads in this sample (cleanup only)
             df_isoform = df.sum(axis=0) > 0  # cols have read
-            novel_isoform_del += [isoname for isoname in df_isoform[df_isoform==False].index.tolist() if isoname.startswith('novelIsoform_')]
             isoformNames = df_isoform[df_isoform].index.tolist()
             df = df.loc[:, isoformNames]
+            # Reorder columns so threshold-doomed novels come LAST — deduplicate_col
+            # drops later duplicates, so any column identical to a pooled-kept
+            # isoform in this sample is preferentially removed from the doomed set,
+            # not from the kept set.
+            if global_novel_drop_threshold and df.shape[1] > 0:
+                thr_here = [c for c in df.columns if c in global_novel_drop_threshold]
+                if thr_here:
+                    keep_here = [c for c in df.columns if c not in global_novel_drop_threshold]
+                    df = df[keep_here + thr_here]
             # filter uncategorized reads
             df_uncategorized = pd.DataFrame()
             if df.shape[1] > 0:
@@ -264,8 +535,9 @@ class CountMatrix:
                     df = df.drop(columns=df_uncategorized.columns.tolist())
             if df.shape[1] > 0:
                 # --------deal with multiple mappings
-                df, dup_iso_name_novel = deduplicate_col(df)  # delete same mapping isoforms
-                novel_isoform_del += dup_iso_name_novel
+                # per-sample dedup for this sample's count matrix only; global
+                # novel-dup decisions already captured via pooled deduplicate_col above.
+                df, _ = deduplicate_col(df)
                 # use unique mappings to decide multiple mappings
                 multiple_bool = df.sum(axis=1) > 1
                 multiple_index = [i for i, k in enumerate(multiple_bool.tolist()) if k]
@@ -289,33 +561,24 @@ class CountMatrix:
                                 np.random.multinomial(1, isoforms_mapping_prob) == 1].tolist()
                         for iso in list(isoforms_mapping):
                             if iso not in isoforms_mapping_max:
-                                df_multiple.iloc[ii, :][iso] = 0
+                                df_multiple.loc[df_multiple.index[ii], iso] = 0
                     df = pd.concat([df_multiple, df_unique])
                 if df_uncategorized.shape[1] > 0:
                     df_uncategorized = df_uncategorized.iloc[multiple_index + unique_index, :]
                     df = pd.concat([df, df_uncategorized], axis=1)
             else:
                 df = df_uncategorized
-            # filter novel isoform by supporting reads
-            if df.shape[1] > 0:
-                df_novel = df.filter(like='novel')
-                if df_novel.shape[1] > 0:
-                    novel_read_n = 0 if splicing is not None else self.novel_read_n
-                    novel_read_pct = 0 if splicing is not None else self.novel_read_pct
-                    #drop based on absolute read support
-                    novel_isoform_drop0 = df_novel.sum(axis=0) < novel_read_n
-                    novel_isoform_drop0 = novel_isoform_drop0[novel_isoform_drop0].index.tolist()
-                    # drop based on read pct
-                    novel_isoform_drop1 = df.sum(axis=0)/df.sum(axis=0).sum() < novel_read_pct
-                    novel_isoform_drop1 = [n_iso for n_iso in novel_isoform_drop1[novel_isoform_drop1].index.tolist() if n_iso.startswith('novel')]
-                    novel_isoform_drop = list(set(novel_isoform_drop0 + novel_isoform_drop1))
-                    novel_isoform_del += novel_isoform_drop
-                    if novel_isoform_drop:  # only proceed if there are columns to drop
-                        df_drop = df.loc[:, novel_isoform_drop].sum(axis=1).tolist()
-                        df = df.drop(columns=novel_isoform_drop)
-                        df['uncategorized_novel'] = df_drop
+            # Apply pooled threshold drops AFTER multi-mapping resolution so a
+            # read's uncategorized_novel contribution is 1 iff resolution assigned
+            # it to a dropped novel (matches legacy post-resolution semantics).
+            if df.shape[1] > 0 and global_novel_drop_threshold:
+                thr_cols = [c for c in df.columns if c in global_novel_drop_threshold]
+                if thr_cols:
+                    df_drop = df.loc[:, thr_cols].sum(axis=1).tolist()
+                    df = df.drop(columns=thr_cols)
+                    df['uncategorized_novel'] = df_drop
             if df.shape[1] == 0:
-                return {gene: novel_isoform_del}, {gene: novel_name_substitution}
+                continue
             df_all, df_filtered = df.copy(), df.copy()
             df_all.columns = [gene + '_' + iso for iso in df_all.columns.tolist()]
             df_filtered = df_filtered[df_filtered.columns[~df_filtered.columns.str.contains('uncategorized')]]
@@ -343,9 +606,41 @@ class CountMatrix:
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
+            if read_selection_pkl_ is None:
+                read_selection_pkl_ = {}
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
         return read_selection_pkl
+
+    def update_multiple_samples_incremental(self, generate_splicing=False):
+        if self.gene_subset is None or len(self.gene_subset) == 0:
+            raise ValueError('Incremental count-matrix update requires gene_subset.')
+        subset_genes = sorted(set(self.gene_subset))
+        self._load_annotation_pkl()
+        read_selection_pkl = self.read_filter()
+        self.logger.info(f'updating count matrices for {len(subset_genes)} genes')
+        genes_list = [gene_list for gene_list in split_list(subset_genes, self.workers) if len(gene_list) > 0]
+        results = Parallel(n_jobs=self.workers)(
+            delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl) for gene_list in genes_list
+        )
+        subset_novel_isoform_del, subset_novel_name_substitution = {}, {}
+        for d1, d2 in results:
+            subset_novel_isoform_del.update(d1)
+            subset_novel_name_substitution.update(d2)
+        self._merge_novel_metadata(subset_novel_isoform_del, subset_novel_name_substitution)
+        self._update_saved_matrices_for_mode(subset_genes, self.count_matrix_folder_path_list, splicing=None)
+        if generate_splicing:
+            Parallel(n_jobs=self.workers)(
+                delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl, splicing='spliced')
+                for gene_list in genes_list
+            )
+            self._update_saved_matrices_for_mode(subset_genes, self.count_matrix_spliced_folder_path_list, splicing='spliced')
+            Parallel(n_jobs=self.workers)(
+                delayed(self.generate_count_matrix_by_gene_list)(gene_list, read_selection_pkl, splicing='unspliced')
+                for gene_list in genes_list
+            )
+            self._update_saved_matrices_for_mode(subset_genes, self.count_matrix_unspliced_folder_path_list, splicing='unspliced')
+
     def generate_multiple_samples(self, generate_splicing = False):
         pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
@@ -369,17 +664,7 @@ class CountMatrix:
         adata_gene_unfiltered_list, adata_transcript_unfiltered_list = [], []
         adata_gene_unfiltered_list_spliced, adata_transcript_unfiltered_list_spliced = [], []
         adata_gene_unfiltered_list_unspliced, adata_transcript_unfiltered_list_unspliced = [], []
-        annotation_pkl = None
-        if self.group_novel:
-            annotation_pkl = {}
-            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
-            metagenes = list(annotation_pkl_meta.keys())
-            for metagene in metagenes:
-                multi_gene_info = annotation_pkl_meta[metagene]
-                for gene_info in multi_gene_info:
-                    genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
-                    annotation_pkl[genename] = gene_info
-        self.annotation_pkl = annotation_pkl
+        self._load_annotation_pkl()
         self.logger.info(f'generating read filter')
         read_selection_pkl = self.read_filter()
         self.logger.info(f'generating count matrix pickles at: {self.count_matrix_folder_path_list}')
@@ -408,7 +693,7 @@ class CountMatrix:
             pickle.dump(self.novel_name_substitution_dict, f)
         if len(self.target)>1:
             for additional_target in self.target[1:]:
-                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{str(self.novel_read_n)}_{str(self.novel_read_pct)}.pkl')
+                dest_path = os.path.join(additional_target, f'reference/novel_isoform_del_{self.novel_read_n_str}_{self.novel_read_pct_str}.pkl')
                 shutil.copyfile(self.novel_isoform_del_path, dest_path)
                 dest_path = os.path.join(additional_target, 'reference/novel_name_substitutions.pkl')
                 shutil.copyfile(self.novel_name_substitution_path, dest_path)
@@ -419,6 +704,10 @@ class CountMatrix:
             Out_unfiltered = []
             for op in out_paths_unfiltered:
                 Out_unfiltered.append(pp.load_pickle(op))
+            if not Out_unfiltered:
+                adata_gene_unfiltered_list.append(None)
+                adata_transcript_unfiltered_list.append(None)
+                continue
             self.logger.info('generating count matrix')
             triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
             triple_gene_list = pp.unpack_list(list(triple_gene_list))
@@ -442,6 +731,10 @@ class CountMatrix:
                 Out_unfiltered = []
                 for op in out_paths_unfiltered:
                     Out_unfiltered.append(pp.load_pickle(op))
+                if not Out_unfiltered:
+                    adata_gene_unfiltered_list_spliced.append(None)
+                    adata_transcript_unfiltered_list_spliced.append(None)
+                    continue
                 self.logger.info('generating spliced count matrix')
                 triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
                 triple_gene_list = pp.unpack_list(list(triple_gene_list))
@@ -463,6 +756,10 @@ class CountMatrix:
                 Out_unfiltered = []
                 for op in out_paths_unfiltered:
                     Out_unfiltered.append(pp.load_pickle(op))
+                if not Out_unfiltered:
+                    adata_gene_unfiltered_list_unspliced.append(None)
+                    adata_transcript_unfiltered_list_unspliced.append(None)
+                    continue
                 self.logger.info('generating unspliced count matrix')
                 triple_gene_list, triple_transcript_list = list(zip(*Out_unfiltered))
                 triple_gene_list = pp.unpack_list(list(triple_gene_list))
@@ -485,9 +782,9 @@ class CountMatrix:
                 gene_meta_unfiltered = {'obs': self.adata_gene_unfiltered_list[i].obs.index.tolist(),
                                         "var": self.adata_gene_unfiltered_list[i].var.index.tolist()}
                 fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
-                             f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                             f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.pickle')
                 fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                                         f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.mtx')
                 with open(fn_pickle,'wb') as f:
                     pickle.dump(gene_meta_unfiltered, f)
                 mmwrite(fn_mtx,self.adata_gene_unfiltered_list[i].X)
@@ -496,9 +793,9 @@ class CountMatrix:
                 transcript_meta_unfiltered = {'obs': self.adata_transcript_unfiltered_list[i].obs.index.tolist(),
                                               "var": self.adata_transcript_unfiltered_list[i].var.index.tolist()}
                 fn_pickle = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.pickle')
+                                         f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.pickle')
                 fn_mtx = os.path.join(self.count_matrix_folder_path_list[i],
-                                      f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.mtx')
+                                      f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.mtx')
                 mmwrite(fn_mtx, self.adata_transcript_unfiltered_list[i].X)
                 with open(fn_pickle,'wb') as f:
                     pickle.dump(transcript_meta_unfiltered, f)
@@ -553,9 +850,9 @@ class CountMatrix:
             self.logger.info('saving count matrix in csv format')
             for i in range(self.n_samples):
                 output_gene_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_gene_{self.novel_read_n}_{self.novel_read_pct}.csv')
+                                         f'adata_gene_{self.novel_read_n_str}_{self.novel_read_pct_str}.csv')
                 output_transcript_unfiltered = os.path.join(self.count_matrix_folder_path_list[i],
-                                         f'adata_transcript_{self.novel_read_n}_{self.novel_read_pct}.csv')
+                                         f'adata_transcript_{self.novel_read_n_str}_{self.novel_read_pct_str}.csv')
                 # save gene
                 print('saving count matrix on gene level ')
                 adata_gene_unfiltered_df = self.adata_gene_unfiltered_list[i].to_df()
@@ -607,7 +904,7 @@ class CountMatrix:
         self.logger.info('updating gtf annotation file')
         for target in self.target:
             input_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation.gtf')
-            output_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation_filtered_{self.novel_read_n}_{self.novel_read_pct}.gtf')
+            output_gtf = os.path.join(target, f'reference/SCOTCH_updated_annotation_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.gtf')
             with open(input_gtf, "r") as infile, open(output_gtf, "w") as outfile:
                 for line in infile:
                     if line.startswith("#"):
@@ -650,7 +947,7 @@ class CountMatrix:
                 continue
 
             output_path = os.path.join(auxillary_dir,
-                f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n}_{self.novel_read_pct}.tsv')
+                f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.tsv')
             tmp_path = output_path + '.tmp'
 
             self.logger.info(f'Filtering read-isoform mapping: {tsv_path}')

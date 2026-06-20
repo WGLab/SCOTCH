@@ -870,7 +870,7 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         logger.info('load existing annotation pickle file of each single gene at: ' + str(refGeneFile_pkl_path))
         geneStructureInformation = load_pickle(refGeneFile_pkl_path)
         #check if geneStructureInformation contains build
-        if build is not None:
+        if build is not None and geneStructureInformation:
             if not geneStructureInformation[list(geneStructureInformation.keys())[0]][0]['geneChr'].startswith(build):
                 geneStructureInformation = add_build(geneStructureInformation, build)
         if os.path.abspath(refGeneFile_pkl_path) != os.path.abspath(output):
@@ -918,9 +918,17 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
             meta_gene = 'meta_gene_' + str(i+1)
             gene_ids = grouped_dict[i+1]
             meta_gene_info = []
+            missing_ids = []
             for id in gene_ids:
                 if id in geneStructureInformation:
                     meta_gene_info.append(geneStructureInformation[id])
+                else:
+                    missing_ids.append(id)
+            if missing_ids:
+                logger.warning(f"Metagene {meta_gene}: gene IDs {missing_ids} not found in geneStructureInformation, skipping")
+            if not meta_gene_info:
+                logger.warning(f"Metagene {meta_gene} has no valid gene entries, skipping")
+                continue
             metageneStructureInformation[meta_gene] = meta_gene_info
         # save to output, meta gene
         with open(meta_output, 'wb') as file:
@@ -1080,6 +1088,9 @@ class Annotator:
                         bam_info = extract_bam_info_pacbio(self.bam_path[i],barcode_cell, barcode_umi)
                     else:
                         bam_info = extract_bam_info(self.bam_path[i], barcode_cell, barcode_umi, workers=self.workers)
+                if bam_info is None:
+                    self.logger.warning(f'No bam info extracted for {self.bam_path[i]}, skipping')
+                    continue
                 bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
                 if save_mem:
@@ -1100,8 +1111,6 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
-
-
 
 
 
