@@ -121,8 +121,28 @@ def read_auxillary_mapping_file(file_path):
     return df
 
 
+AUXILLARY_MAPPING_SUFFIX = '_read_isoform_exon_mapping.tsv'
+# The merged output shares the per-gene suffix, so it has to be named and skipped
+# explicitly or it would be re-read as an input and then deleted with them.
+MERGED_MAPPING_FILENAME = 'all' + AUXILLARY_MAPPING_SUFFIX
+
+
+def is_per_gene_auxillary_file(file_name):
+    """Per-gene mapping files are '<gene name>_<gene ID>_read_isoform_exon_mapping.tsv'.
+
+    Matching the suffix rather than a gene-ID prefix keeps this reference-agnostic:
+    a literal 'ENSG' test silently found nothing for any non-human build, since
+    'ENSMUSG' does not contain 'ENSG'.
+    """
+    return file_name.endswith(AUXILLARY_MAPPING_SUFFIX) and file_name != MERGED_MAPPING_FILENAME
+
+
 def get_gene_name_from_auxillary_filename(file_name):
-    match = re.match(r'^(.*)_ENSG[^_]*_read_isoform_exon_mapping\.tsv$', file_name)
+    if not is_per_gene_auxillary_file(file_name):
+        return None
+    # Greedy prefix, so the gene ID is the last underscore-free segment and gene
+    # names containing underscores still resolve correctly.
+    match = re.match(r'^(.*)_([^_]+)' + re.escape(AUXILLARY_MAPPING_SUFFIX) + r'$', file_name)
     if match:
         return match.group(1)
     return None
@@ -281,7 +301,8 @@ def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
         return
     for auxillary_folder in [auxillary_folder]:
         log_info('summarising read-isoform mapping files at: ' + str(auxillary_folder))
-        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder) if 'ENSG' in f]
+        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)
+                      if is_per_gene_auxillary_file(f)]
         log_info(f'Found {len(file_paths)} input mapping files in {auxillary_folder}')
         if gene_subset is None:
             if len(file_paths) == 0:
