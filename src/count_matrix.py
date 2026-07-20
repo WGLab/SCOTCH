@@ -152,9 +152,11 @@ def _fmt(value):
 class CountMatrix:
     def __init__(self, target:list, novel_read_n: int, novel_read_pct: float = 0,
                  group_novel = True, platform = '10x-ont', workers:int = 1,
-                 csv = True, mtx =True, logger = None, gene_subset = None):
+                 csv = True, mtx =True, logger = None, gene_subset = None,
+                 bulk = False):
         self.logger = logger
         self.target = target
+        self.bulk = bulk
         self.workers = workers
         self.novel_read_n = novel_read_n
         self.novel_read_pct = novel_read_pct
@@ -380,6 +382,8 @@ class CountMatrix:
                 merged_mat, merged_obs, merged_var = None, [], []
             if merged_mat is not None:
                 self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'gene', splicing=splicing)
+            elif existing_mat is not None:
+                self._discard_stale_matrix(folder_path, 'gene', splicing=splicing)
             del existing_mat, merged_mat  # free memory before transcript
             # Process transcript matrix
             existing_mat, existing_obs, existing_var = self._load_saved_matrix_df(folder_path, 'transcript', splicing=splicing)
@@ -393,10 +397,70 @@ class CountMatrix:
                 merged_mat, merged_obs, merged_var = None, [], []
             if merged_mat is not None:
                 self._save_matrix_df(merged_mat, merged_obs, merged_var, folder_path, 'transcript', splicing=splicing)
+            elif existing_mat is not None:
+                self._discard_stale_matrix(folder_path, 'transcript', splicing=splicing)
             del existing_mat, merged_mat
         for path in generated_paths:
             os.remove(path)
 
+
+    def _bulk_cell_label(self, idx):
+        """Bulk has no barcodes, so every read of a sample collapses into one row."""
+        if self.parse:
+            name = self.sample_names[idx]
+        else:
+            name = os.path.basename(os.path.normpath(self.target[idx]))
+        # ':' separates the sample tag appended below, so it cannot appear here.
+        return (name or 'bulk').replace(':', '.')
+
+    @staticmethod
+    def _apply_read_assignment(df, gene_stem, read_selection_pkl):
+        """Keep the reads this file won and collapse each onto its assigned isoform.
+
+        read_selection_pkl maps read -> (gene, isoform), the winner picked by
+        MappingScore in the summary step. Restricting to reads whose assigned gene
+        is this one stops a read overlapping two genes from being counted in both.
+        Zeroing every column but the assigned isoform is what makes MappingScore,
+        rather than the proportional resampling further down, decide the isoform.
+
+        gene_stem is '<name>_<geneID>', i.e. the compatible-matrix filename without
+        its extension. Matching on that rather than on the gene name keeps two
+        same-named geneIDs apart; they share an 'uncategorized' column and may share
+        novelIsoform_* numbering, so a name-only match would count a read in both.
+        """
+        isoform_cols = [c for c in df.columns if c != 'Cell']
+        assignments = df['Cell'].map(read_selection_pkl)
+        is_mine = assignments.apply(lambda a: isinstance(a, tuple) and a[0] == gene_stem)
+        df = df[is_mine]
+        if df.shape[0] == 0:
+            return df
+        winners = assignments[is_mine].apply(lambda a: a[1])
+        collapsed = pd.DataFrame(0, index=df.index, columns=isoform_cols, dtype=int)
+        resolved = pd.Series(False, index=df.index)
+        for col in isoform_cols:
+            hit = (winners == col) & (df[col] > 0)
+            collapsed.loc[hit, col] = 1
+            resolved |= hit
+        collapsed.insert(0, 'Cell', df['Cell'].values)
+        return collapsed[resolved]
+
+    def _discard_stale_matrix(self, folder_path, level, splicing=None):
+        """Remove a saved matrix that the incremental update has emptied out.
+
+        Reached when the subset being updated was the only content of the saved
+        matrix and it now yields no columns. Leaving the previous file on disk
+        would report the superseded counts as if they were current.
+        """
+        paths = self._get_count_output_paths(folder_path, level, splicing=splicing)
+        removed = []
+        for kind in ('csv', 'mtx', 'pickle'):
+            if os.path.exists(paths[kind]):
+                os.remove(paths[kind])
+                removed.append(paths[kind])
+        if removed:
+            self._log('warning',
+                      f'Incremental update left no {level} counts in {folder_path}; removed the previous '
+                      f'matrix rather than leaving stale counts in place: {", ".join(removed)}')
 
     def generate_count_matrix_by_gene(self, gene, read_selection_pkl, splicing = None):
         # CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
@@ -426,9 +490,14 @@ class CountMatrix:
             if self.parse:
                 df.Cell = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
             df['Cell'] = df['Cell'] + f':sample{idx}'
-            df = df[df['Cell'].isin([cell for cell in df['Cell'] if read_selection_pkl.get(cell) == 1])]  # filtering out reads not keep
+            # '<name>_<geneID>' — pins the assignment to this exact file, not just this gene name
+            gene_stem = os.path.splitext(os.path.basename(f))[0]
+            df = self._apply_read_assignment(df, gene_stem, read_selection_pkl)
             if df.shape[0] > 0:
-                df['Cell'] = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
+                if self.bulk:
+                    df['Cell'] = self._bulk_cell_label(idx)
+                else:
+                    df['Cell'] = df['Cell'].str.rsplit('_', n=1).str[0].tolist()
                 df['Cell'] = df['Cell'] + f':sample{idx}'
                 df = df.set_index('Cell')
                 df_list.append(df)
@@ -602,12 +671,55 @@ class CountMatrix:
             novel_isoform_del_dict.update(novel_isoform_del_dict_gene)
             novel_name_substitution_dict.update(novel_name_substitution_dict_gene)
         return novel_isoform_del_dict, novel_name_substitution_dict
+    def _log(self, level, message):
+        if self.logger is not None:
+            getattr(self.logger, level)(message)
+
+    @staticmethod
+    def _is_legacy_read_selection(mapping):
+        """Legacy read_selection.pkl mapped read -> 0/1; current maps read -> (gene, isoform).
+
+        Every value is checked, not just the first: a dict left half-migrated by an
+        interrupted run would otherwise pass as current, and its legacy entries would
+        then be silently dropped instead of triggering a rebuild.
+        """
+        return any(not isinstance(value, tuple) for value in mapping.values())
+
+    def _rebuild_read_selection(self, path):
+        """Regenerate a legacy read_selection.pkl from the merged mapping TSV.
+
+        summarise_auxillary deletes its per-gene inputs once it has merged them,
+        so re-running the summary step cannot refresh this file. The merged TSV it
+        leaves behind still carries Keep and Isoform, so the isoform assignment is
+        recoverable here without re-running the compatible-matrix step.
+        """
+        import compatible as cp
+        tsv_path = os.path.join(os.path.dirname(path), 'all_read_isoform_exon_mapping.tsv')
+        if not os.path.exists(tsv_path):
+            self._log('error',
+                      f'Legacy read_selection.pkl at {path} cannot be upgraded: {tsv_path} is missing. '
+                      f'Re-run the compatible matrix and summary steps for this target.')
+            raise FileNotFoundError(tsv_path)
+        self._log('info', f'Upgrading legacy read_selection.pkl using {tsv_path}')
+        df = pd.read_csv(tsv_path, sep='\t')
+        mapping = cp.build_read_selection_mapping(df, bulk=self.bulk)
+        # Write-then-rename: an interrupted write must not leave a truncated pickle
+        # in place of a file that was still usable.
+        tmp_path = path + '.tmp'
+        with open(tmp_path, 'wb') as handle:
+            pickle.dump(mapping, handle)
+        os.replace(tmp_path, path)
+        self._log('info', f'Upgraded read_selection.pkl: {len(mapping)} reads carry an isoform assignment')
+        return mapping
+
     def read_filter(self):
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path)
             if read_selection_pkl_ is None:
                 read_selection_pkl_ = {}
+            if self._is_legacy_read_selection(read_selection_pkl_):
+                read_selection_pkl_ = self._rebuild_read_selection(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
         return read_selection_pkl
@@ -773,7 +885,47 @@ class CountMatrix:
                 adata_transcript_unfiltered_list_unspliced.append(adata_transcript_unfiltered)
             self.adata_gene_unfiltered_list_unspliced = adata_gene_unfiltered_list_unspliced
             self.adata_transcript_unfiltered_list_unspliced = adata_transcript_unfiltered_list_unspliced
+    def _splicing_ready(self, i, mode):
+        """Whether sample i has a saveable matrix for 'spliced'/'unspliced'.
+
+        An empty side is legitimate - a sample whose reads are all spliced has no
+        unspliced counts - so this skips that mode with a warning instead of
+        aborting the run and losing the matrices that did generate.
+        """
+        # Default to None: generate_multiple_samples only sets these when it was
+        # itself called with generate_splicing, so saving with a different flag than
+        # generating must skip the mode rather than raise AttributeError.
+        gene_list = getattr(self, f'adata_gene_unfiltered_list_{mode}', None)
+        transcript_list = getattr(self, f'adata_transcript_unfiltered_list_{mode}', None)
+        if gene_list is None or transcript_list is None:
+            self._log('warning',
+                      f'No {mode} matrices were generated; skipping them. Run the count step with '
+                      f'--generate_splicing to produce them.')
+            return False
+        if gene_list[i] is not None and transcript_list[i] is not None:
+            return True
+        self._log('warning',
+                  f'No {mode} counts for {self.count_matrix_folder_path_list[i]}; skipping the {mode} '
+                  f'matrix. This is expected when every read of the sample falls on the other side.')
+        return False
+
+    def _assert_matrices_generated(self):
+        """Fail loudly, and with a cause, when a sample produced no counts at all.
+
+        Only the overall matrix is fatal. An empty overall matrix means every read
+        was filtered out, which is never legitimate; empty spliced/unspliced sides
+        are handled by _splicing_ready.
+        """
+        for i in range(self.n_samples):
+            if self.adata_gene_unfiltered_list[i] is None or self.adata_transcript_unfiltered_list[i] is None:
+                target = self.count_matrix_folder_path_list[i]
+                raise ValueError(
+                    f'No counts were generated for {target}. Every read was filtered out, which usually '
+                    f'means read_selection.pkl does not line up with the compatible matrices - check that '
+                    f'its keys match the compatible matrix row names for this target.')
+
     def save_multiple_samples(self, generate_splicing = False):
+        self._assert_matrices_generated()
         if self.mtx:
             for i in range(self.n_samples):
                 # save gene
@@ -799,7 +951,7 @@ class CountMatrix:
                 mmwrite(fn_mtx, self.adata_transcript_unfiltered_list[i].X)
                 with open(fn_pickle,'wb') as f:
                     pickle.dump(transcript_meta_unfiltered, f)
-                if generate_splicing:
+                if generate_splicing and self._splicing_ready(i, 'spliced'):
                     #---------spliced
                     self.logger.info('saving spliced count matrix in mtx format')
                     print('saving spliced count matrix on gene level ')
@@ -821,6 +973,7 @@ class CountMatrix:
                     with open(os.path.join(self.count_matrix_spliced_folder_path_list[i],
                                            'adata_transcript_unfiltered' + str(self.novel_read_n) + '.pickle'), 'wb') as f:
                         pickle.dump(transcript_meta_unfiltered, f)
+                if generate_splicing and self._splicing_ready(i, 'unspliced'):
                     # ---------unspliced
                     self.logger.info('saving unspliced count matrix in mtx format')
                     print('saving unspliced count matrix on gene level ')
@@ -862,7 +1015,7 @@ class CountMatrix:
                 adata_transcript_unfiltered_df = self.adata_transcript_unfiltered_list[i].to_df()
                 adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
 
-                if generate_splicing:
+                if generate_splicing and self._splicing_ready(i, 'spliced'):
                     #---------spliced
                     self.logger.info('saving spliced count matrix in csv format')
                     output_gene_unfiltered = os.path.join(self.count_matrix_spliced_folder_path_list[i],
@@ -879,6 +1032,7 @@ class CountMatrix:
                     adata_transcript_unfiltered_df = self.adata_transcript_unfiltered_list_spliced[i].to_df()
                     adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
 
+                if generate_splicing and self._splicing_ready(i, 'unspliced'):
                     # ---------unspliced
                     self.logger.info('saving unspliced count matrix in csv format')
                     output_gene_unfiltered = os.path.join(self.count_matrix_unspliced_folder_path_list[i],

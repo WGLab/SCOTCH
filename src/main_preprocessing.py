@@ -245,7 +245,8 @@ def main():
             logger.info(f'Gene subset provided: processing {len(gene_subset)} genes: {gene_subset}')
         countmatrix = cm.CountMatrix(target = args.target, novel_read_n = args.novel_read_n, novel_read_pct= args.novel_read_pct,
                                         platform = args.platform, workers = args.workers, group_novel = args.group_novel, logger = logger,
-                                     csv = args.save_csv, mtx = args.save_mtx, gene_subset=gene_subset)
+                                     csv = args.save_csv, mtx = args.save_mtx, gene_subset=gene_subset,
+                                     bulk = args.bulk)
         if args.platform=='parse-ont':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.generate_multiple_samples(generate_splicing=args.generate_splicing)
@@ -271,7 +272,7 @@ def main():
             #auxillary
             logger.info(f'Start summarizing read mapping information for target: {target}')
             try:
-                cp.summarise_auxillary(target, logger=logger)
+                cp.summarise_auxillary(target, logger=logger, bulk=args.bulk)
                 logger.info(f'Completed summarizing read mapping information for target: {target}')
             except Exception as e:
                 logger.exception(f"summarise_auxillary failed for target: {target}")
@@ -289,10 +290,11 @@ def main():
             logger.info(f'Incrementally summarizing annotation for target: {target}')
             cp.summarise_annotation(target, logger=logger, gene_subset=gene_subset)
             logger.info(f'Incrementally summarizing read mapping information for target: {target}')
-            cp.summarise_auxillary(target, gene_subset=gene_subset, logger=logger)
+            cp.summarise_auxillary(target, gene_subset=gene_subset, logger=logger, bulk=args.bulk)
         countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.novel_read_n, novel_read_pct=args.novel_read_pct,
                                      platform=args.platform, workers=args.workers, group_novel=args.group_novel,
-                                     logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset)
+                                     logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset,
+                                     bulk=args.bulk)
         if args.platform == 'parse-ont':
             assert len(args.target) == 1, "Error: The length of target must be 1 when platform is 'parse'."
         countmatrix.update_multiple_samples_incremental(generate_splicing=args.generate_splicing)

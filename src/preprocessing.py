@@ -1096,7 +1096,9 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
                         if parse:
                             cb, umi = '_'.join(qname_cbumi_dict[readname].split('_')[:3]), qname_cbumi_dict[readname].split('_')[3]
                         else:
-                            cb, umi = qname_cbumi_dict[readname].split('_')[0], qname_cbumi_dict[readname].split('_')[1]
+                            # rsplit, not split: bulk stores CBUMI as '<read name>_NA'
+                            # and read names may themselves contain underscores.
+                            cb, umi = qname_cbumi_dict[readname].rsplit('_', 1)
                     else:
                         cb, umi = '.', '.'
                     cbumi = cb +'_'+umi

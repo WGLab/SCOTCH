@@ -82,6 +82,38 @@ def build_read_selection_df(df):
     return df.reset_index(drop=True)
 
 
+def build_read_selection_mapping(df, bulk=False):
+    """Map each read to the (gene, isoform) picked for it by MappingScore.
+
+    Rows with Keep == 1 are the winners chosen in build_read_selection_df. Keying
+    those rows by read carries the isoform choice through to the count matrix; a
+    bare keep/drop flag would lose it and leave the count step to re-decide the
+    isoform on its own.
+
+    The gene is identified by '<name>_<geneID>', matching the compatible-matrix
+    filename stem, so the count step can pin an assignment to exactly one file.
+    Gene name alone is not enough: two geneIDs can share a name, and both their
+    files carry an 'uncategorized' column plus possibly identically numbered
+    novelIsoform_* columns, so a name-only match would count the read twice.
+
+    For bulk the key is rebuilt from Read rather than CBUMI: bulk CBUMI is
+    read-name + '_NA', and TSVs written before the CBUMI fix have a truncated
+    CBUMI column whenever the read name itself contains an underscore.
+    """
+    if df is None or len(df) == 0 or 'Keep' not in df.columns:
+        return {}
+    kept = df[df['Keep'] == 1]
+    if kept.empty:
+        return {}
+    if bulk:
+        keys = kept['Read'].astype(str) + '_NA'
+    else:
+        keys = kept['CBUMI'].astype(str)
+    genes = (kept['geneName'].astype(str).str.replace('/', '.', regex=False)
+             + '_' + kept['geneID'].astype(str))
+    return dict(zip(keys, zip(genes, kept['Isoform'].astype(str))))
+
+
 def read_auxillary_mapping_file(file_path):
     df = pd.read_csv(file_path, sep='\t')
     if 'gene' not in df.columns:
@@ -236,7 +268,7 @@ def summarise_annotation(target,logger=None, gene_subset=None):
         else:
             print('novel isoform annotations does not exist!')
 
-def summarise_auxillary(target, gene_subset=None, logger=None):
+def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
     def log_info(message):
         if logger is not None:
             logger.info(message)
@@ -317,7 +349,7 @@ def summarise_auxillary(target, gene_subset=None, logger=None):
         for file in file_paths:
             os.remove(file)
         output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
-        cbumi_keep_dict = DF_final.set_index('CBUMI')['Keep'].to_dict()
+        cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk)
         log_info('saving read filtering file: ' + str(output_file_pkl))
         with open(output_file_pkl, 'wb') as pickle_file:
             pickle.dump(cbumi_keep_dict, pickle_file)
