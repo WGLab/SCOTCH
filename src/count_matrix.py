@@ -686,18 +686,22 @@ class CountMatrix:
         return any(not isinstance(value, tuple) for value in mapping.values())
 
     def _rebuild_read_selection(self, path):
-        """Regenerate a legacy read_selection.pkl from the merged mapping TSV.
+        """Rebuild read_selection.pkl from the merged mapping TSV.
 
         summarise_auxillary deletes its per-gene inputs once it has merged them,
         so re-running the summary step cannot refresh this file. The merged TSV it
         leaves behind still carries Keep and Isoform, so the isoform assignment is
         recoverable here without re-running the compatible-matrix step.
+
+        Also the documented recovery path: the key scheme depends on --bulk, so a
+        pickle built under the wrong flag is fixed by deleting it and re-running,
+        which lands here because a missing pickle rebuilds too.
         """
         import compatible as cp
         tsv_path = os.path.join(os.path.dirname(path), 'all_read_isoform_exon_mapping.tsv')
         if not os.path.exists(tsv_path):
             self._log('error',
-                      f'Legacy read_selection.pkl at {path} cannot be upgraded: {tsv_path} is missing. '
+                      f'read_selection.pkl at {path} needs rebuilding but {tsv_path} is missing. '
                       f'Re-run the compatible matrix and summary steps for this target.')
             raise FileNotFoundError(tsv_path)
         self._log('info', f'Upgrading legacy read_selection.pkl using {tsv_path}')
@@ -715,10 +719,13 @@ class CountMatrix:
     def read_filter(self):
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
-            read_selection_pkl_ = pp.load_pickle(path)
+            read_selection_pkl_ = pp.load_pickle(path) if os.path.exists(path) else None
             if read_selection_pkl_ is None:
                 read_selection_pkl_ = {}
-            if self._is_legacy_read_selection(read_selection_pkl_):
+            # Rebuild when absent or empty too, not just when legacy: deleting the
+            # pickle is how a user recovers from one built under the wrong --bulk
+            # flag, and an empty mapping would otherwise filter every read out.
+            if not read_selection_pkl_ or self._is_legacy_read_selection(read_selection_pkl_):
                 read_selection_pkl_ = self._rebuild_read_selection(path)
             read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
             read_selection_pkl.update(read_selection_pkl_updated)
@@ -920,9 +927,11 @@ class CountMatrix:
             if self.adata_gene_unfiltered_list[i] is None or self.adata_transcript_unfiltered_list[i] is None:
                 target = self.count_matrix_folder_path_list[i]
                 raise ValueError(
-                    f'No counts were generated for {target}. Every read was filtered out, which usually '
-                    f'means read_selection.pkl does not line up with the compatible matrices - check that '
-                    f'its keys match the compatible matrix row names for this target.')
+                    f'No counts were generated for {target}. Every read was filtered out, so the keys in '
+                    f'read_selection.pkl do not line up with the compatible matrix row names. For bulk data '
+                    f'the count step must be given --bulk, since that decides how the keys are built. '
+                    f'To force read_selection.pkl to be rebuilt from '
+                    f'auxillary/all_read_isoform_exon_mapping.tsv, delete it and re-run this step.')
 
     def save_multiple_samples(self, generate_splicing = False):
         self._assert_matrices_generated()
