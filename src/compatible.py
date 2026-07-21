@@ -115,7 +115,12 @@ def build_read_selection_mapping(df, bulk=False):
 
 
 def read_auxillary_mapping_file(file_path):
-    df = pd.read_csv(file_path, sep='\t')
+    # 'Exon Index' / 'Exon Coordinates' mix comma-joined integers with '-' for
+    # uncategorized rows; reading them as str avoids pandas' mixed-type inference
+    # (and its DtypeWarning) on large files chunked internally. Downstream uses
+    # these columns as strings only.
+    df = pd.read_csv(file_path, sep='\t',
+                     dtype={'Exon Index': str, 'Exon Coordinates': str})
     if 'gene' not in df.columns:
         df['gene'] = df['geneName'] + '_' + df['geneID']
     return df

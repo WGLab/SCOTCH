@@ -8,6 +8,7 @@ from joblib import Parallel, delayed, Memory
 from tqdm import tqdm
 import pickle
 import re
+import sys
 from scipy.io import mmwrite, mmread
 from preprocessing import load_pickle
 import shutil
@@ -717,6 +718,14 @@ class CountMatrix:
         return mapping
 
     def read_filter(self):
+        # This merged dict is broadcast as an argument to every joblib worker, so
+        # its size is multiplied by --workers in both RAM and pickling cost. Each
+        # value is a (gene, isoform) pair whose two strings repeat across the many
+        # reads of a gene; loading a pickle (or an astype(str) build) makes a fresh
+        # copy of each. Interning collapses those duplicates to one shared object
+        # per distinct string, which both shrinks the dict and lets pickle emit
+        # each string once instead of per read - the difference between fitting in
+        # RAM and workers being OOM-killed and respawned on large runs.
         read_selection_pkl = {}
         for i, path in enumerate(self.read_selection_pkl_path_list):
             read_selection_pkl_ = pp.load_pickle(path) if os.path.exists(path) else None
@@ -727,8 +736,10 @@ class CountMatrix:
             # flag, and an empty mapping would otherwise filter every read out.
             if not read_selection_pkl_ or self._is_legacy_read_selection(read_selection_pkl_):
                 read_selection_pkl_ = self._rebuild_read_selection(path)
-            read_selection_pkl_updated = {key + f':sample{i}': value for key, value in read_selection_pkl_.items()}
-            read_selection_pkl.update(read_selection_pkl_updated)
+            suffix = f':sample{i}'
+            for key, value in read_selection_pkl_.items():
+                gene, isoform = value
+                read_selection_pkl[key + suffix] = (sys.intern(gene), sys.intern(isoform))
         return read_selection_pkl
 
     def update_multiple_samples_incremental(self, generate_splicing=False):
