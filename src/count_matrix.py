@@ -430,7 +430,11 @@ class CountMatrix:
         novelIsoform_* numbering, so a name-only match would count a read in both.
         """
         isoform_cols = [c for c in df.columns if c != 'Cell']
-        assignments = df['Cell'].map(read_selection_pkl)
+        # .map(dict.get), not .map(dict): Series.map on a dict realigns against the
+        # whole dict, so it costs O(len(dict)) per call - here the full multi-million
+        # read mapping, per gene per sample. Passing the bound .get makes it a plain
+        # per-read lookup, O(rows), independent of the mapping's size.
+        assignments = df['Cell'].map(read_selection_pkl.get)
         is_mine = assignments.apply(lambda a: isinstance(a, tuple) and a[0] == gene_stem)
         df = df[is_mine]
         if df.shape[0] == 0:
