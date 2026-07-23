@@ -1,4 +1,5 @@
 import os.path
+import glob
 import pickle
 
 from preprocessing import *
@@ -290,8 +291,15 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                     os.remove(dest)
                 shutil.move(file_name_gtf, backup_dir)
             print('Merged GTF annotations saved at: ' + output_gtf)
+        elif os.path.exists(output_pkl):
+            # No per-job files to merge, but the merged annotation is already in place
+            # (e.g. summary was run before): nothing to do, and not an error.
+            msg = f'No new per-job annotations to merge; existing {output_pkl} is up to date.'
+            (logger.info if logger is not None else print)(msg)
         else:
-            print('novel isoform annotations does not exist!')
+            msg = (f'No per-job novel-isoform annotations found in {reference_folder} and no merged '
+                   f'{os.path.basename(output_pkl)} exists. Run the compatible matrix step first.')
+            (logger.warning if logger is not None else print)(msg)
 
 def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
     def log_info(message):
@@ -1065,18 +1073,24 @@ class ReadMapper:
         self.logger.info(f'Saving annotation file...')
         checkpoint_path = self._get_checkpoint_path(current_job_index, total_jobs)
         for i in range(len(self.annotation_path_meta_gene_list)):
-            if total_jobs>1:
-                base = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index)
-            else:
-                base = self.annotation_path_meta_gene_novel_list[i][:-4]
+            # Always suffix with the job index, single-job included. summarise_annotation
+            # only merges files matching '..._<N>.pkl', and the unsuffixed name is its
+            # merge *output* - writing there directly means the single-job run is never
+            # merged (so gene_subset can't accumulate), and if summary did pick it up it
+            # would move the final file into files_jobs and leave count with nothing.
+            # count/splicing already require summary to have run, so routing every run
+            # through the merge adds no new dependency.
+            base = self.annotation_path_meta_gene_novel_list[i][:-4] + '_' + str(current_job_index)
             file_name_pkl = base + ".pkl"
             file_name_gtf = base + ".gtf"
-            #save pickle file
-            version = 1
-            while os.path.exists(file_name_pkl) or os.path.exists(file_name_gtf):
-                file_name_pkl = f"{base}.{version}.pkl"
-                file_name_gtf = f"{base}.{version}.gtf"
-                version += 1
+            # Re-running a job replaces its own output. The previous code version-bumped
+            # to base.1.pkl etc. instead, which left the stale file behind; both then
+            # matched summarise_annotation's merge pattern and were merged in os.listdir
+            # order, so for overlapping metagenes the stale one could win. Clear this
+            # job's prior outputs (clean and version-bumped) before writing fresh.
+            for stale in (glob.glob(base + '.pkl') + glob.glob(base + '.gtf')
+                          + glob.glob(base + '.[0-9]*.pkl') + glob.glob(base + '.[0-9]*.gtf')):
+                os.remove(stale)
             with open(file_name_pkl, 'wb') as file:
                 pickle.dump(self.metageneStructureInformationwNovel, file)
             #save gtf file
