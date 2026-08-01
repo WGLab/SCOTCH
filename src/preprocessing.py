@@ -19,6 +19,24 @@ from itertools import islice
 #---------------some utility functions----------------------#
 # Function to convert the dictionary to GTF
 
+def split_gene_filename(file_name):
+    """'<gene name>_<gene ID>.csv' -> ('<gene name>', '<gene ID>').
+
+    The gene ID is taken as the last underscore-free segment before '.csv', the
+    same convention used for the auxiliary mapping files. Slicing a fixed 15
+    characters assumed an unversioned ENSG identifier and broke on versioned
+    IDs, on ENSMUSG and on any non-Ensembl annotation, while splitting on the
+    first underscore truncated gene names such as HLA_DRA. Returns (None, None)
+    for names that are not per-gene compatible matrices.
+    """
+    if not file_name.endswith('.csv'):
+        return None, None
+    gene_name, sep, gene_id = file_name[:-4].rpartition('_')
+    if not sep:
+        return None, None
+    return gene_name, gene_id
+
+
 def find_subfolder(root, subfolder):
     subfolder_paths = []
     for root, dirs, files in os.walk(root):

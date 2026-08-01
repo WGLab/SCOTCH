@@ -41,13 +41,18 @@ def prepare_read_selection_df(df):
         return pd.DataFrame(columns=READ_MAPPING_COLUMNS)
     df['gene'] = df['geneName'] + '_' + df['geneID']
     df['MappingScore'] = df['MappingScore'].fillna(-1)
+    # Known isoforms are identified by exclusion rather than by an 'ENST' prefix:
+    # 'novel...' and 'uncategorized' are names SCOTCH itself assigns, so anything
+    # else came from the supplied annotation. Testing for 'ENST' silently demoted
+    # every non-Ensembl transcript ID to the 'uncategorized' priority.
+    isoform = df['Isoform'].astype('string')
     conditions = [
-        df['Isoform'].str.startswith('ENST'),
-        df['Isoform'].str.startswith('novel'),
-        df['Isoform'] == 'uncategorized'
+        isoform.str.startswith('novel', na=False),
+        isoform.eq('uncategorized').fillna(False),
+        isoform.isna()
     ]
-    choices = [1, 2, 3]
-    df['priority'] = np.select(conditions, choices, default=3)
+    choices = [2, 3, 3]
+    df['priority'] = np.select(conditions, choices, default=1)
     df['priority'] *= df['MappingScore']
     df['GeneMapping'] = 'delete'
     df['Keep'] = 0
@@ -1170,10 +1175,13 @@ class ClassifyReadsSplice:
     def split_compatible(self):
         os.makedirs(self.splice_folder, exist_ok=True)
         os.makedirs(self.unsplice_folder, exist_ok=True)
+        # Keyed by gene name via the shared parser: f.split('_')[0] truncated at
+        # the FIRST underscore, so HLA_DRA and HLA_DRB1 both keyed on 'HLA' and
+        # silently overwrote each other.
         compatible_matrix_dict = {
-            f.split('_')[0]: os.path.join(self.compatible_folder, f)
+            split_gene_filename(f)[0]: os.path.join(self.compatible_folder, f)
             for f in os.listdir(self.compatible_folder)
-            if f.endswith(".csv")
+            if split_gene_filename(f)[0] is not None
         } #gene: path
         genes = list(compatible_matrix_dict.keys())
         genes_job = np.array_split(genes, self.n_jobs)[self.job_index]

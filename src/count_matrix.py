@@ -10,26 +10,42 @@ import pickle
 import re
 import sys
 from scipy.io import mmwrite, mmread
-from preprocessing import load_pickle
+from preprocessing import load_pickle, split_gene_filename
 import shutil
+
+SCOTCH_ASSIGNED_READ_TYPES = ('uncategorized', 'intronReads')
+
+
+def classify_isoform(isoform):
+    """Map an isoform column name to a read type.
+
+    Anything that is not a name SCOTCH assigns itself came from the supplied
+    annotation and is therefore an existing isoform. Testing for 'ENST' left
+    non-Ensembl transcript IDs unclassified, so they fell out of
+    type_priority_map as NaN and took an undefined priority when resolving
+    reads that map to more than one gene. The 'novel' test matches the prefix
+    that SCOTCH writes ('novelIsoform_<n>'), and matches the test used in
+    compatible.prepare_read_selection_df.
+    """
+    if isoform.startswith('novel'):
+        return 'novel'
+    if isoform in SCOTCH_ASSIGNED_READ_TYPES:
+        return isoform
+    return 'existing'
+
 
 def generate_read_df(f, geneStructureInformation):
     df = pd.read_csv(f)
     f = os.path.basename(f)
     gene = f[:-4]
-    geneID = gene[-15:]
-    geneName = gene[:-16]
+    geneName, geneID = split_gene_filename(f)
     df.columns = ['Reads'] + df.columns.tolist()[1:]
     df = df.set_index('Reads')
     triple = df_to_triple(df)
     reads_type = []
     for tri in triple:
-        _, reads, type = tri
-        if 'novel' in type:
-            type = 'novel'
-        if 'ENST' in type:
-            type = 'existing'
-        reads_type.append((reads, type))
+        _, reads, isoform = tri
+        reads_type.append((reads, classify_isoform(isoform)))
     read_df = pd.DataFrame(reads_type)
     read_df = read_df.drop_duplicates()
     read_df.columns = ['reads', 'type']
@@ -482,12 +498,11 @@ class CountMatrix:
             compatible_matrix_folder_path_list = self.compatible_matrix_folder_path_list
         for folder in count_matrix_folder_path_list:
             os.makedirs(folder, exist_ok=True)
-        pattern = re.compile(r'_ENS.+\.csv')
         files_with_indicators = [
             (os.path.join(CompatibleMatrixPath, i), idx)  # Tuple with file path and index
             for idx, CompatibleMatrixPath in enumerate(compatible_matrix_folder_path_list)
             for i in os.listdir(CompatibleMatrixPath)
-            if '.csv' in i and pattern.sub('', i) == gene]
+            if split_gene_filename(i)[0] == gene]
         df_list = []
         for f, idx in files_with_indicators:
             df = pd.read_csv(f)
@@ -776,11 +791,10 @@ class CountMatrix:
             self._update_saved_matrices_for_mode(subset_genes, self.count_matrix_unspliced_folder_path_list, splicing='unspliced')
 
     def generate_multiple_samples(self, generate_splicing = False):
-        pattern = re.compile(r'_ENS.+\.csv')
         Genes = []
         for p in self.compatible_matrix_folder_path_list:
-            Genes_ = [g for g in os.listdir(p) if 'csv' in g]
-            Genes_ = [pattern.sub('', g) for g in Genes_]
+            Genes_ = [split_gene_filename(g)[0] for g in os.listdir(p)]
+            Genes_ = [g for g in Genes_ if g is not None]
             Genes.append(Genes_)
         Genes = flatten_list(Genes)
         Genes = list(set(Genes))
