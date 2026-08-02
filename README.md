@@ -226,7 +226,7 @@ gene_transcript_CD8_df = data.frame(genes=str_remove(colnames(sample8_CD8_transc
                                     transcripts=colnames(sample8_CD8_transcript))
 
 #----gene-level analysis-----#
-df_gene = scotch_gene(sample8_CD4_gene, sample8_CD8_gene), epsilon=0.01,ncores=10)%>%
+df_gene = scotch_gene(sample8_CD4_gene, sample8_CD8_gene, epsilon=0.01,ncores=10)%>%
   filter(pct1>=0.01|pct2>=0.01)
 
 #----transcript-level analysis-----#
