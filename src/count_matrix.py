@@ -198,7 +198,7 @@ class CountMatrix:
                                          sample_name in self.sample_names]
             self.count_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'count_matrix') for
                 sample_name in self.sample_names]
-            self.read_selection_pkl_path_list = [os.path.join(self.samples_folder_path, sample_name, 'auxillary/read_selection.pkl') for sample_name in self.sample_names]
+            self.read_selection_pkl_path_list = [os.path.join(self.samples_folder_path, sample_name, 'auxiliary/read_selection.pkl') for sample_name in self.sample_names]
             self.spliced_compatible_matrix_folder_path_list = [
                 os.path.join(self.samples_folder_path, sample_name, 'spliced_compatible_matrix') for
                 sample_name in self.sample_names]
@@ -216,7 +216,7 @@ class CountMatrix:
             self.n_samples = len(target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, 'compatible_matrix') for target_ in target]
             self.count_matrix_folder_path_list = [os.path.join(target_, 'count_matrix') for target_ in target]
-            self.read_selection_pkl_path_list = [os.path.join(target_, 'auxillary/read_selection.pkl') for target_ in target]
+            self.read_selection_pkl_path_list = [os.path.join(target_, 'auxiliary/read_selection.pkl') for target_ in target]
             self.spliced_compatible_matrix_folder_path_list = [os.path.join(target_, 'spliced_compatible_matrix') for target_ in target]
             self.unspliced_compatible_matrix_folder_path_list = [os.path.join(target_, 'unspliced_compatible_matrix') for target_ in target]
             self.count_matrix_spliced_folder_path_list = [os.path.join(target_, 'count_matrix', 'spliced') for target_ in target]
@@ -485,7 +485,7 @@ class CountMatrix:
 
     def generate_count_matrix_by_gene(self, gene, read_selection_pkl, splicing = None):
         # CompatibleMatrixPaths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/compatible_matrix'
-        # read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxillary/read_selection.pkl'
+        # read_selection_pkl_paths = '/scr1/users/xu3/singlecell/project_singlecell/sample7_8_ont/sample7/auxiliary/read_selection.pkl'
         # read_selection_pkl: keys must add sample index
         if splicing=='spliced':
             count_matrix_folder_path_list = self.count_matrix_spliced_folder_path_list
@@ -708,7 +708,7 @@ class CountMatrix:
     def _rebuild_read_selection(self, path):
         """Rebuild read_selection.pkl from the merged mapping TSV.
 
-        summarise_auxillary deletes its per-gene inputs once it has merged them,
+        summarise_auxiliary deletes its per-gene inputs once it has merged them,
         so re-running the summary step cannot refresh this file. The merged TSV it
         leaves behind still carries Keep and Isoform, so the isoform assignment is
         recoverable here without re-running the compatible-matrix step.
@@ -960,7 +960,7 @@ class CountMatrix:
                     f'read_selection.pkl do not line up with the compatible matrix row names. For bulk data '
                     f'the count step must be given --bulk, since that decides how the keys are built. '
                     f'To force read_selection.pkl to be rebuilt from '
-                    f'auxillary/all_read_isoform_exon_mapping.tsv, delete it and re-run this step.')
+                    f'auxiliary/all_read_isoform_exon_mapping.tsv, delete it and re-run this step.')
 
     def save_multiple_samples(self, generate_splicing = False):
         self._assert_matrices_generated()
@@ -1132,13 +1132,13 @@ class CountMatrix:
                 drop_by_gene[gene] = set(del_list)
 
         for target in self.target:
-            auxillary_dir = os.path.join(target, 'auxillary')
-            tsv_path = os.path.join(auxillary_dir, 'all_read_isoform_exon_mapping.tsv')
+            auxiliary_dir = os.path.join(target, 'auxiliary')
+            tsv_path = os.path.join(auxiliary_dir, 'all_read_isoform_exon_mapping.tsv')
             if not os.path.exists(tsv_path):
                 self.logger.warning(f'Read-isoform mapping TSV not found: {tsv_path}')
                 continue
 
-            output_path = os.path.join(auxillary_dir,
+            output_path = os.path.join(auxiliary_dir,
                 f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.tsv')
             tmp_path = output_path + '.tmp'
 

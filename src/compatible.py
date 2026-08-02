@@ -120,7 +120,7 @@ def build_read_selection_mapping(df, bulk=False):
     return dict(zip(keys, zip(genes, kept['Isoform'].astype(str))))
 
 
-def read_auxillary_mapping_file(file_path):
+def read_auxiliary_mapping_file(file_path):
     # 'Exon Index' / 'Exon Coordinates' mix comma-joined integers with '-' for
     # uncategorized rows; reading them as str avoids pandas' mixed-type inference
     # (and its DtypeWarning) on large files chunked internally. Downstream uses
@@ -138,7 +138,7 @@ AUXILLARY_MAPPING_SUFFIX = '_read_isoform_exon_mapping.tsv'
 MERGED_MAPPING_FILENAME = 'all' + AUXILLARY_MAPPING_SUFFIX
 
 
-def is_per_gene_auxillary_file(file_name):
+def is_per_gene_auxiliary_file(file_name):
     """Per-gene mapping files are '<gene name>_<gene ID>_read_isoform_exon_mapping.tsv'.
 
     Matching the suffix rather than a gene-ID prefix keeps this reference-agnostic:
@@ -148,8 +148,8 @@ def is_per_gene_auxillary_file(file_name):
     return file_name.endswith(AUXILLARY_MAPPING_SUFFIX) and file_name != MERGED_MAPPING_FILENAME
 
 
-def get_gene_name_from_auxillary_filename(file_name):
-    if not is_per_gene_auxillary_file(file_name):
+def get_gene_name_from_auxiliary_filename(file_name):
+    if not is_per_gene_auxiliary_file(file_name):
         return None
     # Greedy prefix, so the gene ID is the last underscore-free segment and gene
     # names containing underscores still resolve correctly.
@@ -306,29 +306,29 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                    f'{os.path.basename(output_pkl)} exists. Run the compatible matrix step first.')
             (logger.warning if logger is not None else print)(msg)
 
-def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
+def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False):
     def log_info(message):
         if logger is not None:
             logger.info(message)
         else:
             print(message)
 
-    auxillary_folder = os.path.join(target, 'auxillary')
-    if not os.path.isdir(auxillary_folder):
-        log_info(f'auxillary folder does not exist, skipping: {auxillary_folder}')
+    auxiliary_folder = os.path.join(target, 'auxiliary')
+    if not os.path.isdir(auxiliary_folder):
+        log_info(f'auxiliary folder does not exist, skipping: {auxiliary_folder}')
         return
-    for auxillary_folder in [auxillary_folder]:
-        log_info('summarising read-isoform mapping files at: ' + str(auxillary_folder))
-        file_paths = [os.path.join(auxillary_folder, f) for f in os.listdir(auxillary_folder)
-                      if is_per_gene_auxillary_file(f)]
-        log_info(f'Found {len(file_paths)} input mapping files in {auxillary_folder}')
+    for auxiliary_folder in [auxiliary_folder]:
+        log_info('summarising read-isoform mapping files at: ' + str(auxiliary_folder))
+        file_paths = [os.path.join(auxiliary_folder, f) for f in os.listdir(auxiliary_folder)
+                      if is_per_gene_auxiliary_file(f)]
+        log_info(f'Found {len(file_paths)} input mapping files in {auxiliary_folder}')
         if gene_subset is None:
             if len(file_paths) == 0:
                 continue
-            df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxillary_mapping_file)(file_path) for file_path in file_paths)
+            df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in file_paths)
             DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
             duplicated_reads = DF.loc[DF['Read'].duplicated(keep=False), 'Read'].nunique()
-            log_info(f'Loaded {len(DF)} rows from auxillary mapping files')
+            log_info(f'Loaded {len(DF)} rows from auxiliary mapping files')
             log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
             log_info('Starting read-selection build')
             DF_final = build_read_selection_df(DF)
@@ -337,20 +337,20 @@ def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
             subset_names = set(gene_subset)
             candidate_file_paths = []
             for file_path in file_paths:
-                gene_name = get_gene_name_from_auxillary_filename(os.path.basename(file_path))
+                gene_name = get_gene_name_from_auxiliary_filename(os.path.basename(file_path))
                 if gene_name is None:
                     continue
                 if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
                     candidate_file_paths.append(file_path)
             if len(candidate_file_paths) == 0:
-                log_info('No new per-gene TSVs found for subset; skipping auxillary merge.')
+                log_info('No new per-gene TSVs found for subset; skipping auxiliary merge.')
                 continue
-            output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+            output_file_tsv = os.path.join(auxiliary_folder, 'all_read_isoform_exon_mapping.tsv')
             existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
             existing_df = existing_df.copy()
             new_subset_df = (
                 pd.concat(
-                    Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxillary_mapping_file)(file_path) for file_path in candidate_file_paths),
+                    Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in candidate_file_paths),
                     axis=0,
                     ignore_index=True
                 ).reset_index(drop=True)
@@ -381,13 +381,13 @@ def summarise_auxillary(target, gene_subset=None, logger=None, bulk=False):
         # order-independent. Gene-contiguity lets a consumer index the mapping by gene
         # and read only the rows it needs instead of scanning the whole file.
         DF_final = DF_final.sort_values(by=['geneChr', 'geneID', 'Read', 'priority'], ascending=[True, True, True, False]).reset_index(drop=True)
-        output_file_tsv = os.path.join(auxillary_folder, 'all_read_isoform_exon_mapping.tsv')
+        output_file_tsv = os.path.join(auxiliary_folder, 'all_read_isoform_exon_mapping.tsv')
         log_info('saving read-isoform mapping file: '+str(output_file_tsv))
         DF_final.to_csv(output_file_tsv, sep='\t', index=False)
-        log_info('removing temporary files in: '+ str(auxillary_folder))
+        log_info('removing temporary files in: '+ str(auxiliary_folder))
         for file in file_paths:
             os.remove(file)
-        output_file_pkl = os.path.join(auxillary_folder, 'read_selection.pkl')
+        output_file_pkl = os.path.join(auxiliary_folder, 'read_selection.pkl')
         cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk)
         log_info('saving read filtering file: ' + str(output_file_pkl))
         with open(output_file_pkl, 'wb') as pickle_file:
@@ -445,7 +445,7 @@ class ReadMapper:
         if platform != 'parse-ont':
             self.nsamples = len(self.target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, "compatible_matrix") for target_ in target] #not for parse
-            self.read_mapping_path_list = [os.path.join(target_, "auxillary") for target_ in target] #not for parse
+            self.read_mapping_path_list = [os.path.join(target_, "auxiliary") for target_ in target] #not for parse
             self.qname_dict_list, self.qname_cbumi_dict_list, self.qname_sample_dict_list = self._load_bam_info_dicts()
             self.sorted_bam_path_list = None
         else:
@@ -1116,7 +1116,7 @@ class ClassifyReadsSplice:
         self.compatible_folder = os.path.join(scotch_target, 'compatible_matrix')
         self.splice_folder = os.path.join(scotch_target, 'spliced_compatible_matrix')
         self.unsplice_folder = os.path.join(scotch_target, 'unspliced_compatible_matrix')
-        self.read_isoform_mapping_path = os.path.join(scotch_target, 'auxillary/all_read_isoform_exon_mapping.tsv')
+        self.read_isoform_mapping_path = os.path.join(scotch_target, 'auxiliary/all_read_isoform_exon_mapping.tsv')
         self.mapping_df = self._read_mapping()
         self.metageneStructureInformation = load_pickle(os.path.join(scotch_target, 'reference/metageneStructureInformationwNovel.pkl'))
         self.geneStructureInformation = self._seperate_metageneInfo()

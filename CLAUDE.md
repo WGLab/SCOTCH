@@ -57,7 +57,7 @@ Four main classes, each mapping to a pipeline step:
 |---|---|---|
 | `Annotator` | `annotation.py` | Step 1 — build gene structure from GTF + BAM |
 | `ReadMapper` | `compatible.py` | Step 2 — map reads to isoforms, detect novel isoforms |
-| `summarise_annotation` / `summarise_auxillary` | `compatible.py` | Step 3 — merge outputs |
+| `summarise_annotation` / `summarise_auxiliary` | `compatible.py` | Step 3 — merge outputs |
 | `CountMatrix` | `count_matrix.py` | Step 4 — generate count matrices |
 
 `main_preprocessing.py` is a thin CLI orchestrator (argparse) that instantiates and calls these classes. `preprocessing.py` contains shared utilities (`load_pickle`, `merge_exons`, etc.) used across all steps. `reference.py` handles GTF parsing using bedtools.

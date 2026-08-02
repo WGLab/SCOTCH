@@ -1141,7 +1141,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
         #data_df, novel_isoform_name_mapping = group_novel_isoform(data_df, geneStrand, parse)
         # Save read-isoform mappings to a TSV file
         if len(readmapping_data)>0:
-            output_folder0 = os.path.join(output_folder, 'auxillary')
+            output_folder0 = os.path.join(output_folder, 'auxiliary')
             if not os.path.exists(output_folder0):
                 os.makedirs(output_folder0)
             readmapping = pd.DataFrame(readmapping_data,
