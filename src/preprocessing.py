@@ -37,6 +37,27 @@ def split_gene_filename(file_name):
     return gene_name, gene_id
 
 
+def resolve_auxiliary_dir(target, filename=None):
+    """Return the auxiliary directory under target.
+
+    New outputs are written to 'auxiliary', but outputs produced before the
+    spelling fix live in 'auxillary'; readers accept both so old runs stay
+    usable. When filename is given, prefers the folder that actually contains
+    that artifact (both folders can exist, e.g. after a partial re-run of a
+    legacy target); otherwise prefers 'auxiliary' when it exists. Falls back
+    to the 'auxiliary' path when nothing matches.
+    """
+    candidates = [os.path.join(target, name) for name in ('auxiliary', 'auxillary')]
+    if filename is not None:
+        for path in candidates:
+            if os.path.exists(os.path.join(path, filename)):
+                return path
+    for path in candidates:
+        if os.path.isdir(path):
+            return path
+    return candidates[0]
+
+
 def find_subfolder(root, subfolder):
     subfolder_paths = []
     for root, dirs, files in os.walk(root):

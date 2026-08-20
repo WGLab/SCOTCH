@@ -198,7 +198,7 @@ class CountMatrix:
                                          sample_name in self.sample_names]
             self.count_matrix_folder_path_list = [os.path.join(self.samples_folder_path, sample_name, 'count_matrix') for
                 sample_name in self.sample_names]
-            self.read_selection_pkl_path_list = [os.path.join(self.samples_folder_path, sample_name, 'auxiliary/read_selection.pkl') for sample_name in self.sample_names]
+            self.read_selection_pkl_path_list = [os.path.join(pp.resolve_auxiliary_dir(os.path.join(self.samples_folder_path, sample_name), 'read_selection.pkl'), 'read_selection.pkl') for sample_name in self.sample_names]
             self.spliced_compatible_matrix_folder_path_list = [
                 os.path.join(self.samples_folder_path, sample_name, 'spliced_compatible_matrix') for
                 sample_name in self.sample_names]
@@ -216,7 +216,7 @@ class CountMatrix:
             self.n_samples = len(target)
             self.compatible_matrix_folder_path_list = [os.path.join(target_, 'compatible_matrix') for target_ in target]
             self.count_matrix_folder_path_list = [os.path.join(target_, 'count_matrix') for target_ in target]
-            self.read_selection_pkl_path_list = [os.path.join(target_, 'auxiliary/read_selection.pkl') for target_ in target]
+            self.read_selection_pkl_path_list = [os.path.join(pp.resolve_auxiliary_dir(target_, 'read_selection.pkl'), 'read_selection.pkl') for target_ in target]
             self.spliced_compatible_matrix_folder_path_list = [os.path.join(target_, 'spliced_compatible_matrix') for target_ in target]
             self.unspliced_compatible_matrix_folder_path_list = [os.path.join(target_, 'unspliced_compatible_matrix') for target_ in target]
             self.count_matrix_spliced_folder_path_list = [os.path.join(target_, 'count_matrix', 'spliced') for target_ in target]
@@ -718,7 +718,11 @@ class CountMatrix:
         which lands here because a missing pickle rebuilds too.
         """
         import compatible as cp
-        tsv_path = os.path.join(os.path.dirname(path), 'all_read_isoform_exon_mapping.tsv')
+        # The merged TSV may sit in either auxiliary spelling; probe for the file
+        # itself rather than assuming it shares the pickle's directory.
+        target_dir = os.path.dirname(os.path.dirname(path))
+        tsv_path = os.path.join(pp.resolve_auxiliary_dir(target_dir, 'all_read_isoform_exon_mapping.tsv'),
+                                'all_read_isoform_exon_mapping.tsv')
         if not os.path.exists(tsv_path):
             self._log('error',
                       f'read_selection.pkl at {path} needs rebuilding but {tsv_path} is missing. '
@@ -1132,12 +1136,16 @@ class CountMatrix:
                 drop_by_gene[gene] = set(del_list)
 
         for target in self.target:
-            auxiliary_dir = os.path.join(target, 'auxiliary')
-            tsv_path = os.path.join(auxiliary_dir, 'all_read_isoform_exon_mapping.tsv')
+            # Input may sit in a legacy-spelled folder; the filtered output
+            # always goes to the correctly spelled 'auxiliary'.
+            tsv_path = os.path.join(pp.resolve_auxiliary_dir(target, 'all_read_isoform_exon_mapping.tsv'),
+                                    'all_read_isoform_exon_mapping.tsv')
             if not os.path.exists(tsv_path):
                 self.logger.warning(f'Read-isoform mapping TSV not found: {tsv_path}')
                 continue
 
+            auxiliary_dir = os.path.join(target, 'auxiliary')
+            os.makedirs(auxiliary_dir, exist_ok=True)
             output_path = os.path.join(auxiliary_dir,
                 f'all_read_isoform_exon_mapping_filtered_{self.novel_read_n_str}_{self.novel_read_pct_str}.tsv')
             tmp_path = output_path + '.tmp'

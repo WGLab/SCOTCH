@@ -313,85 +313,91 @@ def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False):
         else:
             print(message)
 
+    # Per-gene inputs are gathered from both the current 'auxiliary' folder and
+    # the legacy misspelled 'auxillary' folder (pre-rename runs, or job arrays
+    # that straddled the rename); merged outputs always go to 'auxiliary'.
     auxiliary_folder = os.path.join(target, 'auxiliary')
-    if not os.path.isdir(auxiliary_folder):
+    input_folders = [folder for folder in (auxiliary_folder, os.path.join(target, 'auxillary'))
+                     if os.path.isdir(folder)]
+    if not input_folders:
         log_info(f'auxiliary folder does not exist, skipping: {auxiliary_folder}')
         return
-    for auxiliary_folder in [auxiliary_folder]:
-        log_info('summarising read-isoform mapping files at: ' + str(auxiliary_folder))
-        file_paths = [os.path.join(auxiliary_folder, f) for f in os.listdir(auxiliary_folder)
-                      if is_per_gene_auxiliary_file(f)]
-        log_info(f'Found {len(file_paths)} input mapping files in {auxiliary_folder}')
-        if gene_subset is None:
-            if len(file_paths) == 0:
+    log_info('summarising read-isoform mapping files at: ' + ', '.join(input_folders))
+    file_paths = [os.path.join(folder, f) for folder in input_folders for f in os.listdir(folder)
+                  if is_per_gene_auxiliary_file(f)]
+    log_info(f'Found {len(file_paths)} input mapping files in {", ".join(input_folders)}')
+    if gene_subset is None:
+        if len(file_paths) == 0:
+            return
+        df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in file_paths)
+        DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
+        duplicated_reads = DF.loc[DF['Read'].duplicated(keep=False), 'Read'].nunique()
+        log_info(f'Loaded {len(DF)} rows from auxiliary mapping files')
+        log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
+        log_info('Starting read-selection build')
+        DF_final = build_read_selection_df(DF)
+        log_info('Completed read-selection build')
+    else:
+        subset_names = set(gene_subset)
+        candidate_file_paths = []
+        for file_path in file_paths:
+            gene_name = get_gene_name_from_auxiliary_filename(os.path.basename(file_path))
+            if gene_name is None:
                 continue
-            df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in file_paths)
-            DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
-            duplicated_reads = DF.loc[DF['Read'].duplicated(keep=False), 'Read'].nunique()
-            log_info(f'Loaded {len(DF)} rows from auxiliary mapping files')
+            if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
+                candidate_file_paths.append(file_path)
+        if len(candidate_file_paths) == 0:
+            log_info('No new per-gene TSVs found for subset; skipping auxiliary merge.')
+            return
+        existing_file_tsv = next((path for path in (os.path.join(folder, 'all_read_isoform_exon_mapping.tsv')
+                                                    for folder in input_folders) if os.path.exists(path)), None)
+        existing_df = pd.read_csv(existing_file_tsv, sep='\t') if existing_file_tsv is not None else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+        existing_df = existing_df.copy()
+        new_subset_df = (
+            pd.concat(
+                Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in candidate_file_paths),
+                axis=0,
+                ignore_index=True
+            ).reset_index(drop=True)
+            if len(candidate_file_paths) > 0 else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+        )
+        log_info(f'Loaded {len(new_subset_df)} rows from {len(candidate_file_paths)} subset mapping files')
+        old_subset_df = existing_df[existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+        affected_reads = set(old_subset_df['Read'].tolist()) | set(new_subset_df['Read'].tolist())
+        unaffected_df = existing_df[~existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+        if affected_reads:
+            unaffected_keep = unaffected_df[~unaffected_df['Read'].isin(affected_reads)].copy()
+            affected_non_subset = unaffected_df[unaffected_df['Read'].isin(affected_reads)].copy()
+            affected_df = pd.concat([affected_non_subset, new_subset_df], ignore_index=True)
+            duplicated_reads = affected_df.loc[affected_df['Read'].duplicated(keep=False), 'Read'].nunique()
             log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
             log_info('Starting read-selection build')
-            DF_final = build_read_selection_df(DF)
+            affected_final = build_read_selection_df(affected_df)
             log_info('Completed read-selection build')
+            DF_final = pd.concat([unaffected_keep, affected_final], ignore_index=True)
         else:
-            subset_names = set(gene_subset)
-            candidate_file_paths = []
-            for file_path in file_paths:
-                gene_name = get_gene_name_from_auxiliary_filename(os.path.basename(file_path))
-                if gene_name is None:
-                    continue
-                if gene_name in subset_names or gene_name.replace('.', '/') in subset_names:
-                    candidate_file_paths.append(file_path)
-            if len(candidate_file_paths) == 0:
-                log_info('No new per-gene TSVs found for subset; skipping auxiliary merge.')
-                continue
-            output_file_tsv = os.path.join(auxiliary_folder, 'all_read_isoform_exon_mapping.tsv')
-            existing_df = pd.read_csv(output_file_tsv, sep='\t') if os.path.exists(output_file_tsv) else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-            existing_df = existing_df.copy()
-            new_subset_df = (
-                pd.concat(
-                    Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in candidate_file_paths),
-                    axis=0,
-                    ignore_index=True
-                ).reset_index(drop=True)
-                if len(candidate_file_paths) > 0 else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-            )
-            log_info(f'Loaded {len(new_subset_df)} rows from {len(candidate_file_paths)} subset mapping files')
-            old_subset_df = existing_df[existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-            affected_reads = set(old_subset_df['Read'].tolist()) | set(new_subset_df['Read'].tolist())
-            unaffected_df = existing_df[~existing_df['geneName'].isin(subset_names)].copy() if not existing_df.empty else pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-            if affected_reads:
-                unaffected_keep = unaffected_df[~unaffected_df['Read'].isin(affected_reads)].copy()
-                affected_non_subset = unaffected_df[unaffected_df['Read'].isin(affected_reads)].copy()
-                affected_df = pd.concat([affected_non_subset, new_subset_df], ignore_index=True)
-                duplicated_reads = affected_df.loc[affected_df['Read'].duplicated(keep=False), 'Read'].nunique()
-                log_info(f'Found {duplicated_reads} duplicated reads requiring grouped selection')
-                log_info('Starting read-selection build')
-                affected_final = build_read_selection_df(affected_df)
-                log_info('Completed read-selection build')
-                DF_final = pd.concat([unaffected_keep, affected_final], ignore_index=True)
-            else:
-                DF_final = unaffected_df
-            file_paths = candidate_file_paths
-        if DF_final.empty:
-            DF_final = pd.DataFrame(columns=READ_MAPPING_COLUMNS)
-        # Sort key includes geneID so all rows of a gene are contiguous in the output
-        # TSV. This only affects row order: read selection / Keep is already decided
-        # upstream (build_read_selection_df) and every downstream consumer is
-        # order-independent. Gene-contiguity lets a consumer index the mapping by gene
-        # and read only the rows it needs instead of scanning the whole file.
-        DF_final = DF_final.sort_values(by=['geneChr', 'geneID', 'Read', 'priority'], ascending=[True, True, True, False]).reset_index(drop=True)
-        output_file_tsv = os.path.join(auxiliary_folder, 'all_read_isoform_exon_mapping.tsv')
-        log_info('saving read-isoform mapping file: '+str(output_file_tsv))
-        DF_final.to_csv(output_file_tsv, sep='\t', index=False)
-        log_info('removing temporary files in: '+ str(auxiliary_folder))
-        for file in file_paths:
-            os.remove(file)
-        output_file_pkl = os.path.join(auxiliary_folder, 'read_selection.pkl')
-        cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk)
-        log_info('saving read filtering file: ' + str(output_file_pkl))
-        with open(output_file_pkl, 'wb') as pickle_file:
-            pickle.dump(cbumi_keep_dict, pickle_file)
+            DF_final = unaffected_df
+        file_paths = candidate_file_paths
+    if DF_final.empty:
+        DF_final = pd.DataFrame(columns=READ_MAPPING_COLUMNS)
+    # Sort key includes geneID so all rows of a gene are contiguous in the output
+    # TSV. This only affects row order: read selection / Keep is already decided
+    # upstream (build_read_selection_df) and every downstream consumer is
+    # order-independent. Gene-contiguity lets a consumer index the mapping by gene
+    # and read only the rows it needs instead of scanning the whole file.
+    DF_final = DF_final.sort_values(by=['geneChr', 'geneID', 'Read', 'priority'], ascending=[True, True, True, False]).reset_index(drop=True)
+    os.makedirs(auxiliary_folder, exist_ok=True)
+    output_file_tsv = os.path.join(auxiliary_folder, 'all_read_isoform_exon_mapping.tsv')
+    log_info('saving read-isoform mapping file: '+str(output_file_tsv))
+    DF_final.to_csv(output_file_tsv, sep='\t', index=False)
+    log_info('removing temporary files in: ' + ', '.join(input_folders))
+    for file in file_paths:
+        os.remove(file)
+    output_file_pkl = os.path.join(auxiliary_folder, 'read_selection.pkl')
+    cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk)
+    log_info('saving read filtering file: ' + str(output_file_pkl))
+    with open(output_file_pkl, 'wb') as pickle_file:
+        pickle.dump(cbumi_keep_dict, pickle_file)
 
 
 
@@ -1116,7 +1122,9 @@ class ClassifyReadsSplice:
         self.compatible_folder = os.path.join(scotch_target, 'compatible_matrix')
         self.splice_folder = os.path.join(scotch_target, 'spliced_compatible_matrix')
         self.unsplice_folder = os.path.join(scotch_target, 'unspliced_compatible_matrix')
-        self.read_isoform_mapping_path = os.path.join(scotch_target, 'auxiliary/all_read_isoform_exon_mapping.tsv')
+        self.read_isoform_mapping_path = os.path.join(
+            resolve_auxiliary_dir(scotch_target, 'all_read_isoform_exon_mapping.tsv'),
+            'all_read_isoform_exon_mapping.tsv')
         self.mapping_df = self._read_mapping()
         self.metageneStructureInformation = load_pickle(os.path.join(scotch_target, 'reference/metageneStructureInformationwNovel.pkl'))
         self.geneStructureInformation = self._seperate_metageneInfo()
