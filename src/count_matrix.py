@@ -223,16 +223,16 @@ class CountMatrix:
             self.count_matrix_unspliced_folder_path_list = [os.path.join(target_, 'count_matrix', 'unspliced') for target_ in target]
 
     def _load_annotation_pkl(self):
-        annotation_pkl = None
-        if self.group_novel:
-            annotation_pkl = {}
-            annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
-            metagenes = list(annotation_pkl_meta.keys())
-            for metagene in metagenes:
-                multi_gene_info = annotation_pkl_meta[metagene]
-                for gene_info in multi_gene_info:
-                    genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
-                    annotation_pkl[genename] = gene_info
+        # always load: novel-isoform bookkeeping needs annotation_pkl even when
+        # novel isoforms are not grouped (--group_novel_off)
+        annotation_pkl = {}
+        annotation_pkl_meta = pp.load_pickle(self.annotation_path_meta_gene_novel)
+        metagenes = list(annotation_pkl_meta.keys())
+        for metagene in metagenes:
+            multi_gene_info = annotation_pkl_meta[metagene]
+            for gene_info in multi_gene_info:
+                genename = re.sub(r'[\/\\\:\*\?\"\<\>\|]', '.', gene_info[0]['geneName'])
+                annotation_pkl[genename] = gene_info
         self.annotation_pkl = annotation_pkl
 
     def _get_count_output_paths(self, folder_path, level, splicing=None):
