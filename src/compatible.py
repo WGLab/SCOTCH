@@ -19,6 +19,19 @@ READ_MAPPING_COLUMNS = [
 ]
 
 
+
+def fetch_reads_safe(bam, chrom, start, end):
+    """Fetch reads for a region, treating a contig absent from this BAM's header
+    as an EMPTY region instead of letting pysam raise ValueError and kill the
+    whole job. Contig-naming mismatches between the annotation pickle and the
+    BAM (e.g. CellRanger scaffold 'GL000009.2' vs UCSC
+    'chr14_GL000009v2_random') mean "this BAM has no reads here" — semantically
+    identical to a present-but-empty contig, so skipping is neutral for every
+    gene that does have reads."""
+    if chrom not in bam.references:
+        return iter(())
+    return bam.fetch(chrom, start, end)
+
 def process_group(group):
     highest_priority = group['priority'].max()
     highest_priority_rows = group[group['priority'] == highest_priority]
@@ -659,7 +672,7 @@ class ReadMapper:
             qname_sample_dict = {}
             for i, bamFilePysam in enumerate(bamFilePysams):
                 sample = 'sample' + str(i)
-                reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
+                reads = fetch_reads_safe(bamFilePysam, geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
                 for read in reads:
                     readName, readStart, readEnd = read.qname, read.qstart, read.qend
                     result = process_read(read, self.qname_dict_list[i], self.lowest_match, self.lowest_match1,
@@ -725,7 +738,7 @@ class ReadMapper:
             qname_sample_dict={}
             results = []
             for i, bamFilePysam in enumerate(bamFilePysams):
-                reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
+                reads = fetch_reads_safe(bamFilePysam, geneChr, start, end)  # fetch reads within meta gene region
                 # process reads metagene
                 for read in reads:
                     readName, readStart, readEnd = read.qname, read.qstart, read.qend
@@ -828,7 +841,7 @@ class ReadMapper:
             if self.genenames_subset is not None and geneInfo['geneName'] not in self.genenames_subset:
                 return
             n_isoforms = len(isoformInfo)
-            reads = bamFilePysam.fetch(geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
+            reads = fetch_reads_safe(bamFilePysam, geneInfo['geneChr'], geneInfo['geneStart'], geneInfo['geneEnd'])
             Read_novelIsoform = [] #[('read name',[read-exon percentage],[read-exon mapping])]
             Read_knownIsoform = [] #[('read name',[read-isoform mapping])]
             Read_knownIsoform_scores = {}
@@ -903,7 +916,7 @@ class ReadMapper:
                 if not any(geneInfo['geneName'] in self.genenames_subset for geneInfo, exonInfo, isoformInfo in Info_multigenes):
                     return
             geneChr, start, end = summarise_metagene(Info_multigenes)  # geneChr, start, end
-            reads = bamFilePysam.fetch(geneChr, start, end)  # fetch reads within meta gene region
+            reads = fetch_reads_safe(bamFilePysam, geneChr, start, end)  # fetch reads within meta gene region
             # process reads metagene
             results, samples = [], []
             for read in reads:
@@ -1167,7 +1180,7 @@ class ClassifyReadsSplice:
         read_isoform_dict = mapping_df_gene.set_index('Read')['Isoform'].to_dict()
         read_cbumi_dict = mapping_df_gene.set_index('Read')['CBUMI'].to_dict()
         reads_list = mapping_df_gene.Read.tolist()
-        reads = bam.fetch(Info_singlegene[0]['geneChr'], Info_singlegene[0]['geneStart'], Info_singlegene[0]['geneEnd'])
+        reads = fetch_reads_safe(bam, Info_singlegene[0]['geneChr'], Info_singlegene[0]['geneStart'], Info_singlegene[0]['geneEnd'])
         CBUMI_unspliced, CBUMI_spliced = [], []
         for read in reads:
             readName, readStart, readEnd = read.qname, read.qstart, read.qend
