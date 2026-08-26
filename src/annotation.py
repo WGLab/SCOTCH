@@ -1044,11 +1044,40 @@ class Annotator:
             db.close()
         self.logger.info(f'Sqlite files saved at {self.bamInfo_folder_path[i]}')
 
-    def annotation_bam(self, barcode_cell, barcode_umi, save_mem = False):
+    def _cleanup_bam_info_csv(self, i, keep_intermediate):
+        """Remove the raw bam.Info.csv once its pkl (+sqlite) conversions exist.
+        The csv is a conversion intermediate only: downstream steps read the
+        sqlite (memory-efficient default) or the pkls (legacy); nothing reads the
+        csv after conversion (the compatible-matrix csv path list was a dead
+        residual definition). Keep it with --keep_intermediate (e.g. to re-derive
+        pkls after deleting them)."""
+        if keep_intermediate:
+            return
+        csv_path = self.bamInfo_csv_path[i]
+        if not os.path.isfile(csv_path):
+            return
+        if not (os.path.isfile(self.bamInfo_pkl_path[i])
+                and os.path.getsize(self.bamInfo_pkl_path[i]) > 0
+                and os.path.isfile(self.bamInfo2_pkl_path[i])
+                and os.path.getsize(self.bamInfo2_pkl_path[i]) > 0):
+            self.logger.warning('bam.Info.csv kept: pkl conversions missing/empty')
+            return
+        try:
+            size_gb = os.path.getsize(csv_path) / 1e9
+            os.remove(csv_path)
+            self.logger.info(f'Removed conversion intermediate {csv_path} '
+                             f'({size_gb:.1f} GB freed); use --keep_intermediate to retain')
+        except OSError as exc:
+            self.logger.warning(f'Could not remove {csv_path}: {exc}')
+
+    def annotation_bam(self, barcode_cell, barcode_umi, save_mem = False,
+                       keep_intermediate = False):
         for i in range(len(self.target)):
             os.makedirs(self.bamInfo_folder_path[i], exist_ok=True)
-            if os.path.isfile(self.bamInfo_pkl_path[i]) and os.path.isfile(self.bamInfo_csv_path[i]):
-                self.logger.info(f'bam file information exist at {self.bamInfo_pkl_path[i]} and {self.bamInfo_csv_path[i]}')
+            # key on the pkl alone: the csv is an intermediate and may have been
+            # cleaned up — its absence must not disable sqlite regeneration
+            if os.path.isfile(self.bamInfo_pkl_path[i]):
+                self.logger.info(f'bam file information exist at {self.bamInfo_pkl_path[i]}')
                 # Generate sqlite files if they don't exist yet (for existing pkl users)
                 if not os.path.isfile(self.bamInfo_sqlite_path[i]):
                     self.logger.info('Generating sqlite files from existing pkl files for memory-efficient loading')
@@ -1058,6 +1087,7 @@ class Annotator:
                     self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                     del qname_dict, qname_cbumi_dict, qname_sample_dict
                     gc.collect()
+                self._cleanup_bam_info_csv(i, keep_intermediate)
             if (not os.path.isfile(self.bamInfo_pkl_path[i])) and os.path.isfile(self.bamInfo_csv_path[i]):
                 self.logger.info('Extracting bam file pickle information')
                 if save_mem:
@@ -1077,6 +1107,7 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
+                self._cleanup_bam_info_csv(i, keep_intermediate)
             if os.path.isfile(self.bamInfo_pkl_path[i]) == False and os.path.isfile(self.bamInfo_csv_path[i]) == False:
                 self.logger.info('Extracting bam file information')
                 if os.path.isfile(self.bam_path[i])==False:
@@ -1111,6 +1142,7 @@ class Annotator:
                 self._save_dicts_as_sqlite(i, qname_dict, qname_cbumi_dict, qname_sample_dict)
                 del qname_dict, qname_cbumi_dict, qname_sample_dict
                 gc.collect()
+                self._cleanup_bam_info_csv(i, keep_intermediate)
 
 
 

@@ -34,6 +34,7 @@ parser.add_argument('--min_gene_size',type=int, default=50, help="minimal length
 parser.add_argument('--barcode_cell',type=str, help="cell barcode tag in bam file")
 parser.add_argument('--barcode_umi',type=str,  help="umi barcode tag in bam file")
 parser.add_argument('--save_mem_ann', action='store_true', help="whether to use save memory mode to process in chunks")
+parser.add_argument('--keep_intermediate', action='store_true', help="keep the raw bam/bam.Info.csv after it has been converted to pkl+sqlite (default: remove it — it is a conversion intermediate that nothing reads afterwards and can be >10GB per sample)")
 parser.add_argument('--save_mem', action='store_true', default=True, help="use on-disk sqlite lookup for bam info dicts in compatible matrix step to save memory (default: True). Trades more disk space (~2-3x larger than pkl) for far less RAM usage. Sqlite files are auto-generated from pkl on first run and reused thereafter.")
 parser.add_argument('--save_mem_off', action='store_false', dest='save_mem', help="disable memory-efficient mode: load bam info dicts fully into RAM (legacy behavior). Uses less disk space but requires enough RAM to hold all bam info dicts in memory.")
 
@@ -164,9 +165,9 @@ def main():
         # bam information
         logger.info('Start processing bam file information.')
         if args.bulk:
-            annotator.annotation_bam(None, None, save_mem = args.save_mem_ann)
+            annotator.annotation_bam(None, None, save_mem = args.save_mem_ann, keep_intermediate = args.keep_intermediate)
         else:
-            annotator.annotation_bam(args.barcode_cell, args.barcode_umi, save_mem = args.save_mem_ann)
+            annotator.annotation_bam(args.barcode_cell, args.barcode_umi, save_mem = args.save_mem_ann, keep_intermediate = args.keep_intermediate)
         copy_log_to_targets(log_file, args.target)
         logger.info('Finished processing bam file information')
     def run_compatible():
