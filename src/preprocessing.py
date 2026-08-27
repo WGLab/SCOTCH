@@ -345,7 +345,8 @@ def find_novel(df_assign):
 
 
 
-def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms, exonInfo, small_exon_threshold,small_exon_threshold1):
+def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, n_isoforms, exonInfo, small_exon_threshold,small_exon_threshold1,
+                              novel_discovery_max_reads=10000, novel_discovery_max_rounds=50):
     ####generate novel isoform annotation
     if len(Read_novelIsoform)==1:
         Read_Isoform_compatibleVector.append((Read_novelIsoform[0][0], [0] * n_isoforms))
@@ -357,7 +358,8 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
         #df_pct = pd.DataFrame.from_dict(novel_dict_pct, orient='index')
         df_assign = pd.DataFrame.from_dict(novel_dict_assign, orient='index')
         #novel_df_empty： sample names of novel_uncategorized
-        novelisoform_dict, novel_df, novel_df_empty = find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1,chunk_size=1500)
+        novelisoform_dict, novel_df, novel_df_empty = find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1,chunk_size=1500,
+                                                                          max_reads=novel_discovery_max_reads, max_rounds=novel_discovery_max_rounds)
         if len(novelisoform_dict) > 0:
             read_novelisoform_tuples = [(row, col) for (row, col), value in novel_df.stack().items() if value == 1]
             for rd in novel_df_empty:
@@ -371,14 +373,24 @@ def polish_compatible_vectors(Read_novelIsoform, Read_Isoform_compatibleVector, 
     return read_novelisoform_tuples, novelisoform_dict, Read_Isoform_compatibleVector
 
 
-def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1, chunk_size=1500):
+def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_threshold1, chunk_size=1500,
+                        max_reads=10000, max_rounds=50):
+    # max_reads: cap on reads used for novel isoform DISCOVERY (all reads are still assigned to the
+    #            discovered isoforms afterwards via df_assign_archive); <=0 disables the cap
+    # max_rounds: cap on re-split rounds of the discovery loop; <=0 disables the cap
     df_assign_archive = df_assign.copy()
+    if max_reads is not None and max_reads > 0 and df_assign.shape[0] > max_reads:
+        rng = np.random.default_rng(0)
+        keep = np.sort(rng.choice(df_assign.shape[0], size=max_reads, replace=False))
+        df_assign = df_assign.iloc[keep]
+        print(f'subsampled {max_reads} of {df_assign_archive.shape[0]} novel reads for isoform discovery')
     row_count = df_assign.shape[0]
     num_chunks = max(1, np.ceil(row_count / chunk_size).astype(int))
     #df_pct_list = np.array_split(df_pct, num_chunks)
     df_assign_list = np.array_split(df_assign, num_chunks)
     novelisoform_dict_list, novel_df_list, novel_df_empty = [], [], []
     i = 0
+    rounds = 0
     print(str(len(df_assign_list)) + ' chunks in total')
     while i < len(df_assign_list):
         print('chunk ' + str(i) + ' out of ' + str(len(df_assign_list)))
@@ -397,6 +409,11 @@ def find_novel_by_chunk(df_assign, exonInfo, small_exon_threshold,small_exon_thr
                 num_chunks = max(1, np.ceil(row_count / chunk_size).astype(int))
                 #df_pct_list = np.array_split(df_pct, num_chunks)
                 df_assign_list = np.array_split(df_assign, num_chunks)
+                rounds += 1
+                if max_rounds is not None and max_rounds > 0 and rounds >= max_rounds:
+                    print(f'novel isoform discovery reached round cap ({max_rounds}), stopping discovery; '
+                          f'{row_count} remaining discovery reads will be assigned to discovered isoforms or uncategorized')
+                    break
             else:
                 i += 1
         else:

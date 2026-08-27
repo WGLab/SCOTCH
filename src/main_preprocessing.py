@@ -47,6 +47,8 @@ parser.add_argument('--truncation_match',type =float, default=0.4, help="higher 
 parser.add_argument('--match_low',type=float,default=0.1, help="the base percentage to call a read-exon unmatched")
 parser.add_argument('--match_high',type=float,default=0.6, help="the base percentage to call a read-exon matched")
 parser.add_argument('--reference_genome_fasta',type=str, help="Path to genome fasta file")
+parser.add_argument('--novel_discovery_max_reads',type=int,default=10000, help="cap on the number of reads used for novel isoform discovery per gene; all reads are still assigned to the discovered isoforms afterwards. Prevents very large (meta)genes from stalling the compatible matrix step. Set to 0 (or negative) to disable the cap")
+parser.add_argument('--novel_discovery_max_rounds',type=int,default=50, help="cap on re-clustering rounds during novel isoform discovery per gene. Prevents very large (meta)genes from stalling the compatible matrix step. Set to 0 (or negative) to disable the cap")
 
 #task is compatible matrix splicing
 parser.add_argument('--unsplice_threshold',type=int, default=15, help="threshold for deciding unspliced reads")
@@ -180,6 +182,7 @@ def main():
         logger.info(f'Small exon threshold (low): {args.small_exon_threshold}. Job: {args.job_index}')
         logger.info(f'Small exon threshold (high): min(average exon length, {args.small_exon_threshold_high}). Job: {args.job_index}')
         logger.info(f'Truncation match: {args.truncation_match} or 100bps. Job: {args.job_index}')
+        logger.info(f'Novel discovery caps: max_reads={args.novel_discovery_max_reads}, max_rounds={args.novel_discovery_max_rounds} (0 = uncapped). Job: {args.job_index}')
         logger.info(f'Platform: {args.platform}. Job: {args.job_index}')
         logger.info(f'Reference GTF Path: {args.reference}. Job: {args.job_index}')
         logger.info(f'Reference genome Path: {args.reference_genome_fasta}. Job: {args.job_index}')
@@ -199,7 +202,9 @@ def main():
                                    bulk=args.bulk,
                                    ref_fasta_path=args.reference_genome_fasta,
                                    genenames_subset=gene_subset,
-                                   save_mem=args.save_mem)
+                                   save_mem=args.save_mem,
+                                   novel_discovery_max_reads=args.novel_discovery_max_reads,
+                                   novel_discovery_max_rounds=args.novel_discovery_max_rounds)
         readmapper.map_reads_allgenes(total_jobs=args.total_jobs,current_job_index=args.job_index)
         logger.info(f'saving annotations with identified novel isoforms  Job: {args.job_index}')
         readmapper.save_annotation_w_novel_isoform(total_jobs=args.total_jobs,current_job_index=args.job_index)

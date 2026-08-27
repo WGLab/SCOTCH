@@ -106,7 +106,7 @@ python3 src/main_preprocessing.py \
 
 ### Step2: generate compatible matrix
 
-In this step, SCOTCH aligns reads to existing gene isoforms and identifies novel isoforms based on the annotation files generated in step 1. Set `--task 'compatible matrix'` to run this step. A compatibility matrix is generated for each gene, where each row represents a read and each column represents a gene isoform. Detailed information on read-isoform mappings can be found in the `auxiliary` folder. To speed up this step, job arrays can be submitted in SLURM to process genes in parallel. An example implementation for 100 job arrays is provided in `example/compatible.sh`.
+In this step, SCOTCH aligns reads to existing gene isoforms and identifies novel isoforms based on the annotation files generated in step 1. Set `--task 'compatible matrix'` to run this step. A compatibility matrix is generated for each gene, where each row represents a read and each column represents a gene isoform. Detailed information on read-isoform mappings can be found in the `auxiliary` folder. To speed up this step, job arrays can be submitted in SLURM to process genes in parallel. An example implementation for 100 job arrays is provided in `example/compatible.sh`. For extremely large or highly-expressed genes, novel isoform discovery is capped by `--novel_discovery_max_reads` and `--novel_discovery_max_rounds` to keep runtime bounded; increase them (or set to 0) for exhaustive discovery.
 
 - `--target`: the same with step1
 - `--bam` the same with step1
@@ -117,6 +117,8 @@ In this step, SCOTCH aligns reads to existing gene isoforms and identifies novel
 - `--small_exon_threshold`: dynamic exon length threshold to ignore for includsion and exclusion, default is 0.
 - `--small_exon_threshold_high`: the upper bound of dynamic exon length threshold to ignore for includsion and exclusion, default is 80.
 - `--truncation_match`: higher than this threshold at the truncation end will be adjusted to 1, default is 0.4.
+- `--novel_discovery_max_reads`: maximum number of reads used for novel isoform discovery per gene, default is 10000. This only caps the discovery stage — all reads are still assigned to the discovered isoforms afterwards, so no read is dropped. Prevents extremely large or highly-expressed (meta)genes from stalling this step. Set to 0 to disable.
+- `--novel_discovery_max_rounds`: maximum number of re-clustering rounds during novel isoform discovery per gene, default is 50. Set to 0 to disable.
 - `--total_jobs`: the number of batches to split genes and run in parallel, default is 1
 - `--job_index`: the batch/job index current task to run, default is 0
 - `--gene_subset`: optional, restrict processing to a subset of genes (see [Gene Subset Mode](#gene-subset-mode))

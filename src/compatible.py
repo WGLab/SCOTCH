@@ -422,7 +422,7 @@ class ReadMapper:
     def __init__(self, target:list, bam_path:list, lowest_match=0.2, lowest_match1 = 0.6, small_exon_threshold = 0,
                  small_exon_threshold1=80, truncation_match=0.4, platform = '10x-ont',
                  reference_gtf_path = None, ref_fasta_path = None, logger = None, barcode_umi = None, genenames_subset = None,
-                 save_mem = True, bulk = False):
+                 save_mem = True, bulk = False, novel_discovery_max_reads = 10000, novel_discovery_max_rounds = 50):
         self.logger = logger
         self.target = target
         self.bam_path = bam_path
@@ -456,6 +456,8 @@ class ReadMapper:
         self.truncation_match = truncation_match
         self.lowest_match = lowest_match
         self.lowest_match1 = lowest_match1
+        self.novel_discovery_max_reads = novel_discovery_max_reads
+        self.novel_discovery_max_rounds = novel_discovery_max_rounds
         self.platform = platform
         self.parse = self.platform == 'parse-ont'
         self.pacbio = self.platform == '10x-pacbio'
@@ -693,7 +695,8 @@ class ReadMapper:
             if len(Read_novelIsoform) > 0:
                 #novel_isoformInfo_polished: novel isoform annotation: {'novelIsoform_7':[0,1,2]}
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
-                    Read_novelIsoform, Read_knownIsoform, n_isoforms, exonInfo, self.small_exon_threshold, self.small_exon_threshold1)
+                    Read_novelIsoform, Read_knownIsoform, n_isoforms, exonInfo, self.small_exon_threshold, self.small_exon_threshold1,
+                    self.novel_discovery_max_reads, self.novel_discovery_max_rounds)
             else:
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
             #compile output into compatible matrix
@@ -788,7 +791,8 @@ class ReadMapper:
                 if len(Read_novelIsoform) > 0:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                         Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]),
-                    Info_multigenes[index][1], self.small_exon_threshold, self.small_exon_threshold1)
+                    Info_multigenes[index][1], self.small_exon_threshold, self.small_exon_threshold1,
+                    self.novel_discovery_max_reads, self.novel_discovery_max_rounds)
                 else:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
                     Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
@@ -866,7 +870,7 @@ class ReadMapper:
                 # novel_isoformInfo_polished: novel isoform annotation: {'novelIsoform_7':[0,1,2]}
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                     Read_novelIsoform, Read_knownIsoform, n_isoforms, exonInfo, self.small_exon_threshold,
-                    self.small_exon_threshold1)
+                    self.small_exon_threshold1, self.novel_discovery_max_reads, self.novel_discovery_max_rounds)
             else:
                 Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
                 Read_novelIsoform, novel_isoformInfo,
@@ -970,7 +974,8 @@ class ReadMapper:
                 if len(Read_novelIsoform) > 0:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = polish_compatible_vectors(
                         Read_novelIsoform, Read_knownIsoform, len(Info_multigenes[index][2]),
-                        Info_multigenes[index][1], self.small_exon_threshold, self.small_exon_threshold1)
+                        Info_multigenes[index][1], self.small_exon_threshold, self.small_exon_threshold1,
+                        self.novel_discovery_max_reads, self.novel_discovery_max_rounds)
                 else:
                     Read_novelIsoform_polished, novel_isoformInfo_polished, Read_knownIsoform_polished = (
                         Read_novelIsoform, novel_isoformInfo, Read_knownIsoform)
