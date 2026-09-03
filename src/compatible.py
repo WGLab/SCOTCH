@@ -59,10 +59,20 @@ def prepare_read_selection_df(df):
     # else came from the supplied annotation. Testing for 'ENST' silently demoted
     # every non-Ensembl transcript ID to the 'uncategorized' priority.
     isoform = df['Isoform'].astype('string')
+    # Materialized to plain numpy bool BEFORE np.select. The pandas nullable
+    # 'string' dtype makes these conditions nullable-'boolean' Series, and what
+    # np.asarray turns THOSE into depends on the pandas major version: object
+    # under pandas 1.x, bool under >=2. numpy's select rejects object condlists
+    # ("invalid entry 0 in condlist: should be boolean ndarray"), so on any
+    # pandas-1.x install the summary stage died here on every dataset
+    # (reported by a user 2026-09-03, reproduced on pandas 1.5.3 / numpy
+    # 1.23.5; invisible on our own pandas>=2 environments). Each condition is
+    # NA-free by construction (na=False / fillna(False) / isna()), so the
+    # explicit bool conversion is exact on every pandas version.
     conditions = [
-        isoform.str.startswith('novel', na=False),
-        isoform.eq('uncategorized').fillna(False),
-        isoform.isna()
+        isoform.str.startswith('novel', na=False).to_numpy(dtype=bool),
+        isoform.eq('uncategorized').fillna(False).to_numpy(dtype=bool),
+        isoform.isna().to_numpy(dtype=bool),
     ]
     choices = [2, 3, 3]
     df['priority'] = np.select(conditions, choices, default=1)
