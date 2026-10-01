@@ -111,7 +111,7 @@ def build_read_selection_df(df):
     return df.reset_index(drop=True)
 
 
-def build_read_selection_mapping(df, bulk=False):
+def build_read_selection_mapping(df, bulk=False, platform=None):
     """Map each read to the (gene, isoform) picked for it by MappingScore.
 
     Rows with Keep == 1 are the winners chosen in build_read_selection_df. Keying
@@ -128,6 +128,14 @@ def build_read_selection_mapping(df, bulk=False):
     For bulk the key is rebuilt from Read rather than CBUMI: bulk CBUMI is
     read-name + '_NA', and TSVs written before the CBUMI fix have a truncated
     CBUMI column whenever the read name itself contains an underscore.
+
+    On 10x-pacbio the Read column is NOT the BAM read name: the compatible
+    step appends '_<aligned length>' to every PacBio read name (preprocessing
+    process_read / process_read_metagene) so that segmented reads sharing a
+    name stay distinct, while the compatible-matrix row name is still built
+    from the bare BAM name ('<name>_NA'). That suffix must come off before
+    '_NA' goes on, or no key matches any row and the count step filters every
+    read out (GitHub issue #20).
     """
     if df is None or len(df) == 0 or 'Keep' not in df.columns:
         return {}
@@ -135,7 +143,12 @@ def build_read_selection_mapping(df, bulk=False):
     if kept.empty:
         return {}
     if bulk:
-        keys = kept['Read'].astype(str) + '_NA'
+        reads = kept['Read'].astype(str)
+        if platform == '10x-pacbio':
+            # '-?' : pysam reports a negative span for a fully soft-clipped
+            # record (qstart > qend), and the suffix must still come off.
+            reads = reads.str.replace(r'_-?\d+$', '', regex=True)
+        keys = reads + '_NA'
     else:
         keys = kept['CBUMI'].astype(str)
     genes = (kept['geneName'].astype(str).str.replace('/', '.', regex=False)
@@ -329,7 +342,7 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                    f'{os.path.basename(output_pkl)} exists. Run the compatible matrix step first.')
             (logger.warning if logger is not None else print)(msg)
 
-def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False):
+def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False, platform=None):
     def log_info(message):
         if logger is not None:
             logger.info(message)
@@ -417,7 +430,7 @@ def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False):
     for file in file_paths:
         os.remove(file)
     output_file_pkl = os.path.join(auxiliary_folder, 'read_selection.pkl')
-    cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk)
+    cbumi_keep_dict = build_read_selection_mapping(DF_final, bulk=bulk, platform=platform)
     log_info('saving read filtering file: ' + str(output_file_pkl))
     with open(output_file_pkl, 'wb') as pickle_file:
         pickle.dump(cbumi_keep_dict, pickle_file)

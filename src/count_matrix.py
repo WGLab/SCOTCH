@@ -730,7 +730,7 @@ class CountMatrix:
             raise FileNotFoundError(tsv_path)
         self._log('info', f'Upgrading legacy read_selection.pkl using {tsv_path}')
         df = pd.read_csv(tsv_path, sep='\t')
-        mapping = cp.build_read_selection_mapping(df, bulk=self.bulk)
+        mapping = cp.build_read_selection_mapping(df, bulk=self.bulk, platform=self.platform)
         # Write-then-rename: an interrupted write must not leave a truncated pickle
         # in place of a file that was still usable.
         tmp_path = path + '.tmp'
