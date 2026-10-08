@@ -957,7 +957,9 @@ class Annotator:
         build: parse parameter
         """
         self.logger = logger
-        self.multiple_bam = True if len(bam_path)>1 else False
+        # --bam is optional for the annotation task: with none, only the gene
+        # structure pickles are built from the GTF (no BAM scan, no GTF update)
+        self.multiple_bam = bool(bam_path) and len(bam_path) > 1
         self.multiple_samples = True if len(target)>1 else False
         self.workers = workers
         self.target = target

@@ -161,9 +161,19 @@ def main():
                                     z_score_threshold=args.z_score_threshold,
                                     min_gene_size=args.min_gene_size, build=args.build, platform=args.platform,
                                     logger=logger)
+        if not args.bam and args.update_gtf:
+            raise SystemExit('--update_gtf needs --bam; to build the annotation pickles from the GTF alone, '
+                             'pass --update_gtf_off and no --bam')
         # generate gene annotation
         logger.info('Start generating gene annotation.')
         annotator.annotate_genes()
+        if not args.bam:
+            # annotation-only run: the pickles are built from the GTF; the BAM read
+            # index (bam/bam.Info.*) belongs to a later run that supplies --bam
+            logger.info('No --bam given: annotation pickles built from the GTF only; '
+                        'skipping bam file information (run the compatible matrix step with --bam later).')
+            copy_log_to_targets(log_file, args.target)
+            return
         # bam information
         logger.info('Start processing bam file information.')
         if args.bulk:
