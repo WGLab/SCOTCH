@@ -96,6 +96,22 @@ def load_pickle(file):
     return data
 
 
+class BulkReadIdentity:
+    """Stand-in for the per-read index of a bulk sample. Bulk reads carry no cell
+    barcode or UMI, so the annotation step used to record every read as its own
+    cell ('<read name>' / '<read name>_NA') and the representative of its group
+    as itself; the tables were identity maps over tens of millions of reads.
+    They are no longer built; this object answers the same lookups."""
+    def __init__(self, suffix=''):
+        self.suffix = suffix
+    def __getitem__(self, key):
+        return f'{key}{self.suffix}'
+    def get(self, key, default=None):
+        return f'{key}{self.suffix}'
+    def __contains__(self, key):
+        return True
+
+
 class SqliteDict:
     """Read-only or write-once on-disk key-value store backed by sqlite3.
     Provides dict[key] interface for point lookups without loading into RAM."""

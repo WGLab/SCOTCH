@@ -544,6 +544,11 @@ class ReadMapper:
                 return load_pickle(pkl_path)
             if optional:
                 return None
+            if self.bulk and not self.parse and not self.pacbio and not os.path.isfile(sqlite_path):
+                # bulk: the annotation step no longer writes the identity index
+                if self.logger:
+                    self.logger.info(f'Bulk sample: {label} answered by identity (read name is the cell), no index file needed')
+                return BulkReadIdentity('_NA' if label == 'bam info2' else '')
             if self.logger:
                 self.logger.warning(f'Neither sqlite nor pkl files found for {label} at {os.path.dirname(pkl_path)}')
             return load_pickle(pkl_path)

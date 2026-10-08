@@ -1075,6 +1075,12 @@ class Annotator:
     def annotation_bam(self, barcode_cell, barcode_umi, save_mem = False,
                        keep_intermediate = False):
         for i in range(len(self.target)):
+            if barcode_cell is None and barcode_umi is None and not self.parse and not self.pacbio:
+                # bulk: no barcode or UMI, every read is its own group and its own
+                # representative, so the per-read index is the identity map and is
+                # not built (the compatible matrix step answers the lookups directly)
+                self.logger.info(f'Bulk sample {self.bam_path[i]}: read index not needed, BAM not scanned here')
+                continue
             os.makedirs(self.bamInfo_folder_path[i], exist_ok=True)
             # key on the pkl alone: the csv is an intermediate and may have been
             # cleaned up — its absence must not disable sqlite regeneration
@@ -1124,13 +1130,15 @@ class Annotator:
                 if bam_info is None:
                     self.logger.warning(f'No bam info extracted for {self.bam_path[i]}, skipping')
                     continue
-                bam_info.to_csv(self.bamInfo_csv_path[i])
                 self.logger.info('Generating bam file pickle information')
                 if save_mem:
+                    # the chunked builder reads the table back from disk
+                    bam_info.to_csv(self.bamInfo_csv_path[i])
                     del bam_info
                     gc.collect()
                     qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict_mem(self.bamInfo_csv_path[i], self.parse)
                 else:
+                    # in-memory builder: the csv round trip was never read back
                     qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict(bam_info, self.parse)
                     del bam_info
                     gc.collect()
