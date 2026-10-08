@@ -549,9 +549,13 @@ class ReadMapper:
                 if self.logger:
                     self.logger.info(f'Bulk sample: {label} answered by identity (read name is the cell), no index file needed')
                 return BulkReadIdentity('_NA' if label == 'bam info2' else '')
-            if self.logger:
-                self.logger.warning(f'Neither sqlite nor pkl files found for {label} at {os.path.dirname(pkl_path)}')
-            return load_pickle(pkl_path)
+            # single-cell (or parse / pacbio): without the index the reads could not be
+            # assigned to cells or deduplicated by UMI, and the run used to carry on
+            # silently with Cell/Umi = '.'; stop instead
+            raise SystemExit(
+                f'{label} not found at {os.path.dirname(pkl_path)} (neither sqlite nor pkl). The read index is '
+                f'built by the annotation step from the BAM: run `--task annotation` with --bam for this sample '
+                f'(the no-BAM annotation run only builds the gene structure pickles) before the compatible matrix step.')
 
         qname_dict_list = []
         qname_cbumi_dict_list = []

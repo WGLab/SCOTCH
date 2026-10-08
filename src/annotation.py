@@ -1131,9 +1131,11 @@ class Annotator:
                     self.logger.warning(f'No bam info extracted for {self.bam_path[i]}, skipping')
                     continue
                 self.logger.info('Generating bam file pickle information')
-                if save_mem:
-                    # the chunked builder reads the table back from disk
+                if save_mem or keep_intermediate:
+                    # the chunked builder reads the table back from disk; with
+                    # --keep_intermediate the csv is kept for the user either way
                     bam_info.to_csv(self.bamInfo_csv_path[i])
+                if save_mem:
                     del bam_info
                     gc.collect()
                     qname_dict, qname_cbumi_dict, qname_sample_dict = bam_info_to_dict_mem(self.bamInfo_csv_path[i], self.parse)
