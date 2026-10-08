@@ -76,6 +76,8 @@ SCOTCH offers three modes for generating gene annotations:
 2. **Enhanced-Annotation Mode**: SCOTCH can use BAM files from one or multiple samples to update and refine existing gene annotations. This mode allows for the discovery of de novo (sub)exons with more types of novel isoforms than annotation-only mode. Set `--reference` as path to gene annotation .gtf file. To save time, users can also set `--reference_pkl` as the path to SCOTCH generated annotation based on given gtf file. SCOTCH has pre-computated this file based on [this](https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz) (human hg38) provided by 10X genome. In addition, set `--update_gtf`.
 3. **Annotation-Free Mode**: SCOTCH can generate gene and isoform annotations based solely on BAM files, allowing for the discovery of novel genes and isoforms. Set `--reference None` and `--reference_pkl None`. 
 
+To build the annotation pickles from a GTF alone (no reads involved), run the annotation task with `--update_gtf_off` and without `--bam`: SCOTCH writes `reference/geneStructureInformation.pkl` and `reference/metageneStructureInformation.pkl` under `--target` and skips the BAM scan. The pickles depend only on the GTF, so build them once and reuse them for every sample via `--reference_pkl`; the BAM scan then happens in the compatible matrix step.
+
 #### arguments
 - `--bam`: path(s) to the bam file(s)/folder(s)
 - `--workers`: number of threads for parallel computing.
