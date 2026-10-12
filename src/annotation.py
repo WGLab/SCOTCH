@@ -853,7 +853,13 @@ def extract_annotation_info(refGeneFile_gtf_path, refGeneFile_pkl_path, bamfile_
         Genes = list(zip(genes.iloc[:, 3].tolist(), genes.iloc[:, 4].tolist()))  # id, name
         #generate single gene annotations if not existing
         if os.path.isfile(output) == False:
-            geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes, exons, build) for geneID, geneName in Genes)
+            # split the tables by gene once and hand each task only its own rows:
+            # passing the whole genes/exons tables re-pickled them for every task
+            # and re-scanned them per gene (24h+ on a full GENCODE GTF)
+            genes_by_id = dict(tuple(genes.groupby(genes.columns[3], sort=False)))
+            exons_by_id = dict(tuple(exons.groupby(exons.columns[3], sort=False)))
+            no_exons = exons.iloc[:0]
+            geneStructureInformation = Parallel(n_jobs=num_cores)(delayed(process_gene)(geneID, geneName, genes_by_id[geneID], exons_by_id.get(geneID, no_exons), build) for geneID, geneName in Genes)
             geneStructureInformation = dict(geneStructureInformation)
             geneStructureInformation = add_build(geneStructureInformation, build)
             logger.info('finish generating geneStructureInformation.pkl')
