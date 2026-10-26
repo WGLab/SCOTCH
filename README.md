@@ -143,6 +143,8 @@ python3 src/main_preprocessing.py \
 ```
 
 ### Step4: generate count matrix
+In the updated GTF, novel transcripts use a gene-qualified `transcript_id` (for example, `ENSG00000012048_novelIsoform_7`) so different genes do not share the same transcript ID. The additional `scotch_transcript_id "novelIsoform_7"` attribute retains the internal isoform name used in SCOTCH matrices, mapping tables, and annotation pickles. Match internal outputs using the gene ID together with this attribute. SCOTCH's GTF readers prefer `scotch_transcript_id` and fall back to `transcript_id` for older GTFs and standard reference annotations. Known transcript IDs are preserved.
+
 Finally, SCOTCH will generate gene- and isoform-level count matrix. Set `--task 'count matrix'` to run this step. See `example/count.sh` for an implementation in SLURM.
 
 - `--target`: the same with step1

@@ -10,6 +10,7 @@ import math
 import copy
 from joblib import Parallel, delayed
 import shutil
+from gtf_utils import get_scotch_transcript_id, transcript_attributes, qualify_novel_transcript
 
 
 READ_MAPPING_COLUMNS = [
@@ -207,6 +208,8 @@ def get_gene_ids_from_metagene_dict(metagene_dict):
 def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None, num_cores=1):
     def update_annotation_gene(geneID, gtf_df, geneStructureInformationwNovel):
         gtf_df_sub = gtf_df[gtf_df['attribute'].str.contains(f'gene_id "{geneID}"', regex=False)].reset_index(drop=True)
+        gtf_df_sub['attribute'] = gtf_df_sub['attribute'].apply(qualify_novel_transcript)
+        existing_isoforms = set(gtf_df_sub['attribute'].apply(get_scotch_transcript_id).dropna())
         geneInfo, exonInfo, isoformInfo = geneStructureInformationwNovel[geneID]
         if gtf_df_sub.shape[0] > 0:
             new_row_gene = []
@@ -217,10 +220,13 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
         for isoform_name, exon_indices in isoformInfo.items():
             isoform_start = exonInfo[exon_indices[0]][0]
             isoform_end = exonInfo[exon_indices[-1]][1]
-            if gtf_df_sub[gtf_df_sub['attribute'].str.contains(f'transcript_id "{isoform_name}"', regex=False)].shape[0] == 0:
+            if isoform_name not in existing_isoforms:
+                attributes = (f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; '
+                              + transcript_attributes(geneID, isoform_name,
+                                                      novel=isoform_name.startswith('novelIsoform_')))
                 new_rows_isoform = [geneInfo['geneChr'], 'SCOTCH', 'transcript', isoform_start+1, isoform_end, '.',
                                     geneInfo['geneStrand'], '.',
-                                    f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id "{isoform_name}"; transcript_name "{isoform_name}"']
+                                    attributes]
                 new_rows_isoforms.append(new_rows_isoform)
                 exons_isoform = []
                 for exon_index in exon_indices:
@@ -229,7 +235,7 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
                 for exon_num, (exon_start, exon_end) in enumerate(merged_exons_isoform, start=1):
                     new_rows_exon = [geneInfo['geneChr'], 'SCOTCH', 'exon', exon_start+1, exon_end, '.',
                                      geneInfo['geneStrand'], '.',
-                                     f'gene_id "{geneID}"; gene_name "{geneInfo["geneName"]}"; transcript_id "{isoform_name}"; transcript_name "{isoform_name}"; exon_number "{exon_num}"']
+                                     attributes + f'; exon_number "{exon_num}"']
                     new_rows_isoforms.append(new_rows_exon)
         new_row = new_row_gene + new_rows_isoforms
         gtf_df_sub_new = pd.DataFrame(new_row, columns=column_names)

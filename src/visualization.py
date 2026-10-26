@@ -9,8 +9,7 @@ import subprocess
 import warnings
 from collections import defaultdict
 from scipy.io import mmread
-
-_TRANSCRIPT_ID_RE = re.compile(r'transcript_id "([^"]+)"')
+from gtf_utils import get_scotch_transcript_id
 
 
 # ---------------------------------------------------------------------------
@@ -18,9 +17,8 @@ _TRANSCRIPT_ID_RE = re.compile(r'transcript_id "([^"]+)"')
 # ---------------------------------------------------------------------------
 
 def _extract_tid(attr_str):
-    """Return transcript_id from a GTF attribute string, if present."""
-    match = _TRANSCRIPT_ID_RE.search(attr_str)
-    return match.group(1) if match else None
+    """Return the internal isoform ID used by the count matrix."""
+    return get_scotch_transcript_id(attr_str)
 
 
 def _extract_isoform_from_var(col_name, gene_name):

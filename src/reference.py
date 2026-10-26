@@ -1,6 +1,7 @@
 import pandas as pd
 import csv
 import os
+from gtf_utils import get_gtf_attribute
 
 def read_top(path, N):
     header = []
@@ -17,6 +18,7 @@ def read_top(path, N):
 
 
 def parse_info(x: str,sep=';',inner_sep = ' ')->dict:
+    scotch_id = get_gtf_attribute(x, 'scotch_transcript_id')
     x=x.split(sep)
     x = [x_ for x_ in x if x_!='']
     out = []
@@ -30,6 +32,8 @@ def parse_info(x: str,sep=';',inner_sep = ' ')->dict:
     if 'gene_type' not in attributes and 'gene_biotype' in attributes:
         attributes['gene_type'] = attributes['gene_biotype']
     attributes.pop('gene_biotype', None)
+    if scotch_id:
+        attributes['transcript_id'] = scotch_id
     return attributes
 
 def lines2df(lines: list, sep=';',inner_sep = ' ', parse = True):

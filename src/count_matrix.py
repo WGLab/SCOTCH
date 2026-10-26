@@ -12,6 +12,7 @@ import sys
 from scipy.io import mmwrite, mmread
 from preprocessing import load_pickle, split_gene_filename
 import shutil
+from gtf_utils import get_gtf_attribute, get_scotch_transcript_id
 
 SCOTCH_ASSIGNED_READ_TYPES = ('uncategorized', 'intronReads')
 
@@ -1092,10 +1093,7 @@ class CountMatrix:
                     adata_transcript_unfiltered_df.to_csv(output_transcript_unfiltered)
 
     def _extract_attribute(self, attributes, attribute_name):
-        try:
-            return attributes.split(f'{attribute_name} "')[1].split('"')[0]
-        except IndexError:
-            return None
+        return get_gtf_attribute(attributes, attribute_name)
     def filter_gtf(self):
         self.logger.info('updating gtf annotation file')
         for target in self.target:
@@ -1109,7 +1107,7 @@ class CountMatrix:
                     columns = line.split("\t")
                     attributes = columns[8]
                     gene_name = self._extract_attribute(attributes, 'gene_name')
-                    transcript_id = self._extract_attribute(attributes, 'transcript_id')
+                    transcript_id = get_scotch_transcript_id(attributes)
                     if gene_name in self.novel_isoform_del_dict and transcript_id in self.novel_isoform_del_dict[gene_name]:
                         continue
                     outfile.write(line)

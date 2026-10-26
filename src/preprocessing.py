@@ -10,6 +10,7 @@ import networkx as nx
 import community.community_louvain as community_louvain
 from collections import defaultdict
 from itertools import islice
+from gtf_utils import get_scotch_transcript_id, transcript_attributes
 
 #bam="/scr1/users/xu3/singlecell/project_singlecell/sample8_R10/bam/sample8_R10.filtered.bam"
 #gene_pkl="/scr1/users/xu3/singlecell/project_singlecell/M4/reference/geneStructureInformation.pkl"
@@ -530,11 +531,7 @@ def generate_gene_annotation_novel_isoform(geneID, isoformID, geneStructureInfor
                                  only_this_gene=True, filter_existing=filter_existing)
 
 def get_transcript_id(attribute):
-    parts = attribute.split(';')
-    transcript_name_part = next((part for part in parts if 'transcript_id' in part), None)
-    if transcript_name_part:
-        return transcript_name_part.split('"')[1]
-    return None
+    return get_scotch_transcript_id(attribute)
 
 def add_novel_isoform_to_gtf(gtf_path, gene_id, gene_name, novel_dict_list, output_gtf_path,
                              only_this_gene=False, filter_existing=None):
@@ -562,11 +559,12 @@ def add_novel_isoform_to_gtf(gtf_path, gene_id, gene_name, novel_dict_list, outp
                 new_entry['start'] = start
                 new_entry['end'] = end
                 new_entry[
-                    'attribute'] = f'gene_id "{gene_id}"; transcript_id "{new_transcript_id}"; gene_name "{gene_name}"; '
-                gtf_data = gtf_data.append(new_entry, ignore_index=True)
+                    'attribute'] = (f'gene_id "{gene_id}"; gene_name "{gene_name}"; '
+                                    + transcript_attributes(gene_id, new_transcript_id, novel=True) + ';')
+                gtf_data = pd.concat([gtf_data, new_entry.to_frame().T], ignore_index=True)
             new_entry['feature'] = 'transcript'
             new_entry['start'] = novel_exon_annotation[0][0]
-            gtf_data = gtf_data.append(new_entry, ignore_index=True)
+            gtf_data = pd.concat([gtf_data, new_entry.to_frame().T], ignore_index=True)
     # Write the updated DataFrame to a new GTF file
     gtf_data.to_csv(output_gtf_path, sep='\t', index=False, header=False, quoting=3)
 
