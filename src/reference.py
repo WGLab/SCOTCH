@@ -22,10 +22,15 @@ def parse_info(x: str,sep=';',inner_sep = ' ')->dict:
     out = []
     for i in x:
         pair = [p for p in i.split(inner_sep) if p!='']
-        if len(pair)==2 and (pair[0] in ['gene_name','gene_id','transcript_id','gene_type']):
+        if len(pair)==2 and (pair[0] in ['gene_name','gene_id','transcript_id','gene_type','gene_biotype']):
             pair = (pair[0],pair[1].replace('\"',''))
             out.append(pair)
-    return dict(out)
+    attributes = dict(out)
+    # Ensembl uses gene_biotype for the field GENCODE calls gene_type.
+    if 'gene_type' not in attributes and 'gene_biotype' in attributes:
+        attributes['gene_type'] = attributes['gene_biotype']
+    attributes.pop('gene_biotype', None)
+    return attributes
 
 def lines2df(lines: list, sep=';',inner_sep = ' ', parse = True):
     df = pd.DataFrame(lines)
@@ -70,7 +75,12 @@ def generate_reference_df(gtf_path):
     outdir = os.path.dirname(gtf_path)
     _, _, df = read_gtf(gtf_path, None, ['gene', 'exon'])
     df = df.dropna(axis=0, subset=['gene_name']).reset_index(drop=True)
-    df.columns = ['CHR', 'SOURCE', 'TYPE', 'START', 'END', '.', 'STRAND', '.', 'gene_id','gene_type','gene_name',  'transcript_id']
+    # Attribute columns already carry their GTF keys; their order can vary.
+    # Rename only the eight fixed GTF fields to preserve attribute identities.
+    df = df.rename(columns={
+        0: 'CHR', 1: 'SOURCE', 2: 'TYPE', 3: 'START',
+        4: 'END', 5: 'SCORE', 6: 'STRAND', 7: 'FRAME',
+    })
     df_gene = df[df.iloc[:, 2] == "gene"].loc[:, ['CHR', 'START', 'END', 'gene_id','gene_name', 'gene_type','STRAND']].reset_index(
         drop=True)
     df_exon = df[df.iloc[:, 2] == "exon"].loc[:, ['CHR', 'START', 'END','gene_id', 'gene_name', 'transcript_id']].reset_index(
