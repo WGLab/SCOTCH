@@ -343,6 +343,20 @@ def summarise_annotation(target,logger=None, gene_subset=None):
             (logger.warning if logger is not None else print)(msg)
 
 def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False, platform=None):
+    """Summarise Parse mappings separately for each sample under the target."""
+    samples_folder = os.path.join(target, 'samples')
+    if platform == 'parse-ont' and os.path.isdir(samples_folder):
+        for sample_name in sorted(os.listdir(samples_folder)):
+            sample_target = os.path.join(samples_folder, sample_name)
+            if os.path.isdir(sample_target):
+                _summarise_auxiliary_sample(sample_target, gene_subset=gene_subset,
+                                            logger=logger, bulk=bulk, platform=platform)
+        return
+    _summarise_auxiliary_sample(target, gene_subset=gene_subset, logger=logger,
+                                bulk=bulk, platform=platform)
+
+
+def _summarise_auxiliary_sample(target, gene_subset=None, logger=None, bulk=False, platform=None):
     def log_info(message):
         if logger is not None:
             logger.info(message)
