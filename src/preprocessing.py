@@ -731,7 +731,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.2,lowest_match1=
     df_intron = df[df['nMapExons'] == 0].reset_index(drop=True)
     if df_exon.shape[0] == 0 and df_intron.shape[0] > 0:
         df_intron = df_intron.sort_values(by=['readCoverage'], ascending=[False])
-        ind = df_intron['index'][0]
+        ind = df_intron['index'].iloc[0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read,
                                                                                         Info_multigenes[ind],
                                                                                         lowest_match,  lowest_match1, small_exon_threshold, small_exon_threshold1, truncation_match,
@@ -760,7 +760,7 @@ def choose_gene_from_meta(read, Info_multigenes, lowest_match=0.2,lowest_match1=
             df_exon['readType'] = readType
             df_exon = df_exon.sort_values(by=['readType', 'nMapExons', 'readCoverage', 'geneLength'],
                                           ascending=[True, False, False, False])
-            ind = df_exon['index'][0]
+            ind = df_exon['index'].iloc[0]
             read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = read_novelisoform_tuple_dict[ind], \
             read_isoform_compatibleVector_tuple_dict[ind], read_mapping_scores_dict[ind]
         else:  # map to only one gene exon
@@ -795,7 +795,7 @@ def choose_gene_from_meta_parse(read, Info_multigenes, lowest_match=0.2, lowest_
     df_intron = df[df['nMapExons'] == 0].reset_index(drop=True)
     if df_exon.shape[0] == 0 and df_intron.shape[0] > 0:
         df_intron = df_intron.sort_values(by=['readCoverage'], ascending=[False])
-        ind = df_intron['index'][0]
+        ind = df_intron['index'].iloc[0]
         read_novelisoform_tuple, read_isoform_compatibleVector_tuple, mapping_scores = map_read_to_gene(read,
                                                                                         Info_multigenes[ind],
                                                                                         lowest_match, lowest_match1, small_exon_threshold,
