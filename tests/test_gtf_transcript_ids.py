@@ -69,6 +69,11 @@ class GtfTranscriptTests(unittest.TestCase):
         _, again = self.export_fixture(existing=df)
         pd.testing.assert_frame_equal(df, again)
 
+    def test_empty_partition_emits_empty_gtf(self):
+        output = self.root / 'empty.gtf'
+        self.export['convert_to_gtf']({}, str(output))
+        self.assertEqual(output.read_text(), '')
+
     def test_legacy_novel_records_are_upgraded_on_export(self):
         _, df = self.export_fixture()
         for i, attrs in df.attribute.items():

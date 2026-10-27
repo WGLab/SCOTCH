@@ -105,7 +105,7 @@ def setup_logger(target, task_name):
 
 def copy_log_to_targets(log_file, targets):
     for target in targets[1:]:
-        shutil.copy(log_file, os.path.join(target, 'annotation.log'))
+        shutil.copy(log_file, os.path.join(target, os.path.basename(log_file)))
 
 
 def main():
@@ -183,7 +183,8 @@ def main():
         copy_log_to_targets(log_file, args.target)
         logger.info('Finished processing bam file information')
     def run_compatible():
-        logger, log_file = setup_logger(args.target[0], 'compatible')
+        log_name = f'compatible_{args.job_index}' if args.total_jobs > 1 else 'compatible'
+        logger, log_file = setup_logger(args.target[0], log_name)
         logger.info(f'Start generating compatible matrix step for all targets. Job: {args.job_index}')
         logger.info(f'Target directories: {args.target}. Job: {args.job_index}')
         logger.info(f'BAM files: {args.bam}. Job: {args.job_index}')
@@ -276,6 +277,7 @@ def main():
         logger, log_file = setup_logger(args.target[0], 'summary')
         logger.info('Start summarizing read isoform mapping and annotations for all targets.')
         logger.info(f'Target directories: {args.target}')
+        failures = []
         for i in range(len(args.target)):
             target = args.target[i]
             logger.info(f'Start summarizing annotation for target: {target}')
@@ -284,15 +286,21 @@ def main():
                 logger.info(f'Completed summarizing annotation for target: {target}')
             except Exception as e:
                 logger.exception(f"summarise_annotation failed for target: {target}")
+                failures.append(f'annotation: {target}')
 
             #auxiliary
             logger.info(f'Start summarizing read mapping information for target: {target}')
             try:
-                cp.summarise_auxiliary(target, logger=logger, bulk=args.bulk, platform=args.platform)
+                cp.summarise_auxiliary(target, logger=logger, bulk=args.bulk, platform=args.platform,
+                                       workers=args.workers)
                 logger.info(f'Completed summarizing read mapping information for target: {target}')
             except Exception as e:
                 logger.exception(f"summarise_auxiliary failed for target: {target}")
+                failures.append(f'auxiliary: {target}')
 
+        if failures:
+            copy_log_to_targets(log_file, args.target)
+            raise RuntimeError('Summary failed for ' + ', '.join(failures))
         logger.info('Completed summarizing annotations and auxiliary information for all targets.')
         copy_log_to_targets(log_file, args.target)
 
@@ -306,7 +314,8 @@ def main():
             logger.info(f'Incrementally summarizing annotation for target: {target}')
             cp.summarise_annotation(target, logger=logger, gene_subset=gene_subset)
             logger.info(f'Incrementally summarizing read mapping information for target: {target}')
-            cp.summarise_auxiliary(target, gene_subset=gene_subset, logger=logger, bulk=args.bulk, platform=args.platform)
+            cp.summarise_auxiliary(target, gene_subset=gene_subset, logger=logger, bulk=args.bulk,
+                                   platform=args.platform, workers=args.workers)
         countmatrix = cm.CountMatrix(target=args.target, novel_read_n=args.novel_read_n, novel_read_pct=args.novel_read_pct,
                                      platform=args.platform, workers=args.workers, group_novel=args.group_novel,
                                      logger=logger, csv=args.save_csv, mtx=args.save_mtx, gene_subset=gene_subset,

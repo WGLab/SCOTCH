@@ -258,6 +258,10 @@ def convert_to_gtf(metageneStructureInformationNovel, output_file, gtf_df = None
         gtf_df = pd.DataFrame(columns=column_names)
     gtf_df_gene_list = Parallel(n_jobs=num_cores)(delayed(update_annotation_gene)(geneID, gtf_df, geneStructureInformationwNovel) for geneID in geneIDs)
     if not gtf_df_gene_list:
+        # Empty partitions are valid when there are fewer metagenes than jobs.
+        # Still emit the file expected by the workflow and summary stage.
+        with open(output_file, 'w'):
+            pass
         return pd.DataFrame()
     gtf_df_geness = pd.concat(gtf_df_gene_list, ignore_index=True)
     gtf_df_geness.to_csv(output_file, sep='\t', header=False, index=False, quoting=csv.QUOTE_NONE)
@@ -348,7 +352,7 @@ def summarise_annotation(target,logger=None, gene_subset=None):
                    f'{os.path.basename(output_pkl)} exists. Run the compatible matrix step first.')
             (logger.warning if logger is not None else print)(msg)
 
-def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False, platform=None):
+def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False, platform=None, workers=8):
     """Summarise Parse mappings separately for each sample under the target."""
     samples_folder = os.path.join(target, 'samples')
     if platform == 'parse-ont' and os.path.isdir(samples_folder):
@@ -356,13 +360,13 @@ def summarise_auxiliary(target, gene_subset=None, logger=None, bulk=False, platf
             sample_target = os.path.join(samples_folder, sample_name)
             if os.path.isdir(sample_target):
                 _summarise_auxiliary_sample(sample_target, gene_subset=gene_subset,
-                                            logger=logger, bulk=bulk, platform=platform)
+                                            logger=logger, bulk=bulk, platform=platform, workers=workers)
         return
     _summarise_auxiliary_sample(target, gene_subset=gene_subset, logger=logger,
-                                bulk=bulk, platform=platform)
+                                bulk=bulk, platform=platform, workers=workers)
 
 
-def _summarise_auxiliary_sample(target, gene_subset=None, logger=None, bulk=False, platform=None):
+def _summarise_auxiliary_sample(target, gene_subset=None, logger=None, bulk=False, platform=None, workers=8):
     def log_info(message):
         if logger is not None:
             logger.info(message)
@@ -385,7 +389,7 @@ def _summarise_auxiliary_sample(target, gene_subset=None, logger=None, bulk=Fals
     if gene_subset is None:
         if len(file_paths) == 0:
             return
-        df_list = Parallel(n_jobs=min(8, len(file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in file_paths)
+        df_list = Parallel(n_jobs=min(workers, len(file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in file_paths)
         DF = pd.concat(df_list, axis=0, ignore_index=True).reset_index(drop=True)
         duplicated_reads = DF.loc[DF['Read'].duplicated(keep=False), 'Read'].nunique()
         log_info(f'Loaded {len(DF)} rows from auxiliary mapping files')
@@ -411,7 +415,7 @@ def _summarise_auxiliary_sample(target, gene_subset=None, logger=None, bulk=Fals
         existing_df = existing_df.copy()
         new_subset_df = (
             pd.concat(
-                Parallel(n_jobs=min(8, len(candidate_file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in candidate_file_paths),
+                Parallel(n_jobs=min(workers, len(candidate_file_paths)))(delayed(read_auxiliary_mapping_file)(file_path) for file_path in candidate_file_paths),
                 axis=0,
                 ignore_index=True
             ).reset_index(drop=True)
