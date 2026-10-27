@@ -16,7 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 STAGES = ('annotation', 'compatible', 'summary', 'count')
 ARRAYS = ('BAM_PATHS', 'TARGET_DIRS')
-BOOLEANS = ('BULK', 'UPDATE_GTF', 'SAVE_MEM_ANN', 'SAVE_MEM', 'GROUP_NOVEL', 'SAVE_CSV')
+BOOLEANS = ('BULK', 'UPDATE_GTF', 'SAVE_MEM_ANN', 'SAVE_MEM', 'GROUP_NOVEL', 'SAVE_CSV', 'KEEP_INTERMEDIATE')
 INTEGERS = ('CPUS', 'COMPATIBLE_JOBS', 'MAX_CONCURRENT_JOBS', 'ANNOTATION_CPUS',
             'COMPATIBLE_CPUS', 'SUMMARY_CPUS', 'COUNT_CPUS',
             'NOVEL_DISCOVERY_MAX_READS', 'NOVEL_DISCOVERY_MAX_ROUNDS', 'NOVEL_READ_N')
@@ -165,6 +165,69 @@ def stage_command(config, stage, index=0):
     return command
 
 
+def execution_stages(config):
+    return STAGES + (() if config.get('KEEP_INTERMEDIATE', True) else ('cleanup',))
+
+
+def sample_dirs(config, target):
+    if config['PLATFORM'] != 'parse-ont':
+        return [target]
+    directory = target / 'samples'
+    samples = sorted(p for p in directory.iterdir() if p.is_dir()) if directory.is_dir() else []
+    if not samples:
+        raise RuntimeError(f'No Parse sample directories were generated under {target}')
+    return samples
+
+
+def count_suffix(config):
+    def fmt(value):
+        return str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)
+    return fmt(config['NOVEL_READ_N']) + '_' + fmt(config['NOVEL_READ_PCT'])
+
+
+def cleanup_intermediates(config, run_dir):
+    """Delete only recognized reusable artifacts after validating every sample."""
+    if config.get('KEEP_INTERMEDIATE', True):
+        return
+    check_outputs(config, 'summary')
+    check_outputs(config, 'count')
+    protected = {Path(config[k]).resolve() for k in
+                 ('REFERENCE_GTF', 'REFERENCE_FASTA', 'REFERENCE_PKL') if config.get(k)}
+    protected.update(Path(p).resolve() for p in config['BAM_PATHS'])
+    candidates = []
+    for target in map(Path, config['TARGET_DIRS']):
+        directories = [(target / 'bam', r'bam\.Info[23]?\.(?:pkl|sqlite(?:-wal|-shm|-journal)?)'),
+                       (target / 'reference/files_jobs',
+                        r'metageneStructureInformationwNovel_\d+(?:\.\d+)?\.(?:pkl|gtf)')]
+        directories += [(p / 'compatible_matrix', r'.+_.+\.csv') for p in sample_dirs(config, target)]
+        for directory, pattern in directories:
+            # Never traverse a symlink in an output directory or its parents.
+            if any(p.is_symlink() for p in (directory, *directory.parents)) or not directory.is_dir():
+                continue
+            for path in sorted(directory.iterdir()):
+                if (re.fullmatch(pattern, path.name) and not path.is_symlink() and path.is_file()
+                        and path.resolve() not in protected):
+                    candidates.append(path)
+    report = {'status': 'running', 'deleted': [], 'bytes_removed': 0}
+    report_path = run_dir / 'cleanup.json'
+    report_path.write_text(json.dumps(report, indent=2) + '\n')
+    try:
+        for path in candidates:
+            size = path.stat().st_size
+            path.unlink()
+            report['deleted'].append({'path': str(path), 'bytes': size})
+            report['bytes_removed'] += size
+            print(f'Removed {path} ({size} bytes)', flush=True)
+        report['status'] = 'complete'
+    except OSError as exc:
+        report['status'] = 'failed'
+        report['error'] = str(exc)
+        raise
+    finally:
+        report_path.write_text(json.dumps(report, indent=2) + '\n')
+    print(f"Cleanup removed {len(report['deleted'])} files, {report['bytes_removed']} bytes; {report_path}", flush=True)
+
+
 def check_outputs(config, stage, index=0):
     for sample_index, target in enumerate(map(Path, config['TARGET_DIRS'])):
         reference = target / 'reference'
@@ -187,6 +250,16 @@ def check_outputs(config, stage, index=0):
             for sample in samples:
                 required += [sample / 'auxiliary' / name for name in
                              ('all_read_isoform_exon_mapping.tsv', 'read_selection.pkl')]
+        elif stage == 'count':
+            suffix = count_suffix(config)
+            required = [reference / f'SCOTCH_updated_annotation_filtered_{suffix}.gtf']
+            for sample in sample_dirs(config, target):
+                for level in ('gene', 'transcript'):
+                    base = sample / 'count_matrix' / f'adata_{level}_{suffix}'
+                    for extension in ('.mtx', '.pickle') + (('.csv',) if config['SAVE_CSV'] else ()):
+                        output = base.with_name(base.name + extension)
+                        if not output.is_file() or output.stat().st_size == 0:
+                            raise RuntimeError(f'count did not produce nonempty output: {output}')
         else:
             return
         missing = [str(path) for path in required if not path.is_file()]
@@ -204,7 +277,10 @@ def stage_environment():
     return env
 
 
-def run_stage(config, stage, index=0):
+def run_stage(config, stage, index=0, run_dir=None):
+    if stage == 'cleanup':
+        cleanup_intermediates(config, run_dir)
+        return
     command = stage_command(config, stage, index)
     print(shlex.join(command), flush=True)
     subprocess.run(command, check=True, env=stage_environment())
@@ -239,7 +315,7 @@ def run_local(config, run_dir):
         raise KeyboardInterrupt
     previous_sigterm = signal.signal(signal.SIGTERM, interrupted)
     try:
-        for stage in STAGES:
+        for stage in execution_stages(config):
             jobs = range(config['COMPATIBLE_JOBS']) if stage == 'compatible' else range(1)
             limit = concurrency if stage == 'compatible' else 1
             for index in jobs:
@@ -278,6 +354,8 @@ def slurm_script(config, run_dir, stage):
 
 def sbatch_command(config, run_dir, stage, dependency=None):
     prefix = stage.upper()
+    if stage == 'cleanup':
+        config = dict(config, CLEANUP_CPUS=1, CLEANUP_MEM='1G', CLEANUP_TIME='01:00:00')
     command = ['sbatch', '--parsable', '--job-name', f'scotch_{stage}',
                '--ntasks', '1',
                '--cpus-per-task', str(config[f'{prefix}_CPUS']),
@@ -300,7 +378,7 @@ def submit_slurm(config, run_dir):
     submitted = {}
     dependency = None
     try:
-        for stage in STAGES:
+        for stage in execution_stages(config):
             (run_dir / f'{stage}.sh').write_text(slurm_script(config, run_dir, stage))
             result = subprocess.run(sbatch_command(config, run_dir, stage, dependency),
                                     check=True, text=True, stdout=subprocess.PIPE)
@@ -323,7 +401,7 @@ def main():
     parser.add_argument('config', nargs='?', help='Bash config copied from config_template.sh')
     parser.add_argument('--dry-run', action='store_true', help='Validate config and print commands without running/submitting')
     parser.add_argument('--manifest', help=argparse.SUPPRESS)
-    parser.add_argument('--stage', choices=STAGES, help=argparse.SUPPRESS)
+    parser.add_argument('--stage', choices=STAGES + ('cleanup',), help=argparse.SUPPRESS)
     parser.add_argument('--index', type=int, default=0, help=argparse.SUPPRESS)
     args = parser.parse_args()
     if args.manifest:
@@ -332,20 +410,23 @@ def main():
         config = json.loads(Path(args.manifest).read_text())
         if args.stage == 'compatible' and not 0 <= args.index < config['COMPATIBLE_JOBS']:
             parser.error('Compatible partition index is out of range')
-        run_stage(config, args.stage, args.index)
+        run_stage(config, args.stage, args.index, Path(args.manifest).parent)
         return
     if not args.config:
         parser.error('Provide a config file, e.g. bash scotch.sh my_run.sh')
     config = load_config(args.config)
     validate_inputs(config)
     if args.dry_run:
-        for stage in STAGES:
+        for stage in execution_stages(config):
+            if stage == 'cleanup':
+                print('After successful count validation: remove reusable intermediates; write cleanup.json.')
+                continue
             indices = range(config['COMPATIBLE_JOBS']) if stage == 'compatible' else range(1)
             for index in indices:
                 print(shlex.join(stage_command(config, stage, index)))
         if config['RUNNER'] == 'slurm':
             dependency = None
-            for stage in STAGES:
+            for stage in execution_stages(config):
                 print(shlex.join(sbatch_command(config, Path('<run-directory>'), stage, dependency)))
                 dependency = '<' + stage + '-job-id>'
         return

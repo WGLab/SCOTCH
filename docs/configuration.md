@@ -70,3 +70,11 @@ Each invocation creates `TARGET_DIRS[0]/.scotch_runs/<timestamp>/` containing re
 Local execution stops on failure and terminates its remaining active partitions. SLURM dependencies prevent later stages from running after a failed predecessor. Inspect the failed stage's log before retrying. If submission itself fails partway through, the wrapper reports the jobs already submitted so you can inspect or cancel them with SLURM.
 
 Existing annotation/checkpoint behavior comes from the underlying SCOTCH steps. Use fresh target directories when changing the input data or annotation settings; do not run two wrappers against the same targets simultaneously. If resuming compatible jobs with existing checkpoints, keep the partition count unchanged. The wrapper does not automatically decide which stages to skip; to rerun just one stage, use the [preprocessing commands](preprocessing.md).
+
+## Keeping or removing intermediate files
+
+`KEEP_INTERMEDIATE=true` (default) retains reusable intermediates. Set it to `false` to remove read lookup caches (`bam/bam.Info*.pkl` and SQLite files), per-gene compatible CSVs, and recognized per-job annotation backups in `reference/files_jobs/`. Parse sample subdirectories are included. Inputs, merged references, filtered GTFs, count matrices and their metadata, merged read mappings, read-selection files, and logs are retained.
+
+Cleanup runs only after all four steps succeed and every sample has the expected final files, including nonempty count matrices and metadata. Local execution runs cleanup last; SLURM adds a job with an `afterok` dependency on count (1 CPU, 1 GB, 1 hour). The run directory contains `cleanup.json` with deleted paths and their total file sizes, plus a cleanup log. File sizes do not necessarily equal physical disk space reclaimed. Failed upstream jobs leave reusable intermediates in place.
+
+After cleanup, recounting with different thresholds requires regenerating compatible matrices. Keep the default if you expect to rerun counts. This setting is separate from the individual-step CLI's `--keep_intermediate`, which controls only the raw `bam.Info.csv`; existing automatic temporary-file cleanup is unchanged.

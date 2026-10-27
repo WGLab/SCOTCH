@@ -40,6 +40,8 @@ bash scotch.sh my_run.sh
 
 The wrapper runs **annotation → compatible matrix → summary → count matrix**. Set `RUNNER="local"` for local CPU execution or `RUNNER="slurm"` to submit jobs with dependencies and a compatible-matrix job array. Use `bash scotch.sh my_run.sh --dry-run` to check your config and preview commands.
 
+Intermediate files are retained by default. Set `KEEP_INTERMEDIATE=false` to clean reusable intermediates after successful completion; see the [cleanup details](docs/configuration.md#keeping-or-removing-intermediate-files) before disabling retention.
+
 Set `PLATFORM="10x-pacbio"` for PacBio or `PLATFORM="parse-ont"` for Parse + ONT. For bulk data, set `BULK=true`. See the [configuration guide](docs/configuration.md) for CPU and SLURM settings, or the [preprocessing guide](docs/preprocessing.md) for individual steps.
 
 ## Outputs

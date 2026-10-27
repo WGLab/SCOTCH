@@ -167,6 +167,12 @@ elif stage == 'summary':
     (aux / 'all_read_isoform_exon_mapping.tsv').touch()
 elif stage == 'count matrix':
     assert (target / 'auxiliary/read_selection.pkl').exists()
+    touch('SCOTCH_updated_annotation_filtered_0_0.gtf')
+    out = target / 'count_matrix'
+    out.mkdir(exist_ok=True)
+    for level in ('gene', 'transcript'):
+        for ext in ('mtx', 'pickle'):
+            (out / f'adata_{level}_0_0.{ext}').write_text('output')
 '''.replace('FAIL_INDEX', str(fail_index)).replace('MISSING_ANNOTATION', repr(missing_annotation)))
         shim.chmod(0o755)
         config = self.config('PYTHON=' + shlex.quote(str(shim)) + '\n')
@@ -195,6 +201,103 @@ elif stage == 'count matrix':
         with self.assertRaisesRegex(RuntimeError, 'annotation failed'):
             runner.run_local(config, directory)
         self.assertEqual((self.root / 'output/events').read_text(), 'annotation\n')
+
+    def cleanup_fixture(self, parse=False):
+        config = self.config('KEEP_INTERMEDIATE=false\n')
+        if parse:
+            config['PLATFORM'] = 'parse-ont'
+        target = Path(config['TARGET_DIRS'][0])
+        ref = target / 'reference'
+        ref.mkdir(parents=True)
+        for name in ('metageneStructureInformationwNovel.pkl', 'SCOTCH_updated_annotation.gtf',
+                     'SCOTCH_updated_annotation_filtered_0_0.gtf'):
+            (ref / name).write_text('reference')
+        samples = [target / 'samples/a', target / 'samples/b'] if parse else [target]
+        disposable = []
+        preserved = []
+        for sample in samples:
+            for directory in ('auxiliary', 'count_matrix', 'compatible_matrix'):
+                (sample / directory).mkdir(parents=True, exist_ok=True)
+            for name in ('read_selection.pkl', 'all_read_isoform_exon_mapping.tsv'):
+                preserved.append(sample / 'auxiliary' / name)
+            for level in ('gene', 'transcript'):
+                for ext in ('mtx', 'pickle'):
+                    preserved.append(sample / 'count_matrix' / f'adata_{level}_0_0.{ext}')
+            disposable.append(sample / 'compatible_matrix/GENE_ENSG1.csv')
+            preserved.append(sample / 'compatible_matrix/log.txt')
+        (target / 'bam').mkdir()
+        (ref / 'files_jobs').mkdir()
+        disposable += [target / 'bam/bam.Info.pkl', target / 'bam/bam.Info2.sqlite',
+                       ref / 'files_jobs/metageneStructureInformationwNovel_0.gtf']
+        preserved += [target / 'bam/reads.bam', ref / 'files_jobs/unknown.pkl']
+        for path in disposable + preserved:
+            path.write_text('test data')
+        run_dir = self.root / 'cleanup run'
+        run_dir.mkdir()
+        return config, run_dir, disposable, preserved
+
+    def test_cleanup_parse_preserves_final_outputs_and_unknown_files(self):
+        config, directory, disposable, preserved = self.cleanup_fixture(parse=True)
+        runner.cleanup_intermediates(config, directory)
+        self.assertTrue(all(not p.exists() for p in disposable))
+        self.assertTrue(all(p.exists() for p in preserved))
+        report = json.loads((directory / 'cleanup.json').read_text())
+        self.assertEqual(report['status'], 'complete')
+        self.assertEqual(report['bytes_removed'], 9 * len(disposable))
+
+    def test_cleanup_requires_every_sample_output_before_deleting(self):
+        config, directory, disposable, preserved = self.cleanup_fixture(parse=True)
+        next(p for p in preserved if '/samples/b/count_matrix/' in str(p)).write_text('')
+        with self.assertRaisesRegex(RuntimeError, 'nonempty output'):
+            runner.cleanup_intermediates(config, directory)
+        self.assertTrue(all(p.exists() for p in disposable))
+
+    def test_cleanup_default_keep_and_symlink_and_input_protection(self):
+        config, directory, disposable, _ = self.cleanup_fixture()
+        config['KEEP_INTERMEDIATE'] = True
+        runner.cleanup_intermediates(config, directory)
+        self.assertTrue(all(p.exists() for p in disposable))
+        config['KEEP_INTERMEDIATE'] = False
+        config['REFERENCE_PKL'] = str(disposable[1])
+        link = disposable[0].parent / 'LINK_ENSG2.csv'
+        source = self.root / 'outside.csv'
+        source.write_text('keep')
+        link.symlink_to(source)
+        runner.cleanup_intermediates(config, directory)
+        self.assertTrue(disposable[1].exists())
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(source.read_text(), 'keep')
+
+    def test_local_cleanup_runs_after_count(self):
+        config, directory = self.prepare_fake_pipeline()
+        config['KEEP_INTERMEDIATE'] = False
+        (directory / 'config.json').write_text(json.dumps(config))
+        runner.run_local(config, directory)
+        self.assertEqual(json.loads((directory / 'cleanup.json').read_text())['status'], 'complete')
+
+    def test_failed_pipeline_never_runs_cleanup(self):
+        config, directory = self.prepare_fake_pipeline(fail_index=1)
+        config['KEEP_INTERMEDIATE'] = False
+        (directory / 'config.json').write_text(json.dumps(config))
+        with self.assertRaises(RuntimeError):
+            runner.run_local(config, directory)
+        self.assertFalse((directory / 'cleanup.json').exists())
+        self.assertFalse((directory / 'cleanup.log').exists())
+
+    def test_slurm_cleanup_depends_on_count(self):
+        config = self.config('RUNNER=slurm\nKEEP_INTERMEDIATE=false\n')
+        directory = self.root / 'slurm'
+        directory.mkdir()
+        calls = []
+        def submit(command, **kwargs):
+            calls.append(command)
+            return types.SimpleNamespace(stdout=str(100 + len(calls)))
+        with patch.object(runner.shutil, 'which', return_value='/usr/bin/sbatch'), \
+                patch.object(runner.subprocess, 'run', side_effect=submit):
+            runner.submit_slurm(config, directory)
+        self.assertEqual(len(calls), 5)
+        self.assertIn('afterok:104', calls[-1])
+        self.assertIn('scotch_cleanup', calls[-1])
 
     def test_slurm_array_dependencies_and_frozen_configuration(self):
         config = self.config('RUNNER=slurm\nPARTITION=compute\n')

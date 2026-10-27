@@ -61,3 +61,4 @@ NOVEL_READ_N=0                 # Minimum supporting reads for retaining a novel 
 NOVEL_READ_PCT=0               # Minimum fraction of gene coverage for retaining a novel isoform (0-1).
 GROUP_NOVEL=true               # Group novel isoforms potentially caused by read truncation.
 SAVE_CSV=false                 # Also write CSV count matrices; MTX output is always enabled here.
+KEEP_INTERMEDIATE=true        # Keep reusable intermediates; false deletes them after all steps and output checks succeed.
