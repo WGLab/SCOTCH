@@ -591,7 +591,7 @@ def read_exon_match(read, Info_singlegene):
     geneInfo, exonInfo, isoformInfo = Info_singlegene
     gene_name =geneInfo['geneName']
     gene_length = geneInfo['geneEnd'] - geneInfo['geneStart']
-    overlap_length = max(0, max(readEnd, geneInfo['geneEnd']) - min(readStart, geneInfo['geneStart']))
+    overlap_length = max(0, min(readEnd, geneInfo['geneEnd']) - max(readStart, geneInfo['geneStart']))
     mapExons = exon_hit(referencePositions, exonInfo)
     n_mapExons=len(mapExons)
     return gene_name, overlap_length, gene_length, n_mapExons
