@@ -950,7 +950,7 @@ class ReadMapper:
             for sample in unique_samples:
                 sample_target = os.path.join(self.target[0], 'samples/' + str(sample))
                 if not os.path.exists(sample_target):
-                    os.makedirs(sample_target)
+                    os.makedirs(sample_target, exist_ok=True)
                 Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                 for readname in list(Read_Isoform_compatibleVector.keys()):
                     read_sample = self.qname_sample_dict.get(readname)
@@ -1009,7 +1009,7 @@ class ReadMapper:
                 for sample in unique_samples:
                     sample_target = os.path.join(self.target[0], 'samples/' + sample)
                     if not os.path.exists(sample_target):
-                        os.makedirs(sample_target)
+                        os.makedirs(sample_target, exist_ok=True)
                     save_compatibleVector_by_gene(geneName=Info_multigenes[index][0]['geneName'],
                                                   geneID=Info_multigenes[index][0]['geneID'],
                                                   geneChr=Info_multigenes[index][0]['geneChr'],
@@ -1056,7 +1056,7 @@ class ReadMapper:
                     for sample in unique_samples:
                         sample_target = os.path.join(self.target[0], 'samples/' + str(sample))
                         if not os.path.exists(sample_target):
-                            os.makedirs(sample_target)
+                            os.makedirs(sample_target, exist_ok=True)
                         Read_Isoform_compatibleVector_sample, Read_knownIsoform_scores_sample = {}, {}
                         for readname in list(Read_Isoform_compatibleVector.keys()):
                             read_sample = self.qname_sample_dict.get(readname)

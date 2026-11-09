@@ -1195,7 +1195,7 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
         if len(readmapping_data)>0:
             output_folder0 = os.path.join(output_folder, 'auxiliary')
             if not os.path.exists(output_folder0):
-                os.makedirs(output_folder0)
+                os.makedirs(output_folder0, exist_ok=True)
             readmapping = pd.DataFrame(readmapping_data,
                                        columns=['Read', 'Isoform', 'Exon Index', 'Exon Coordinates', 'Cell', 'Umi', 'CBUMI', 'geneName', 'geneID', 'geneChr'])
 
@@ -1209,14 +1209,14 @@ def save_compatibleVector_by_gene(geneName, geneID, geneChr, colNames, Read_Isof
         #save compatible matrix
         output_folder = os.path.join(output_folder,'compatible_matrix')
         if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+            os.makedirs(output_folder, exist_ok=True)
         file_name = os.path.join(output_folder, str(geneName) + '.csv')
         data_df.to_csv(file_name)
         print('gene ' + str(geneName) + ' saved')
     elif (output_folder is not None and len(rowNames)==0): #log the gene because no reads mapped
         output_folder = os.path.join(output_folder, 'compatible_matrix')
         if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+            os.makedirs(output_folder, exist_ok=True)
         log_file = os.path.join(output_folder, 'log.txt')
         if os.path.isfile(log_file):
             with open(log_file, 'a') as file:
