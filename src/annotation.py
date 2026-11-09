@@ -35,6 +35,8 @@ def _extract_bam_info_contig(bam, contig, barcode_cell='CB', barcode_umi='UB'):
     bam_fh = pysam.AlignmentFile(bam, "rb")
     rows = []
     for read in bam_fh.fetch(contig=contig):
+        if read.is_secondary or read.is_supplementary:
+            continue
         if barcode_cell is None and barcode_umi is None:
             rows.append((read.qname, read.qname, 'NA', read.query_alignment_length))
         else:
@@ -76,6 +78,8 @@ def extract_bam_info(bam, barcode_cell='CB', barcode_umi='UB', chunk_size=100000
     all_chunks, current_chunk = [], []
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
+        if read.is_secondary or read.is_supplementary:
+            continue
         if barcode_cell is None and barcode_umi is None:
             current_chunk.append((read.qname, read.qname, 'NA', read.query_alignment_length))
         else:
@@ -121,6 +125,8 @@ def extract_bam_info_parse(bam, chunk_size=100000):
                 return value
         return None
     for read in bamFilePysam.fetch(until_eof=True):
+        if read.is_secondary or read.is_supplementary:
+            continue
         try:
             cb = read.qname.split('_')[-5] + '_' + read.qname.split('_')[-4] + '_' + read.qname.split('_')[-3]
             umi = read.qname.split('_')[-1]
@@ -171,6 +177,8 @@ def extract_bam_info_pacbio(bam, barcode_cell = 'XC', barcode_umi = 'XM', chunk_
     all_chunks, current_chunk = [], []
     counter = 0
     for read in bamFilePysam.fetch(until_eof=True):
+        if read.is_secondary or read.is_supplementary:
+            continue
         try:
             if barcode_cell is None and barcode_umi is None:
                 current_chunk.append((read.qname, read.qname, 'NA', read.qend - read.qstart))
@@ -434,6 +442,8 @@ def get_non_overlapping_exons(bam_file, chrom, gene_start, gene_end,
     #get read coverage
     for bam in bams:
         for read in bam.fetch(chrom, gene_start, gene_end):
+            if read.is_secondary or read.is_supplementary:
+                continue
             if read.reference_start >= gene_start and read.reference_end < gene_end:
                 junctions += get_splicejuction_from_read(read)
                 for block_start, block_end in read.get_blocks():
@@ -514,7 +524,7 @@ def get_genes_from_bam(input_bam_path, coverage_threshold = 20, min_region_size=
             for bam in bams:
                 if chrom in bam.references:
                     for read in bam.fetch(chrom):
-                        if not read.is_unmapped:
+                        if not read.is_unmapped and not read.is_secondary and not read.is_supplementary:
                             diff[read.reference_start] += 1
                             diff[read.reference_end] -= 1
             coverage_array = np.cumsum(diff[:chrom_length])
